@@ -1,0 +1,72 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ProjectProvider } from './context/ProjectContext';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { MainLayout } from './components/layout/MainLayout';
+import { SnackbarProvider } from './context/SnackbarContext';
+import { ProgressIndicatorProvider } from './context/ProgressIndicatorContext';
+import { ProgressIndicator } from './components/ui/ProgressIndicator';
+import { OffersPage } from './pages/OffersPage';
+import { TemplatesPage } from './pages/TemplatesPage';
+import { ThemeAndLogosPage } from './pages/ThemeAndLogosPage';
+import { ReviewPage } from './pages/ReviewPage';
+import { ApprovedPage } from './pages/ApprovedPage';
+import { AdsPage } from './pages/AdsPage';
+import { CampaignsPage } from './pages/CampaignsPage';
+
+const theme = createTheme({
+  typography: {
+    fontFamily: "'Roboto', sans-serif",
+  },
+  palette: {
+    primary: {
+      main: '#473bab',
+      dark: '#3d3396',
+      light: '#6356e1',
+    },
+    background: {
+      default: '#f0f2f4',
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+        },
+      },
+    },
+  },
+});
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <ProjectProvider>
+      <BrowserRouter>
+      <SnackbarProvider>
+      <ProgressIndicatorProvider>
+        <MainLayout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/projects" element={<OffersPage />} />
+            <Route path="/offers" element={<OffersPage />} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />
+            <Route path="/review" element={<ReviewPage />} />
+            <Route path="/approved" element={<ApprovedPage />} />
+            <Route path="/ads" element={<AdsPage />} />
+            <Route path="/campaigns" element={<CampaignsPage />} />
+          </Routes>
+        </MainLayout>
+        <ProgressIndicator />
+      </ProgressIndicatorProvider>
+      </SnackbarProvider>
+      </BrowserRouter>
+      </ProjectProvider>
+    </ThemeProvider>
+  );
+}
+
+export default App;

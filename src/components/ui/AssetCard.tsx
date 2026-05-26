@@ -1,0 +1,446 @@
+import { useState } from 'react';
+import { Checkbox, IconButton } from '@mui/material';
+import { MoreVert, FolderOutlined, CheckCircle, HourglassEmpty, DoNotDisturb, WarningAmber, PendingOutlined } from '@mui/icons-material';
+import { NeedsEditsIcon } from './NeedsEditsIcon';
+import type { Asset, AssetStatus } from '../../data/types';
+import { FilledTemplatePreview } from './FilledTemplatePreview';
+import { TEMPLATES } from '../../data/mockData';
+
+export type DraftVariant = 'default' | 'labeled' | 'badge';
+
+interface AssetCardProps {
+  asset: Asset;
+  selected?: boolean;
+  disabled?: boolean;
+  draftVariant?: DraftVariant;
+  onSelect?: (id: string, checked: boolean) => void;
+  onStatusChange?: (id: string, status: AssetStatus) => void;
+}
+
+const STATUS_CONFIG: Record<AssetStatus, {
+  label: string;
+  bg: string;
+  textColor: string;
+  Icon: React.ElementType;
+  iconColor: string;
+}> = {
+  draft: {
+    label: 'Draft',
+    bg: '#EBF5FB',
+    textColor: '#01579b',
+    Icon: PendingOutlined,
+    iconColor: '#01579b',
+  },
+  approved: {
+    label: 'Approved',
+    bg: '#e8f5e9',
+    textColor: '#1b5e20',
+    Icon: CheckCircle,
+    iconColor: '#1b5e20',
+  },
+  awaiting_approval: {
+    label: 'Awaiting Approval',
+    bg: '#FDF4EC',
+    textColor: '#c45500',
+    Icon: HourglassEmpty,
+    iconColor: '#c45500',
+  },
+  needs_edits: {
+    label: 'Needs Edits',
+    bg: '#FDF4EC',
+    textColor: '#c45500',
+    Icon: NeedsEditsIcon,
+    iconColor: '#c45500',
+  },
+  denied: {
+    label: 'Denied',
+    bg: '#FBEFF0',
+    textColor: '#be0e1c',
+    Icon: DoNotDisturb,
+    iconColor: '#be0e1c',
+  },
+  updated: {
+    label: 'Updated',
+    bg: '#FDF4EC',
+    textColor: '#c45500',
+    Icon: WarningAmber,
+    iconColor: '#c45500',
+  },
+  removed: {
+    label: 'Removed',
+    bg: '#FBEFF0',
+    textColor: '#be0e1c',
+    Icon: DoNotDisturb,
+    iconColor: '#be0e1c',
+  },
+};
+
+const MAX_VISIBLE_TAGS = 2;
+
+export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect }: AssetCardProps) => {
+  const [hover, setHover] = useState(false);
+
+  const visibleTags = asset.tags.slice(0, MAX_VISIBLE_TAGS);
+  const overflowCount = asset.tags.length - MAX_VISIBLE_TAGS;
+  const status = STATUS_CONFIG[asset.status];
+  const template = TEMPLATES.find((t) => t.id === asset.templateId);
+  const { Icon: StatusIcon } = status;
+
+  const isDraft = asset.status === 'draft';
+
+  // Determine how to size the template preview within the square thumbnail.
+  // Wide templates (e.g. 600×250) are letterboxed; square fills the card fully.
+  const isWide = asset.width > asset.height;
+  const innerWidthPct = isWide ? 100 : (asset.width / asset.height) * 100;
+  const innerHeightPct = !isWide ? 100 : (asset.height / asset.width) * 100;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'default',
+      }}
+      onMouseEnter={() => !disabled && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {/* ── Thumbnail — always 1:1 square ──────────────── */}
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '1 / 1',
+          background: '#f0f2f4',
+          border: isDraft && draftVariant === 'labeled'
+            ? '3px dashed #80C3E8'
+            : `${selected ? 2 : 1}px solid ${selected ? '#473bab' : '#e7e7e9'}`,
+          borderRadius: isDraft && draftVariant === 'badge' ? '8px 8px 0 0' : 8,
+          overflow: 'hidden',
+          transition: 'border-color 0.15s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {/* Template content — centered sub-container at correct aspect ratio */}
+        <div style={{ opacity: asset.status === 'removed' ? 0.25 : 1, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {template && asset.offer ? (
+            <div
+              style={{
+                width: `${innerWidthPct}%`,
+                height: `${innerHeightPct}%`,
+                position: 'relative',
+                flexShrink: 0,
+              }}
+            >
+              <FilledTemplatePreview
+                template={template}
+                offer={asset.offer}
+                backgroundUrl={asset.backgroundUrl}
+              />
+            </div>
+          ) : (
+            <img
+              src={asset.thumbnailUrl}
+              alt={asset.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'absolute', inset: 0 }}
+            />
+          )}
+        </div>
+
+        {/* Selection tint overlay */}
+        {selected && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(71, 59, 171, 0.06)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
+        {/* "Asset Details" hover button — bottom-right */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 9,
+            right: 9,
+            opacity: hover ? 1 : 0,
+            transition: 'opacity 0.15s',
+            pointerEvents: hover ? 'auto' : 'none',
+            zIndex: 3,
+          }}
+        >
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#473bab',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 100,
+              padding: '4px 10px',
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: 'Roboto, sans-serif',
+              letterSpacing: '0.46px',
+              lineHeight: '22px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            }}
+          >
+            Asset Details
+          </button>
+        </div>
+      </div>
+
+      {/* ── Checkbox — absolute top-left of thumbnail ──── */}
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 2 }}>
+        <div style={{
+          position: 'absolute', top: 11, left: 11,
+          width: 16, height: 16,
+          background: 'white', borderRadius: 1, zIndex: 0,
+        }} />
+        <Checkbox
+          checked={!!selected}
+          onChange={(e) => onSelect?.(asset.id, e.target.checked)}
+          size="medium"
+          disabled={disabled}
+          sx={{
+            padding: '9px',
+            zIndex: 1,
+            position: 'relative',
+            '&.Mui-checked': { color: '#473bab' },
+            '& .MuiSvgIcon-root': {
+              fontSize: 22,
+              color: selected ? '#473bab' : 'rgba(0,0,0,0.54)',
+              background: 'white',
+              borderRadius: '3px',
+            },
+          }}
+        />
+      </div>
+
+      {/* ── Status chip — absolute top-right of thumbnail ── */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 10,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '3px 8px 3px 6px',
+            borderRadius: 100,
+            background: status.bg,
+            backdropFilter: 'blur(2px)',
+          }}
+        >
+          <StatusIcon style={{ fontSize: 14, color: status.iconColor }} />
+          <span
+            style={{
+              fontSize: 11,
+              fontFamily: 'Roboto, sans-serif',
+              fontWeight: 500,
+              color: status.textColor,
+              letterSpacing: '0.4px',
+              lineHeight: 1.66,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {status.label}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Draft variant: Badge ───────────────────────── */}
+      {isDraft && draftVariant === 'badge' && (
+        <div style={{
+          background: '#EBF5FB',
+          borderRadius: '0 0 8px 8px',
+          padding: '4px 12px',
+          width: '100%',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 400,
+            color: '#01579B',
+            letterSpacing: '0.4px',
+            lineHeight: 1.66,
+          }}>
+            Preview only
+          </span>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 400,
+            color: '#01579B',
+            letterSpacing: '0.4px',
+            lineHeight: 1.66,
+          }}>
+            {asset.width} x {asset.height}
+          </span>
+        </div>
+      )}
+
+      {/* ── Draft variant: Labeled ─────────────────────── */}
+      {isDraft && draftVariant === 'labeled' && (
+        <div style={{ paddingTop: 8, width: '100%' }}>
+          <p style={{
+            margin: 0,
+            fontSize: 12,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 400,
+            color: '#01579B',
+            lineHeight: 1.43,
+            letterSpacing: '0.17px',
+          }}>
+            Preview Only
+          </p>
+          <div style={{
+            display: 'flex',
+            gap: 4,
+            fontSize: 11,
+            fontFamily: 'Roboto, sans-serif',
+            color: '#686576',
+            lineHeight: 1.66,
+            letterSpacing: '0.4px',
+            marginTop: 1,
+          }}>
+            <span>{asset.imageType}</span>
+            <span>|</span>
+            <span>{asset.width} x {asset.height}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Content below thumbnail (non-draft) ───────── */}
+      {!isDraft && (
+      <div style={{ paddingTop: 8, paddingBottom: 4, width: '100%' }}>
+
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, width: '100%' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                fontWeight: 400,
+                fontFamily: 'Roboto, sans-serif',
+                color: '#1f1d25',
+                lineHeight: 1.43,
+                letterSpacing: '0.17px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {asset.name}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                fontSize: 11,
+                fontFamily: 'Roboto, sans-serif',
+                color: '#686576',
+                lineHeight: 1.66,
+                letterSpacing: '0.4px',
+                marginTop: 1,
+              }}
+            >
+              <span>{asset.imageType}</span>
+              <span>|</span>
+              <span>{asset.width} x {asset.height}</span>
+            </div>
+          </div>
+
+          <IconButton
+            size="small"
+            disabled={disabled}
+            sx={{ padding: '4px', flexShrink: 0, mt: '-2px' }}
+          >
+            <MoreVert style={{ fontSize: 18, color: '#1f1d25' }} />
+          </IconButton>
+        </div>
+
+        {/* Tags */}
+        {asset.tags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, paddingTop: 6 }}>
+            {visibleTags.map((tag) => (
+              <div
+                key={tag}
+                style={{
+                  background: '#f0f2f4',
+                  borderRadius: 8,
+                  padding: '1px 6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'Roboto, sans-serif',
+                    color: '#1f1d25',
+                    letterSpacing: '0.16px',
+                    lineHeight: '18px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tag}
+                </span>
+              </div>
+            ))}
+            {overflowCount > 0 && (
+              <div style={{ background: '#f0f2f4', borderRadius: 8, padding: '1px 6px', display: 'flex', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', lineHeight: '18px' }}>
+                  +{overflowCount}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Folder */}
+        {asset.folder && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 4 }}>
+            <FolderOutlined style={{ fontSize: 14, color: '#686576', flexShrink: 0 }} />
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: 'Roboto, sans-serif',
+                color: '#686576',
+                letterSpacing: '0.17px',
+                lineHeight: 1.43,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {asset.folder}
+            </span>
+          </div>
+        )}
+      </div>
+      )}
+    </div>
+  );
+};
+
