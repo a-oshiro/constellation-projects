@@ -64,6 +64,15 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
   const updatedCount = assets.filter((a) => a.status === 'updated').length;
   const removedCount = assets.filter((a) => a.status === 'removed').length;
   const awaitingApprovalCount = assets.filter((a) => a.status === 'awaiting_approval').length;
+
+  // Pending-change counts per task type
+  const updatedOffersCount = pendingChanges.length;
+  const removedOffersCount = pendingRemovals.filter((r) => r.type === 'offer').length;
+  const removedTemplatesCount = pendingRemovals.filter((r) => r.type === 'template').length;
+  const removedBackgroundsCount = pendingRemovals.filter((r) => r.type === 'background').length;
+
+  // "All assets generated" = assets exist and none are still draft
+  const allAssetsGenerated = assets.length > 0 && !hasDraftAssets;
   // Assets that were previously approved and are now awaiting re-approval after changes were applied
   const approvedNowAwaitingCount = assets.filter((a) => a.status === 'awaiting_approval' && everApprovedIds.has(a.id)).length;
 
@@ -351,6 +360,26 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
                       </span>
                     )}
                   </div>
+                  {task.key === 'offers' && hasPendingChanges && updatedOffersCount > 0 && (
+                    <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {updatedOffersCount} offer{updatedOffersCount !== 1 ? 's' : ''} updated
+                    </span>
+                  )}
+                  {task.key === 'offers' && hasPendingChanges && removedOffersCount > 0 && (
+                    <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {removedOffersCount} offer{removedOffersCount !== 1 ? 's' : ''} removed
+                    </span>
+                  )}
+                  {task.key === 'templates' && hasPendingChanges && removedTemplatesCount > 0 && (
+                    <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {removedTemplatesCount} template{removedTemplatesCount !== 1 ? 's' : ''} removed
+                    </span>
+                  )}
+                  {task.key === 'theme_and_logos' && hasPendingChanges && removedBackgroundsCount > 0 && (
+                    <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {removedBackgroundsCount} background{removedBackgroundsCount !== 1 ? 's' : ''} removed
+                    </span>
+                  )}
                   {task.key === 'review' && hasUpdatedAssets && (
                     <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {updatedCount} updated
@@ -446,6 +475,12 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
                       : adsAwaitingShellCount > 0
                         ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                         : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                ) : (task.key === 'offers' || task.key === 'templates' || task.key === 'theme_and_logos') ? (
+                  hasPendingChanges
+                    ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                    : allAssetsGenerated
+                      ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                      : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.completed ? (
                   <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                 ) : (
