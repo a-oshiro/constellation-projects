@@ -376,12 +376,12 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
                       {approvedNowAwaitingCount} removed due changes
                     </span>
                   )}
-                  {task.key === 'ads' && hasPendingChanges && adsUpdatedShellCount > 0 && (
+                  {task.key === 'ads' && (liveCounts['approved'] > 0 || !hasAwaitingApproval) && hasPendingChanges && adsUpdatedShellCount > 0 && (
                     <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {adsUpdatedShellCount} updated
                     </span>
                   )}
-                  {task.key === 'ads' && adsAwaitingShellCount > 0 && (
+                  {task.key === 'ads' && (liveCounts['approved'] > 0 || !hasAwaitingApproval) && adsAwaitingShellCount > 0 && (
                     <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {adsAwaitingShellCount} awaiting approval
                     </span>
@@ -427,13 +427,17 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
                         ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                         : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.key === 'ads' ? (
-                  hasPendingChanges && adsUpdatedShellCount > 0
-                    ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                    : adsAwaitingShellCount > 0
-                      ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                      : allReviewConcluded && liveCounts['approved'] > 0
-                        ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
-                        : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
+                  liveCounts['approved'] === 0 && hasAwaitingApproval
+                    ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
+                    : hasPendingChanges && adsUpdatedShellCount > 0
+                      ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                      : adsAwaitingShellCount > 0
+                        ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                        : allReviewConcluded && liveCounts['approved'] > 0
+                          ? hasPendingChanges
+                            ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                            : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                          : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.key === 'campaigns' ? (
                   !campaignLoaded
                     ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import type { Asset } from '../../data/types';
+import { LargePreviewModal } from './LargePreviewModal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { KeyboardArrowDown, OpenInNew } from '@mui/icons-material';
@@ -13,6 +15,7 @@ import { TEMPLATES } from '../../data/mockData';
 export const PreviewPanel = () => {
   const [open, setOpen] = useState(false);
   const [buttonHovered, setButtonHovered] = useState(false);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [panelCenter, setPanelCenter] = useState<{ left: number; width: number } | null>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -278,6 +281,7 @@ export const PreviewPanel = () => {
                 return (
                   <div
                     key={asset.id}
+                    onClick={() => setPreviewAsset(asset)}
                     style={{
                       flexShrink: 0,
                       position: 'relative',
@@ -290,6 +294,7 @@ export const PreviewPanel = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      cursor: 'pointer',
                     }}
                   >
                     {template && (
@@ -321,6 +326,9 @@ export const PreviewPanel = () => {
           </div>
         </div>
       </div>
+      {previewAsset && (
+        <LargePreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} />
+      )}
     </>
   );
 };

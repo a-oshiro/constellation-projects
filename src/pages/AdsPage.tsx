@@ -4,7 +4,7 @@ import { Search, MoreVert, Add, ArrowDropDown, InfoOutlined } from '@mui/icons-m
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { AdShellCard } from '../components/ui/AdShellCard';
-import type { AdShell } from '../components/ui/AdShellCard';
+import { useLayout } from '../context/LayoutContext';
 import emptyFolderSrc from '../assets/empty-folder.png';
 import { useProject } from '../context/ProjectContext';
 import { TEMPLATES, BACKGROUNDS, PROJECT_INFO } from '../data/mockData';
@@ -43,6 +43,7 @@ const CreateAdShellSplitButton = () => (
 
 export const AdsPage = () => {
   const { assets, everApprovedIds } = useProject();
+  const { openAdShellPanel } = useLayout();
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -216,6 +217,7 @@ export const AdsPage = () => {
                   shell={shell}
                   selected={selectedIds.has(shell.id)}
                   onSelect={handleSelect}
+                  onEdit={openAdShellPanel}
                 />
               ))}
             </div>

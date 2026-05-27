@@ -4,9 +4,10 @@ import { TopBar } from './TopBar';
 import { TasksPanel } from './TasksPanel';
 import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
+import { AdShellPanel } from '../ui/AdShellPanel';
 
 const MainLayoutInner = ({ children }: { children: ReactNode }) => {
-  const { tasksPanelOpen, closeTasksPanel, mainPanelRef } = useLayout();
+  const { tasksPanelOpen, closeTasksPanel, mainPanelRef, editingShell, closeAdShellPanel } = useLayout();
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -25,6 +26,13 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             </div>
             <PreviewPanel />
           </div>
+          {editingShell && (
+            <AdShellPanel
+              key={editingShell.id}
+              shell={editingShell}
+              onClose={closeAdShellPanel}
+            />
+          )}
         </div>
       </div>
     </div>

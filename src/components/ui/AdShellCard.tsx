@@ -20,6 +20,7 @@ interface AdShellCardProps {
   shell: AdShell;
   selected?: boolean;
   onSelect?: (id: string, checked: boolean) => void;
+  onEdit?: (shell: AdShell) => void;
 }
 
 // Renders a single asset preview letterboxed within its container
@@ -37,7 +38,7 @@ const AssetLayerContent = ({ asset, template }: { asset: Asset; template: Templa
   );
 };
 
-export const AdShellCard = ({ shell, selected, onSelect }: AdShellCardProps) => {
+export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardProps) => {
   const [hover, setHover] = useState(false);
   const { assets, template, name, platform, adType, folder } = shell;
 
@@ -227,6 +228,7 @@ export const AdShellCard = ({ shell, selected, onSelect }: AdShellCardProps) => 
           }}
         >
           <button
+            onClick={(e) => { e.stopPropagation(); onEdit?.(shell); }}
             style={{
               display: 'flex',
               alignItems: 'center',

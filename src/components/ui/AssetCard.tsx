@@ -5,6 +5,8 @@ import { NeedsEditsIcon } from './NeedsEditsIcon';
 import type { Asset, AssetStatus } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
+import { AssetDetailsDialog } from './AssetDetailsDialog';
+import { LargePreviewModal } from './LargePreviewModal';
 
 export type DraftVariant = 'default' | 'labeled' | 'badge';
 
@@ -77,8 +79,12 @@ const STATUS_CONFIG: Record<AssetStatus, {
 
 const MAX_VISIBLE_TAGS = 2;
 
+const LARGE_PREVIEW_STATUSES: AssetStatus[] = ['updated', 'draft'];
+
 export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect }: AssetCardProps) => {
   const [hover, setHover] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
+  const [showLargePreview, setShowLargePreview] = useState(false);
 
   const visibleTags = asset.tags.slice(0, MAX_VISIBLE_TAGS);
   const overflowCount = asset.tags.length - MAX_VISIBLE_TAGS;
@@ -174,6 +180,14 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           }}
         >
           <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (LARGE_PREVIEW_STATUSES.includes(asset.status)) {
+                setShowLargePreview(true);
+              } else {
+                setShowDialog(true);
+              }
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -439,6 +453,13 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           </div>
         )}
       </div>
+      )}
+
+      {showDialog && (
+        <AssetDetailsDialog asset={asset} onClose={() => setShowDialog(false)} />
+      )}
+      {showLargePreview && (
+        <LargePreviewModal asset={asset} onClose={() => setShowLargePreview(false)} />
       )}
     </div>
   );

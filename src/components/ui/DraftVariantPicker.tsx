@@ -14,10 +14,6 @@ const TABS: { value: DraftVariant; label: string }[] = [
 export const DraftVariantPicker = ({ value, onChange }: DraftVariantPickerProps) => (
   <div
     style={{
-      position: 'fixed',
-      bottom: 24,
-      right: 24,
-      zIndex: 200,
       background: '#ffffff',
       border: '1px solid #e7e7e9',
       borderRadius: 100,

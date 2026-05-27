@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, Select, MenuItem, FormControl, TextField } from '@mui/material';
 import { Search, MoreVert, ViewModule, FilterList, WarningAmber } from '@mui/icons-material';
@@ -16,6 +16,16 @@ const STATUS_OPTIONS: AssetStatus[] = [
   'needs_edits',
   'denied',
 ];
+
+const TAB_ORDER: AssetStatus[] = ['draft', 'updated', 'awaiting_approval', 'needs_edits', 'denied', 'removed'];
+const STATUS_TAB_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  updated: 'Updated',
+  awaiting_approval: 'Awaiting Approval',
+  needs_edits: 'Needs Edits',
+  denied: 'Denied',
+  removed: 'Removed',
+};
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { AssetCard } from '../components/ui/AssetCard';
@@ -36,6 +46,8 @@ export const ReviewPage = () => {
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [revertDialogOpen, setRevertDialogOpen] = useState(false);
   const [draftVariant, setDraftVariant] = useState<DraftVariant>('default');
+  const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>('all');
+  const [showTabs, setShowTabs] = useState(true);
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const nonApprovedAssets = assets.filter((a) => a.status !== 'approved');
@@ -63,7 +75,8 @@ export const ReviewPage = () => {
 
   const adsUpdatedShellCount = useMemo(() => {
     const eligible = assets.filter((a) =>
-      a.status === 'approved' || a.status === 'updated' ||
+      a.status === 'approved' ||
+      (a.status === 'updated' && everApprovedIds.has(a.id)) ||
       (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
       (a.status === 'removed' && everApprovedIds.has(a.id))
     );
@@ -116,9 +129,23 @@ export const ReviewPage = () => {
     });
   };
 
-  const filteredAssets = nonApprovedAssets.filter((a) =>
-    a.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const dynamicTabs = TAB_ORDER
+    .filter((status) => nonApprovedAssets.some((a) => a.status === status))
+    .map((status) => ({
+      status,
+      label: STATUS_TAB_LABELS[status],
+      count: nonApprovedAssets.filter((a) => a.status === status).length,
+    }));
+
+  useEffect(() => {
+    if (activeTab !== 'all' && !nonApprovedAssets.some((a) => a.status === activeTab)) {
+      setActiveTab('all');
+    }
+  }, [activeTab, assets]);
+
+  const filteredAssets = nonApprovedAssets
+    .filter((a) => activeTab === 'all' || a.status === activeTab)
+    .filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
   const handleChangeStatus = (status: AssetStatus) => {
     let targetIds: Set<string>;
@@ -342,6 +369,7 @@ export const ReviewPage = () => {
           gap: 8,
           flexShrink: 0,
           borderBottom: '1px solid rgba(0,0,0,0.06)',
+          margin: '0px 16px'
         }}>
           <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#663c00', letterSpacing: '0.17px', lineHeight: 1.5 }}>
@@ -370,6 +398,36 @@ export const ReviewPage = () => {
           </button>
         </div>
       )}
+
+      {/* ── Tabs ─────────────────────────────────────────────── */}
+      {showTabs && <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
+        {([{ status: 'all' as const, label: 'All', count: nonApprovedAssets.length }, ...dynamicTabs]).map(({ status, label, count }) => {
+          const isActive = activeTab === status;
+          return (
+            <button
+              key={status}
+              onClick={() => setActiveTab(status)}
+              style={{
+                padding: '16px 16px',
+                border: 'none',
+                borderBottom: isActive ? '2px solid #473bab' : '2px solid transparent',
+                marginBottom: '-1px',
+                background: 'none',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontFamily: 'Roboto, sans-serif',
+                fontWeight: 500,
+                color: isActive ? '#473bab' : '#686576',
+                letterSpacing: '0.4px',
+                lineHeight: '24px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label} ({count})
+            </button>
+          );
+        })}
+      </div>}
 
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
       <div className="flex-1 overflow-y-auto flex flex-col">
@@ -424,9 +482,26 @@ export const ReviewPage = () => {
         onRevertRemovals={(itemIds) => { revertRemovals(itemIds); showSnackbar({ message: 'Changes reverted.' }); }}
       />
     )}
-    {hasDraftAssets && (
-      <DraftVariantPicker value={draftVariant} onChange={setDraftVariant} />
-    )}
+    <div style={{ position: 'fixed', bottom: 80, right: 16, zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+      {/* Tabs toggle */}
+      <div style={{ background: '#ffffff', border: '1px solid #e7e7e9', borderRadius: 100, boxShadow: '0 2px 12px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', padding: 3, gap: 8, paddingLeft: 10, paddingRight: 10 }}>
+        <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+          Review tabs
+        </span>
+        <button
+          onClick={() => setShowTabs((v) => !v)}
+          aria-label={showTabs ? 'Hide review tabs' : 'Show review tabs'}
+          style={{ width: 28, height: 16, borderRadius: 100, background: showTabs ? '#473bab' : '#cac9cf', border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'background 0.15s' }}
+        >
+          <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', background: '#ffffff', top: 2, left: showTabs ? 14 : 2, transition: 'left 0.15s' }} />
+        </button>
+      </div>
+
+      {/* Draft view picker */}
+      {hasDraftAssets && (
+        <DraftVariantPicker value={draftVariant} onChange={setDraftVariant} />
+      )}
+    </div>
     </>
   );
 };
