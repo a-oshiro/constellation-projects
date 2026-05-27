@@ -61,7 +61,7 @@ const inputStyle: React.CSSProperties = {
 
 const readOnlyInputStyle: React.CSSProperties = {
   ...inputStyle,
-  background: '#f0f2f4',
+  background: '#F9FAFA',
   cursor: 'default',
 };
 
@@ -249,7 +249,7 @@ export const CampaignsPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#f0f2f4' }}>
+    <div className="flex flex-col h-full" style={{ background: '#F9FAFA' }}>
       <div
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
@@ -501,13 +501,15 @@ export const CampaignsPage = () => {
                       disabled={campaignLoaded}
                       sx={{
                         fontSize: 12,
+                        backgroundColor: '#ffffff',
                         fontFamily: 'Roboto, sans-serif',
                         letterSpacing: '0.17px',
                         color: '#1f1d25',
                         '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
                         '& .MuiSelect-select': { padding: '6px 8px', fontSize: 12 },
-                        '&.Mui-disabled': { background: '#f0f2f4' },
+                        '&.Mui-disabled': { background: '#F9FAFA' },
                         '&.Mui-disabled .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
+                        height: 36,
                       }}
                     >
                       {PLACEMENT_OPTIONS.map((opt) => (
@@ -521,7 +523,7 @@ export const CampaignsPage = () => {
                   {/* Actions — Edit + Preview */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2, paddingRight: 8, flexShrink: 0 }}>
                     <IconButton size="small" sx={{ padding: '5px' }}>
-                      <EditOutlined style={{ fontSize: 20, color: '#686576' }} />
+                      <EditOutlined style={{ fontSize: 20, color: 'rgb(71, 59, 171)' }} />
                     </IconButton>
                     <IconButton size="small" sx={{ padding: '5px' }}>
                       <OpenInNew style={{ fontSize: 20, color: '#686576' }} />
