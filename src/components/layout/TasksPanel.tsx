@@ -131,16 +131,16 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
     };
   }, [offers, assets, templates, removedTemplateIds, removedBgIds]);
 
-  const projectWorkflowStatus: ProjectWorkflowStatus = hasPendingChanges
-    ? 'pending_changes'
-    : hasAwaitingApproval
-      ? 'awaiting_approval'
-      : hasNeedsEdits
-        ? 'needs_edits'
-        : campaignLoaded
-          ? 'campaign_loaded'
-          : hasDraftAssets
-            ? 'in_progress'
+  const projectWorkflowStatus: ProjectWorkflowStatus = hasDraftAssets
+    ? 'in_progress'
+    : hasPendingChanges
+      ? 'pending_changes'
+      : hasAwaitingApproval
+        ? 'awaiting_approval'
+        : hasNeedsEdits
+          ? 'needs_edits'
+          : campaignLoaded
+            ? 'campaign_loaded'
             : liveCounts['approved'] > 0
               ? 'assets_generated'
               : 'in_progress';
@@ -431,7 +431,7 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
                     ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                     : adsAwaitingShellCount > 0
                       ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                      : allReviewConcluded
+                      : allReviewConcluded && liveCounts['approved'] > 0
                         ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                         : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.key === 'campaigns' ? (

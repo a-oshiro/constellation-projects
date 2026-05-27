@@ -31,10 +31,10 @@ export const PageHeader = ({
   const hasPendingChanges = assets.some((a) => a.status === 'updated' || a.status === 'removed');
   const approvedCount = assets.filter((a) => a.status === 'approved').length;
 
-  const projectWorkflowStatus: ProjectWorkflowStatus = hasPendingChanges
-    ? 'pending_changes'
-    : hasDraftAssets
-      ? 'in_progress'
+  const projectWorkflowStatus: ProjectWorkflowStatus = hasDraftAssets
+    ? 'in_progress'
+    : hasPendingChanges
+      ? 'pending_changes'
       : hasAwaitingApproval
         ? 'awaiting_approval'
         : hasNeedsEdits

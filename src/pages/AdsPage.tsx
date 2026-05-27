@@ -51,7 +51,7 @@ export const AdsPage = () => {
   // Assets that were never approved are excluded even if awaiting_approval for the first time.
   const approvedAssets = assets.filter((a) =>
     a.status === 'approved' ||
-    a.status === 'updated' ||
+    (a.status === 'updated' && everApprovedIds.has(a.id)) ||
     (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
     (a.status === 'removed' && everApprovedIds.has(a.id))
   );
