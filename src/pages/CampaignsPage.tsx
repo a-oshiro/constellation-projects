@@ -38,7 +38,7 @@ const PLACEMENT_OPTIONS = [
 const COL_CHEVRON = 24;
 const COL_LOGO = 54;      // 16px left pad + 38px image
 const COL_NAME = 300;     // campaign name cell
-const COL_STATUS = 140;
+const COL_STATUS = 160;
 const COL_DATE = 140;
 const COL_SHELL_INDENT = COL_CHEVRON + COL_LOGO;  // 78px — aligns thumbnail with campaign logo
 const COL_SHELL_NAME = COL_NAME - COL_LOGO;        // 246px — right edge aligns with campaign name
@@ -62,6 +62,7 @@ const inputStyle: React.CSSProperties = {
 const readOnlyInputStyle: React.CSSProperties = {
   ...inputStyle,
   background: '#F9FAFA',
+  color: 'rgba(0,0,0,0.38)',
   cursor: 'default',
 };
 
@@ -202,11 +203,16 @@ export const CampaignsPage = () => {
     startDate: string; endDate: string; placement: string;
   }>>({});
 
-  const getShellData = (id: string) =>
-    shellData[id] ?? { startDate: campaignStartDate, endDate: campaignEndDate, placement: PLACEMENT_OPTIONS[0] };
+  const getShellData = (id: string, idx?: number) => {
+    const defaultPlacement = idx !== undefined
+      ? PLACEMENT_OPTIONS[idx % PLACEMENT_OPTIONS.length]
+      : PLACEMENT_OPTIONS[0];
+    return shellData[id] ?? { startDate: campaignStartDate, endDate: campaignEndDate, placement: defaultPlacement };
+  };
 
   const updateShell = (id: string, patch: Partial<{ startDate: string; endDate: string; placement: string }>) => {
-    setShellData((prev) => ({ ...prev, [id]: { ...getShellData(id), ...patch } }));
+    const idx = adShells.findIndex((s) => s.id === id);
+    setShellData((prev) => ({ ...prev, [id]: { ...getShellData(id, idx), ...patch } }));
   };
 
   const shellStatus = (shell: AdShell): AssetStatus | null => {
@@ -426,8 +432,8 @@ export const CampaignsPage = () => {
             </div>
 
             {/* ── Ad Shell child rows (expanded) ────────────── */}
-            {hasAdShells && expanded && adShells.map((shell) => {
-              const data = getShellData(shell.id);
+            {hasAdShells && expanded && adShells.map((shell, idx) => {
+              const data = getShellData(shell.id, idx);
               const status = shellStatus(shell);
 
               return (
