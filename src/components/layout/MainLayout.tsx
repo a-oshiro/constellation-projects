@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LeftNav } from './LeftNav';
 import { TopBar } from './TopBar';
 import { TasksPanel } from './TasksPanel';
@@ -8,6 +9,14 @@ import { AdShellPanel } from '../ui/AdShellPanel';
 
 const MainLayoutInner = ({ children }: { children: ReactNode }) => {
   const { tasksPanelOpen, closeTasksPanel, mainPanelRef, editingShell, closeAdShellPanel } = useLayout();
+  const location = useLocation();
+
+  // Close the Ad Shell panel whenever the user navigates away from the Ads page
+  useEffect(() => {
+    if (location.pathname !== '/ads') {
+      closeAdShellPanel();
+    }
+  }, [location.pathname]);
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
