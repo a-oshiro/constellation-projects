@@ -168,9 +168,10 @@ const AssetThumbnailStack = ({ assets, total }: { assets: Asset[]; total: number
 interface AdvancedGenerationPanelProps {
   selectedAssets: Asset[];
   onClose: () => void;
+  width?: number;
 }
 
-export const AdvancedGenerationPanel = ({ selectedAssets, onClose }: AdvancedGenerationPanelProps) => {
+export const AdvancedGenerationPanel = ({ selectedAssets, onClose, width = 320 }: AdvancedGenerationPanelProps) => {
   const { assets: allAssets, bulkSetAssetStatus } = useProject();
   const { startProgress } = useProgressIndicator();
   const { addSubmittingIds, clearSubmittingIds } = useLayout();
@@ -259,7 +260,7 @@ export const AdvancedGenerationPanel = ({ selectedAssets, onClose }: AdvancedGen
     <div
       className="flex flex-col shrink-0 overflow-hidden"
       style={{
-        width: 320,
+        width,
         background: '#ffffff',
         borderRadius: 8,
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',

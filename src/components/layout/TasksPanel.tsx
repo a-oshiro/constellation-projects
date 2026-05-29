@@ -45,9 +45,10 @@ const AVATARS = [
 
 interface TasksPanelProps {
   onClose?: () => void;
+  width?: number;
 }
 
-export const TasksPanel = ({ onClose }: TasksPanelProps) => {
+export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { offers, assets, templates, removedTemplateIds, removedBgIds, pendingChanges, pendingRemovals, everApprovedIds, campaignLoaded } = useProject();
@@ -160,7 +161,7 @@ export const TasksPanel = ({ onClose }: TasksPanelProps) => {
     <div
       className="flex flex-col shrink-0 overflow-hidden"
       style={{
-        width: 280,
+        width,
         background: '#ffffff',
         borderRadius: 8,
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',

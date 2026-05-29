@@ -14,11 +14,17 @@ export interface AdShell {
   platform: string;
   adType: string;
   folder: string;
+  // Editable via AdShellPanel
+  displayOrder?: string;
+  autoTransition?: boolean;
+  displayTime?: string;
+  transitionTime?: string;
 }
 
 interface AdShellCardProps {
   shell: AdShell;
   selected?: boolean;
+  isEditing?: boolean;
   onSelect?: (id: string, checked: boolean) => void;
   onEdit?: (shell: AdShell) => void;
 }
@@ -38,8 +44,9 @@ const AssetLayerContent = ({ asset, template }: { asset: Asset; template: Templa
   );
 };
 
-export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardProps) => {
+export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: AdShellCardProps) => {
   const [hover, setHover] = useState(false);
+  const active = hover || isEditing;
   const { assets, template, name, platform, adType, folder } = shell;
 
   // Derive shell status: awaiting_approval > updated (also shown when assets are removed)
@@ -62,14 +69,14 @@ export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardPr
           position: 'relative',
           aspectRatio: '1 / 1',
           background: '#f0f2f4',
-          border: `${hover ? 2 : 1}px solid ${hover ? '#473bab' : '#e7e7e9'}`,
+          border: `${active ? 2 : 1}px solid ${active ? '#473bab' : '#e7e7e9'}`,
           borderRadius: 8,
           overflow: 'hidden',
           transition: 'border-color 0.15s',
         }}
       >
         {/* Default state: stacked cards */}
-        {!hover && (
+        {!active && (
           <>
             {/* Layer 3 — back, rotated -5° (left) */}
             {assets[2] && (
@@ -92,8 +99,8 @@ export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardPr
           </>
         )}
 
-        {/* Hover state: 2-row padded grid */}
-        {hover && (() => {
+        {/* Hover / editing state: 2-row padded grid */}
+        {active && (() => {
           // Row 1 cells are ~square; row 2 cell is ~2:1 (inner area is square, two equal rows).
           // Use percentage dimensions so FilledTemplatePreview (which fills 100%×100%) gets a definite size.
           const hPct = (template.height / template.width) * 100; // % of cell HEIGHT for row-1 (square cells)
@@ -221,9 +228,9 @@ export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardPr
             position: 'absolute',
             bottom: 9,
             right: 9,
-            opacity: hover ? 1 : 0,
+            opacity: active ? 1 : 0,
             transition: 'opacity 0.15s',
-            pointerEvents: hover ? 'auto' : 'none',
+            pointerEvents: active ? 'auto' : 'none',
             zIndex: 3,
           }}
         >
@@ -269,7 +276,7 @@ export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardPr
           }}
         />
         <Checkbox
-          checked={!!selected}
+          checked={!!selected || !!isEditing}
           onChange={(e) => onSelect?.(shell.id, e.target.checked)}
           size="medium"
           sx={{
@@ -279,7 +286,7 @@ export const AdShellCard = ({ shell, selected, onSelect, onEdit }: AdShellCardPr
             '&.Mui-checked': { color: '#473bab' },
             '& .MuiSvgIcon-root': {
               fontSize: 22,
-              color: selected ? '#473bab' : 'rgba(0,0,0,0.54)',
+              color: (selected || isEditing) ? '#473bab' : 'rgba(0,0,0,0.54)',
               background: 'white',
               borderRadius: '3px',
             },

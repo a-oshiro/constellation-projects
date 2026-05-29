@@ -11,6 +11,8 @@ interface LayoutContextValue {
   editingShell: AdShell | null;
   openAdShellPanel: (shell: AdShell) => void;
   closeAdShellPanel: () => void;
+  shellCustomizations: Record<string, Partial<AdShell>>;
+  updateAdShell: (id: string, updates: Partial<AdShell>) => void;
   advancedGenerationOpen: boolean;
   advancedGenerationAssets: Asset[];
   openAdvancedGeneration: (selectedAssets?: Asset[]) => void;
@@ -29,6 +31,8 @@ const LayoutContext = createContext<LayoutContextValue>({
   editingShell: null,
   openAdShellPanel: () => {},
   closeAdShellPanel: () => {},
+  shellCustomizations: {},
+  updateAdShell: () => {},
   advancedGenerationOpen: false,
   advancedGenerationAssets: [],
   openAdvancedGeneration: () => {},
@@ -41,6 +45,7 @@ const LayoutContext = createContext<LayoutContextValue>({
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
   const [editingShell, setEditingShell] = useState<AdShell | null>(null);
+  const [shellCustomizations, setShellCustomizations] = useState<Record<string, Partial<AdShell>>>({});
   const [advancedGenerationOpen, setAdvancedGenerationOpen] = useState(false);
   const [advancedGenerationAssets, setAdvancedGenerationAssets] = useState<Asset[]>([]);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
@@ -55,6 +60,14 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
       editingShell,
       openAdShellPanel: (shell) => setEditingShell(shell),
       closeAdShellPanel: () => setEditingShell(null),
+      shellCustomizations,
+      updateAdShell: (id, updates) => {
+        setShellCustomizations((prev) => ({
+          ...prev,
+          [id]: { ...(prev[id] ?? {}), ...updates },
+        }));
+        setEditingShell((prev) => (prev?.id === id ? { ...prev, ...updates } : prev));
+      },
       advancedGenerationOpen,
       advancedGenerationAssets,
       openAdvancedGeneration: (selectedAssets = []) => {

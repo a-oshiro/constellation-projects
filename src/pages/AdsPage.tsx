@@ -43,7 +43,7 @@ const CreateAdShellSplitButton = () => (
 
 export const AdsPage = () => {
   const { assets, everApprovedIds } = useProject();
-  const { openAdShellPanel } = useLayout();
+  const { openAdShellPanel, editingShell, shellCustomizations } = useLayout();
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -70,8 +70,9 @@ export const AdsPage = () => {
       const template = TEMPLATES.find((t) => t.id === first.templateId)!;
       const templateBgs = BACKGROUNDS.filter((b) => b.templateId === first.templateId);
       const bgNum = templateBgs.findIndex((b) => b.id === first.backgroundId) + 1;
-      return {
-        id: `${first.templateId}__${first.backgroundId}`,
+      const id = `${first.templateId}__${first.backgroundId}`;
+      const base: AdShell = {
+        id,
         assets: shellAssets,
         template,
         bgNum,
@@ -80,8 +81,10 @@ export const AdsPage = () => {
         adType: AD_TYPE_MAP[template.type] ?? 'Grid',
         folder: first.folder,
       };
+      // Apply any saved customizations on top of the computed base
+      return { ...base, ...(shellCustomizations[id] ?? {}) };
     });
-  }, [approvedAssets]);
+  }, [approvedAssets, shellCustomizations]);
 
   const filteredShells = adShells.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -216,6 +219,7 @@ export const AdsPage = () => {
                   key={shell.id}
                   shell={shell}
                   selected={selectedIds.has(shell.id)}
+                  isEditing={editingShell?.id === shell.id}
                   onSelect={handleSelect}
                   onEdit={openAdShellPanel}
                 />

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { LeftNav } from './LeftNav';
 import { TopBar } from './TopBar';
@@ -7,6 +7,80 @@ import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
 import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
+
+// ── Resize constraints ────────────────────────────────────────────────────────
+const LEFT_DEFAULT  = 280;
+const LEFT_MIN      = 180;
+const LEFT_MAX      = 480;
+const RIGHT_DEFAULT = 320;
+const RIGHT_MIN     = 220;
+const RIGHT_MAX     = 560;
+
+// ── ResizeHandle ─────────────────────────────────────────────────────────────
+interface ResizeHandleProps {
+  /** Called with incremental pixel delta on every mousemove while dragging. */
+  onDrag: (delta: number) => void;
+}
+
+const ResizeHandle = ({ onDrag }: ResizeHandleProps) => {
+  const [hovered, setHovered]   = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    let lastX = e.clientX;
+    setDragging(true);
+    document.body.style.cursor    = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (me: MouseEvent) => {
+      const delta = me.clientX - lastX;
+      lastX = me.clientX;
+      onDrag(delta);
+    };
+
+    const onUp = () => {
+      setDragging(false);
+      document.body.style.cursor    = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  }, [onDrag]);
+
+  const active = hovered || dragging;
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: 4,
+        flexShrink: 0,
+        cursor: 'col-resize',
+        display: 'flex',
+        alignItems: 'stretch',
+        justifyContent: 'center',
+        zIndex: 20,
+        alignSelf: 'stretch',
+      }}
+    >
+      <div
+        style={{
+          width: 2,
+          borderRadius: 1,
+          background: active ? '#473bab' : 'transparent',
+          transition: 'background 0.12s',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
+};
 
 /** Pages where the Advanced Generation panel should auto-close. */
 const ADV_GEN_HIDDEN_PATHS = ['/approved', '/ads', '/campaigns'];
@@ -18,6 +92,18 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
   } = useLayout();
   const location = useLocation();
+
+  const [leftWidth,  setLeftWidth]  = useState(LEFT_DEFAULT);
+  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
+
+  const handleLeftDrag  = useCallback((delta: number) => {
+    setLeftWidth((w)  => Math.min(LEFT_MAX,  Math.max(LEFT_MIN,  w + delta)));
+  }, []);
+  const handleRightDrag = useCallback((delta: number) => {
+    setRightWidth((w) => Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, w - delta)));
+  }, []);
+
+  const hasRightPanel = !!editingShell || advancedGenerationOpen;
 
   // Close the Ad Shell panel whenever the user navigates away from the Ads page
   useEffect(() => {
@@ -39,7 +125,12 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
       <div className="flex flex-col flex-1 min-w-0" style={{ background: '#f0f2f4' }}>
         <TopBar />
         <div className="flex flex-1 min-h-0">
-          {tasksPanelOpen && <TasksPanel onClose={closeTasksPanel} />}
+          {tasksPanelOpen && (
+            <>
+              <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
+              <ResizeHandle onDrag={handleLeftDrag} />
+            </>
+          )}
           <div
             ref={mainPanelRef}
             className="flex-1 min-w-0 overflow-hidden"
@@ -50,17 +141,20 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             </div>
             <PreviewPanel />
           </div>
+          {hasRightPanel && <ResizeHandle onDrag={handleRightDrag} />}
           {editingShell && (
             <AdShellPanel
               key={editingShell.id}
               shell={editingShell}
               onClose={closeAdShellPanel}
+              width={rightWidth}
             />
           )}
           {advancedGenerationOpen && (
             <AdvancedGenerationPanel
               selectedAssets={advancedGenerationAssets}
               onClose={closeAdvancedGeneration}
+              width={rightWidth}
             />
           )}
         </div>

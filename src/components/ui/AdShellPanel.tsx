@@ -3,10 +3,12 @@ import { Close, Add } from '@mui/icons-material';
 import { Checkbox, MenuItem, Select } from '@mui/material';
 import type { AdShell } from './AdShellCard';
 import { AssetHorizontalCard } from './AssetHorizontalCard';
+import { useLayout } from '../../context/LayoutContext';
 
 interface AdShellPanelProps {
   shell: AdShell;
   onClose: () => void;
+  width?: number;
 }
 
 const DISPLAY_ORDER_OPTIONS = ['Display First', 'Display Last'];
@@ -55,24 +57,36 @@ const sectionTitleStyle: React.CSSProperties = {
   lineHeight: 1.43,
 };
 
-export const AdShellPanel = ({ shell, onClose }: AdShellPanelProps) => {
+export const AdShellPanel = ({ shell, onClose, width = 320 }: AdShellPanelProps) => {
+  const { updateAdShell } = useLayout();
   const [name, setName] = useState(shell.name);
   const [folder, setFolder] = useState(shell.folder ?? '');
-  const [displayOrder, setDisplayOrder] = useState(DISPLAY_ORDER_OPTIONS[0]);
-  const [adType, setAdType] = useState(
-    shell.adType === 'Carousel' ? 'Carousel' : 'Grid'
-  );
-  const [autoTransition, setAutoTransition] = useState(false);
-  const [displayTime, setDisplayTime] = useState('5');
-  const [transitionTime, setTransitionTime] = useState('1');
+  const [displayOrder, setDisplayOrder] = useState(shell.displayOrder ?? DISPLAY_ORDER_OPTIONS[0]);
+  const [adType, setAdType] = useState(shell.adType === 'Carousel' ? 'Carousel' : 'Grid');
+  const [autoTransition, setAutoTransition] = useState(shell.autoTransition ?? false);
+  const [displayTime, setDisplayTime] = useState(shell.displayTime ?? '5');
+  const [transitionTime, setTransitionTime] = useState(shell.transitionTime ?? '1');
 
   const isCarousel = adType === 'Carousel';
+
+  const handleSave = () => {
+    updateAdShell(shell.id, {
+      name,
+      folder,
+      adType,
+      displayOrder,
+      autoTransition,
+      displayTime,
+      transitionTime,
+    });
+    onClose();
+  };
 
   return (
     <div
       className="flex flex-col shrink-0 overflow-hidden"
       style={{
-        width: 320,
+        width,
         background: '#ffffff',
         borderRadius: 8,
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
@@ -366,6 +380,7 @@ export const AdShellPanel = ({ shell, onClose }: AdShellPanelProps) => {
           Close
         </button>
         <button
+          onClick={handleSave}
           style={{
             background: '#473bab',
             color: '#ffffff',

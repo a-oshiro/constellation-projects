@@ -11,6 +11,7 @@ import bmwLogoSrc from '../assets/bmw-logo.png';
 import { PROJECT_INFO, TEMPLATES, BACKGROUNDS } from '../data/mockData';
 import { useProject } from '../context/ProjectContext';
 import { useSnackbar } from '../context/SnackbarContext';
+import { useLayout } from '../context/LayoutContext';
 
 function toInputDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -158,6 +159,7 @@ const MiniShellThumbnail = ({ shell }: { shell: AdShell }) => {
 export const CampaignsPage = () => {
   const { assets, everApprovedIds, campaignLoaded, loadCampaign } = useProject();
   const { showSnackbar } = useSnackbar();
+  const { shellCustomizations } = useLayout();
 
   const approvedAssets = assets.filter((a) =>
     a.status === 'approved' ||
@@ -178,8 +180,9 @@ export const CampaignsPage = () => {
       const template = TEMPLATES.find((t) => t.id === first.templateId)!;
       const templateBgs = BACKGROUNDS.filter((b) => b.templateId === first.templateId);
       const bgNum = templateBgs.findIndex((b) => b.id === first.backgroundId) + 1;
-      return {
-        id: `${first.templateId}__${first.backgroundId}`,
+      const id = `${first.templateId}__${first.backgroundId}`;
+      const base: AdShell = {
+        id,
         assets: shellAssets,
         template,
         bgNum,
@@ -188,8 +191,9 @@ export const CampaignsPage = () => {
         adType: AD_TYPE_MAP[template.type] ?? 'Grid',
         folder: first.folder,
       };
+      return { ...base, ...(shellCustomizations[id] ?? {}) };
     });
-  }, [approvedAssets]);
+  }, [approvedAssets, shellCustomizations]);
 
   const hasAdShells = adShells.length > 0;
 
@@ -255,7 +259,7 @@ export const CampaignsPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F9FAFA' }}>
+    <div className="flex flex-col h-full">
       <div
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
