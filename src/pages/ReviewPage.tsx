@@ -46,7 +46,10 @@ export const ReviewPage = () => {
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [revertDialogOpen, setRevertDialogOpen] = useState(false);
   const [draftVariant] = useState<DraftVariant>('badge');
-  const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>(() => {
+    const nonApproved = assets.filter((a) => a.status !== 'approved');
+    return TAB_ORDER.find((s) => nonApproved.some((a) => a.status === s)) ?? 'all';
+  });
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const nonApprovedAssets = assets.filter((a) => a.status !== 'approved');
@@ -138,7 +141,8 @@ export const ReviewPage = () => {
 
   useEffect(() => {
     if (activeTab !== 'all' && !nonApprovedAssets.some((a) => a.status === activeTab)) {
-      setActiveTab('all');
+      const fallback = TAB_ORDER.find((s) => nonApprovedAssets.some((a) => a.status === s)) ?? 'all';
+      setActiveTab(fallback);
     }
   }, [activeTab, assets]);
 
@@ -387,7 +391,7 @@ export const ReviewPage = () => {
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
       <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
-        {([{ status: 'all' as const, label: 'All', count: nonApprovedAssets.length }, ...dynamicTabs]).map(({ status, label, count }) => {
+        {([...dynamicTabs, { status: 'all' as const, label: 'All', count: nonApprovedAssets.length }]).map(({ status, label, count }) => {
           const isActive = activeTab === status;
           return (
             <button
