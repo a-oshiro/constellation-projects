@@ -26,7 +26,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     setCurrent(config);
     setOpen(true);
-    timerRef.current = setTimeout(() => setOpen(false), 4000);
+    timerRef.current = setTimeout(() => setOpen(false), 2000);
   }, []);
 
   const handleClose = useCallback(() => {

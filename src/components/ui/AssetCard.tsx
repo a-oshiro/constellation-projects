@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { Checkbox, IconButton } from '@mui/material';
-import { MoreVert, FolderOutlined, CheckCircle, HourglassEmpty, DoNotDisturb, WarningAmber, PendingOutlined } from '@mui/icons-material';
+import { Checkbox, Divider, IconButton, Menu, MenuItem } from '@mui/material';
+import {
+  MoreVert, FolderOutlined, CheckCircle, HourglassEmpty, DoNotDisturb, WarningAmber, PendingOutlined,
+  EditOutlined, AssignmentReturnOutlined, ContentCopyOutlined, DriveFileRenameOutline,
+  InsertLinkOutlined, FolderOpenOutlined, RefreshOutlined, DeleteOutlined,
+} from '@mui/icons-material';
 import { NeedsEditsIcon } from './NeedsEditsIcon';
 import type { Asset, AssetStatus } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
@@ -17,6 +21,7 @@ interface AssetCardProps {
   draftVariant?: DraftVariant;
   onSelect?: (id: string, checked: boolean) => void;
   onStatusChange?: (id: string, status: AssetStatus) => void;
+  onSendBackToReview?: (id: string) => void;
 }
 
 const STATUS_CONFIG: Record<AssetStatus, {
@@ -81,10 +86,11 @@ const MAX_VISIBLE_TAGS = 2;
 
 const LARGE_PREVIEW_STATUSES: AssetStatus[] = ['updated', 'draft'];
 
-export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect }: AssetCardProps) => {
+export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect, onSendBackToReview }: AssetCardProps) => {
   const [hover, setHover] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [showLargePreview, setShowLargePreview] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
   const visibleTags = asset.tags.slice(0, MAX_VISIBLE_TAGS);
   const overflowCount = asset.tags.length - MAX_VISIBLE_TAGS;
@@ -120,7 +126,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           background: '#f0f2f4',
           border: isDraft && draftVariant === 'labeled'
             ? '3px dashed #80C3E8'
-            : `${selected ? 2 : 1}px solid ${selected ? '#473bab' : '#e7e7e9'}`,
+            : `${(selected || hover) ? 2 : 1}px solid ${(selected || hover) ? '#473bab' : '#e7e7e9'}`,
           borderRadius: isDraft && draftVariant === 'badge' ? '8px 8px 0 0' : 8,
           overflow: 'hidden',
           transition: 'border-color 0.15s',
@@ -386,11 +392,66 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           <IconButton
             size="small"
             disabled={disabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (asset.status === 'approved') setMenuAnchor(e.currentTarget);
+            }}
             sx={{ padding: '4px', flexShrink: 0, mt: '-2px' }}
           >
             <MoreVert style={{ fontSize: 18, color: '#1f1d25' }} />
           </IconButton>
         </div>
+
+        {/* ── Approved asset context menu ─────────────────── */}
+        {asset.status === 'approved' && (
+          <Menu
+            anchorEl={menuAnchor}
+            open={!!menuAnchor}
+            onClose={() => setMenuAnchor(null)}
+            slotProps={{ paper: { sx: { minWidth: 220, borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.14)' } } }}
+          >
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <EditOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Edit Variables</span>
+            </MenuItem>
+            <MenuItem
+              onClick={() => { onSendBackToReview?.(asset.id); setMenuAnchor(null); }}
+              sx={{ gap: 1.5, py: 1 }}
+            >
+              <AssignmentReturnOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Send back to Review</span>
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <ContentCopyOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Duplicate</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <DriveFileRenameOutline sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Edit Metadata</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <InsertLinkOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Copy Link To Asset</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <InsertLinkOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Copy Link To Latest</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <FolderOpenOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>View in Folder</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <RefreshOutlined sx={{ fontSize: 18, color: '#686576' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Refresh Asset</span>
+            </MenuItem>
+            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+              <DeleteOutlined sx={{ fontSize: 18, color: '#be0e1c' }} />
+              <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#be0e1c' }}>Delete</span>
+            </MenuItem>
+          </Menu>
+        )}
 
         {/* Tags */}
         {asset.tags.length > 0 && (

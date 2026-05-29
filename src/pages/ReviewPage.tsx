@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, Select, MenuItem, FormControl, TextField } from '@mui/material';
 import { Search, MoreVert, ViewModule, FilterList, WarningAmber } from '@mui/icons-material';
-import { GenerateAssetsIcon } from '../components/ui/GenerateAssetsIcon';
+import { GenerateSplitButton } from '../components/ui/GenerateSplitButton';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Tooltip } from '../components/ui/Tooltip';
 import { useSnackbar } from '../context/SnackbarContext';
@@ -30,24 +30,23 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { AssetCard } from '../components/ui/AssetCard';
 import type { DraftVariant } from '../components/ui/AssetCard';
-import { DraftVariantPicker } from '../components/ui/DraftVariantPicker';
 import { EmptyStateMessage } from '../components/ui/EmptyStateMessage';
 import { useProject } from '../context/ProjectContext';
+import { useLayout } from '../context/LayoutContext';
 import { ApplyChangesDialog, RevertChangesDialog } from '../components/ui/ProjectChangesDialogs';
 
 export const ReviewPage = () => {
   const { assets, offers, bulkSetAssetStatus, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded } = useProject();
   const { showSnackbar } = useSnackbar();
   const { startProgress } = useProgressIndicator();
+  const { openAdvancedGeneration, closeAdvancedGeneration, submittingIds, addSubmittingIds, clearSubmittingIds } = useLayout();
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [revertDialogOpen, setRevertDialogOpen] = useState(false);
-  const [draftVariant, setDraftVariant] = useState<DraftVariant>('default');
+  const [draftVariant] = useState<DraftVariant>('badge');
   const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>('all');
-  const [showTabs, setShowTabs] = useState(true);
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const nonApprovedAssets = assets.filter((a) => a.status !== 'approved');
@@ -174,7 +173,8 @@ export const ReviewPage = () => {
     if (targetAssets.length === 0) return;
 
     const targetIds = new Set(targetAssets.map((a) => a.id));
-    setSubmittingIds(targetIds);
+    closeAdvancedGeneration();
+    addSubmittingIds(targetIds);
     setSelectedIds(new Set());
 
     startProgress(targetAssets.map((a) => ({
@@ -185,8 +185,8 @@ export const ReviewPage = () => {
 
     setTimeout(() => {
       bulkSetAssetStatus(targetIds, 'awaiting_approval');
-      setSubmittingIds(new Set());
-    }, 5000);
+      clearSubmittingIds();
+    }, 3000);
   };
 
   return (
@@ -242,27 +242,16 @@ export const ReviewPage = () => {
           placement="bottom"
         >
           <span style={{ flexShrink: 0, display: 'inline-flex' }}>
-            <button
+            <GenerateSplitButton
               disabled={submitDisabled}
               onClick={handleSubmitForApproval}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: !submitDisabled ? '#473bab' : 'rgba(17,16,20,0.12)',
-                borderRadius: 100,
-                padding: '4px 10px',
-                border: 'none',
-                cursor: !submitDisabled ? 'pointer' : 'default',
-                pointerEvents: submitDisabled ? 'none' : undefined,
+              onAdvancedGeneration={() => {
+                const sel = selectedIds.size > 0
+                  ? nonApprovedAssets.filter((a) => selectedIds.has(a.id))
+                  : [];
+                openAdvancedGeneration(sel);
               }}
-            >
-              <GenerateAssetsIcon color={!submitDisabled ? '#ffffff' : '#9c99a9'} size={16} />
-              <span style={{
-                fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-                color: !submitDisabled ? '#ffffff' : '#9c99a9', letterSpacing: '0.46px', lineHeight: '22px', whiteSpace: 'nowrap',
-              }}>
-                Generate Assets
-              </span>
-            </button>
+            />
           </span>
         </Tooltip>
 
@@ -311,9 +300,6 @@ export const ReviewPage = () => {
                     '& .MuiSelect-select': { py: '6px', px: '8px', display: 'flex', alignItems: 'center' },
                   }}
                 >
-                  <MenuItem value="" sx={{ fontSize: 12, color: '#9c99a9', fontFamily: 'Roboto, sans-serif' }}>
-                    Change Status
-                  </MenuItem>
                   {STATUS_OPTIONS.map((status) => (
                     <MenuItem key={status} value={status} sx={{ px: 2, py: '4px' }}>
                       <StatusBadge status={status} />
@@ -400,7 +386,7 @@ export const ReviewPage = () => {
       )}
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
-      {showTabs && <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
+      <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
         {([{ status: 'all' as const, label: 'All', count: nonApprovedAssets.length }, ...dynamicTabs]).map(({ status, label, count }) => {
           const isActive = activeTab === status;
           return (
@@ -427,7 +413,7 @@ export const ReviewPage = () => {
             </button>
           );
         })}
-      </div>}
+      </div>
 
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
       <div className="flex-1 overflow-y-auto flex flex-col">
@@ -482,26 +468,6 @@ export const ReviewPage = () => {
         onRevertRemovals={(itemIds) => { revertRemovals(itemIds); showSnackbar({ message: 'Changes reverted.' }); }}
       />
     )}
-    <div style={{ position: 'fixed', bottom: 80, right: 16, zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-      {/* Tabs toggle */}
-      <div style={{ background: '#ffffff', border: '1px solid #e7e7e9', borderRadius: 100, boxShadow: '0 2px 12px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', padding: 3, gap: 8, paddingLeft: 10, paddingRight: 10 }}>
-        <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-          Review tabs
-        </span>
-        <button
-          onClick={() => setShowTabs((v) => !v)}
-          aria-label={showTabs ? 'Hide review tabs' : 'Show review tabs'}
-          style={{ width: 28, height: 16, borderRadius: 100, background: showTabs ? '#473bab' : '#cac9cf', border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'background 0.15s' }}
-        >
-          <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', background: '#ffffff', top: 2, left: showTabs ? 14 : 2, transition: 'left 0.15s' }} />
-        </button>
-      </div>
-
-      {/* Draft view picker */}
-      {hasDraftAssets && (
-        <DraftVariantPicker value={draftVariant} onChange={setDraftVariant} />
-      )}
-    </div>
     </>
   );
 };

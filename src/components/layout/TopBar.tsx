@@ -1,6 +1,7 @@
 import { TextField } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import constellationLockup from '../../assets/constellation-lockup.svg';
+import { CURRENT_USER } from '../../data/mockData';
 
 const AIAgentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 30 30" fill="none">
@@ -124,7 +125,7 @@ export const TopBar = () => {
         <IconBtn title="Settings"><SettingsIcon /></IconBtn>
 
         <img
-          src="https://i.pravatar.cc/32?img=47"
+          src={CURRENT_USER.avatarUrl}
           alt="User"
           style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', marginLeft: 8, cursor: 'pointer', flexShrink: 0 }}
         />

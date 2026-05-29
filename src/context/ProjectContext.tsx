@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
-import { BACKGROUNDS, TEMPLATES, OFFERS } from '../data/mockData';
-import type { Background, Asset, AssetStatus, Offer, Template } from '../data/types';
+import React, { createContext, useContext, useState, useMemo, useCallback, useRef } from 'react';
+import { BACKGROUNDS, TEMPLATES, OFFERS, CURRENT_USER } from '../data/mockData';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment } from '../data/types';
 
 export interface PendingOfferChange {
   offerId: string;
@@ -38,6 +38,9 @@ interface ProjectContextValue {
   revertRemovals: (itemIds: Set<string>) => void;
   campaignLoaded: boolean;
   loadCampaign: () => void;
+  assetVersions: Record<string, AssetVersion[]>;
+  assetComments: Record<string, AssetComment[]>;
+  addAssetComment: (assetId: string, text: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -96,9 +99,32 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [removedOfferIds, setRemovedOfferIds] = useState<Set<string>>(new Set());
   const [campaignLoaded, setCampaignLoaded] = useState(false);
   const loadCampaign = useCallback(() => setCampaignLoaded(true), []);
+  const [assetVersionHistory, setAssetVersionHistory] = useState<Record<string, AssetVersion[]>>({});
+  const [assetComments, setAssetComments] = useState<Record<string, AssetComment[]>>({});
+
+  const addAssetComment = useCallback((assetId: string, text: string) => {
+    const comment: AssetComment = {
+      id: `comment-${assetId}-${Date.now()}`,
+      assetId,
+      authorName: CURRENT_USER.name,
+      authorAvatar: CURRENT_USER.avatarUrl,
+      text,
+      timestamp: Date.now(),
+    };
+    setAssetComments((prev) => ({
+      ...prev,
+      [assetId]: [...(prev[assetId] ?? []), comment],
+    }));
+  }, []);
 
   // All items (including pending removals) so computeAssets can still generate ghost assets
   const rawAssets = useMemo(() => computeAssets(offers, templates, backgrounds), [offers, templates, backgrounds]);
+
+  // Refs so callbacks can always read the latest values without stale closures
+  const rawAssetsRef = useRef(rawAssets);
+  rawAssetsRef.current = rawAssets;
+  const assetStatusesRef = useRef(assetStatuses);
+  assetStatusesRef.current = assetStatuses;
 
   const assets = useMemo(
     () => rawAssets.map((a) => assetStatuses[a.id] ? { ...a, status: assetStatuses[a.id] } : a),
@@ -197,9 +223,56 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     if (status === 'approved') setEverApprovedIds((prev) => new Set([...prev, ...ids]));
+    if (status === 'awaiting_approval') {
+      const now = Date.now();
+      setAssetVersionHistory((prev) => {
+        const next = { ...prev };
+        ids.forEach((id) => {
+          const asset = rawAssetsRef.current.find((a) => a.id === id);
+          if (!asset) return;
+          const version: AssetVersion = {
+            id: `v-${id}-${now}`,
+            assetId: id,
+            timestamp: now,
+            offer: { ...asset.offer },
+            backgroundUrl: asset.backgroundUrl,
+            name: asset.name,
+          };
+          next[id] = [...(prev[id] ?? []), version];
+        });
+        return next;
+      });
+    }
   }, []);
 
   const applyChanges = useCallback(() => {
+    // Record a new version for every 'updated' asset before changing statuses
+    const now = Date.now();
+    const currentStatuses = assetStatusesRef.current;
+    const currentRawAssets = rawAssetsRef.current;
+    const updatedIds = Object.entries(currentStatuses)
+      .filter(([, s]) => s === 'updated')
+      .map(([id]) => id);
+    if (updatedIds.length > 0) {
+      setAssetVersionHistory((prev) => {
+        const next = { ...prev };
+        updatedIds.forEach((id) => {
+          const asset = currentRawAssets.find((a) => a.id === id);
+          if (!asset) return;
+          const version: AssetVersion = {
+            id: `v-${id}-${now}`,
+            assetId: id,
+            timestamp: now,
+            offer: { ...asset.offer },
+            backgroundUrl: asset.backgroundUrl,
+            name: asset.name,
+          };
+          next[id] = [...(prev[id] ?? []), version];
+        });
+        return next;
+      });
+    }
+
     // Finalize: remove pending-removal items from their arrays
     const removalsByType = { offer: new Set<string>(), template: new Set<string>(), background: new Set<string>() };
     pendingRemovals.forEach((r) => removalsByType[r.type].add(r.id));
@@ -291,6 +364,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       pendingChanges, pendingRemovals,
       applyChanges, revertChanges, revertRemovals,
       campaignLoaded, loadCampaign,
+      assetVersions: assetVersionHistory,
+      assetComments,
+      addAssetComment,
     }}>
       {children}
     </ProjectContext.Provider>

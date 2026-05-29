@@ -27,7 +27,7 @@ export function ProgressIndicatorProvider({ children }: { children: React.ReactN
     setItems(newItems);
     setVisible(true);
     setDone(false);
-    timerRef.current = setTimeout(() => setDone(true), 5000);
+    timerRef.current = setTimeout(() => setDone(true), 3000);
   }, []);
 
   const dismiss = useCallback(() => {

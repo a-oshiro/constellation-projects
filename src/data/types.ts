@@ -81,6 +81,24 @@ export interface Asset {
   logoId?: string;
 }
 
+export interface AssetVersion {
+  id: string;
+  assetId: string;
+  timestamp: number;
+  offer: Offer;
+  backgroundUrl: string;
+  name: string;
+}
+
+export interface AssetComment {
+  id: string;
+  assetId: string;
+  authorName: string;
+  authorAvatar: string;
+  text: string;
+  timestamp: number;
+}
+
 export type TaskKey = 'offers' | 'templates' | 'theme_and_logos' | 'review' | 'approved' | 'ads' | 'campaigns';
 
 export interface TaskItem {

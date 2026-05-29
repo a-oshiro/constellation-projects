@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, TextField } from '@mui/material';
-import { Search, MoreVert, ViewModule, FilterList, WarningAmber } from '@mui/icons-material';
+import {
+  Search, MoreVert, ViewModule, FilterList, WarningAmber,
+  Close, IosShareOutlined, BuildOutlined, EditOutlined,
+  CropFreeOutlined, AutoAwesomeOutlined, DeleteOutlined,
+  AssignmentReturnOutlined,
+} from '@mui/icons-material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { AssetCard } from '../components/ui/AssetCard';
@@ -9,7 +14,7 @@ import { EmptyStateMessage } from '../components/ui/EmptyStateMessage';
 import { useProject } from '../context/ProjectContext';
 
 export const ApprovedPage = () => {
-  const { assets } = useProject();
+  const { assets, bulkSetAssetStatus } = useProject();
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -29,6 +34,20 @@ export const ApprovedPage = () => {
     });
   };
 
+  const handleSendBackToReview = (id: string) => {
+    bulkSetAssetStatus(new Set([id]), 'awaiting_approval');
+    navigate('/review');
+  };
+
+  const handleBulkSendBackToReview = () => {
+    if (selectedIds.size === 0) return;
+    bulkSetAssetStatus(selectedIds, 'awaiting_approval');
+    setSelectedIds(new Set());
+    navigate('/review');
+  };
+
+  const hasSelection = selectedIds.size > 0;
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#f0f2f4' }}>
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -37,53 +56,108 @@ export const ApprovedPage = () => {
         breadcrumbs={['Projects', 'May Offers - Specials', 'Approved']}
         title="Approved"
         rightExtras={
-          <>
-            <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
-              {filteredAssets.length} Items
-            </span>
-            <IconButton size="small" sx={{ padding: '5px' }}>
-              <ViewModule style={{ fontSize: 20, color: '#686576' }} />
-            </IconButton>
-          </>
+          !hasSelection ? (
+            <>
+              <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+                {filteredAssets.length} Items
+              </span>
+              <IconButton size="small" sx={{ padding: '5px' }}>
+                <ViewModule style={{ fontSize: 20, color: '#686576' }} />
+              </IconButton>
+            </>
+          ) : undefined
         }
       >
-        {/* Filter icon */}
-        <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
-          <FilterList style={{ fontSize: 20, color: '#1f1d25' }} />
-        </IconButton>
+        {hasSelection ? (
+          /* ── Multi-select toolbar ─────────────────────────── */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1}}>
+            {/* Clear selection */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: '#F4F5F6', padding: '4px 12px', borderRadius: 100, width: 'fit-content' }}>
+              <IconButton size="small" onClick={() => setSelectedIds(new Set())} sx={{ padding: '5px', flexShrink: 0 }}>
+                <Close style={{ fontSize: 20, color: '#1f1d25' }} />
+              </IconButton>
 
-        {/* Three-dots */}
-        <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
-          <MoreVert style={{ fontSize: 20, color: '#1f1d25' }} />
-        </IconButton>
+              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', fontWeight: 500, letterSpacing: '0.17px', whiteSpace: 'nowrap', marginRight: 4 }}>
+                {selectedIds.size} selected
+              </span>
 
-        {/* Search */}
-        <TextField
-          size="small"
-          placeholder="Find below"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          slotProps={{
-            input: { startAdornment: <Search style={{ fontSize: 20, color: '#9c99a9', marginRight: 6, flexShrink: 0 }} /> },
-          }}
-          sx={{
-            minWidth: 160,
-            maxWidth: 211,
-            flex: 1,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '20px',
-              background: '#f9fafa',
-              height: 34,
-              '& fieldset': { borderColor: '#cac9cf' },
-              '&:hover fieldset': { borderColor: '#9c99a9' },
-            },
-            '& .MuiOutlinedInput-input': {
-              fontSize: 14, color: '#9c99a9', letterSpacing: '0.15px',
-              padding: '6px 8px 6px 0',
-              '&::placeholder': { color: '#9c99a9', opacity: 1 },
-            },
-          }}
-        />
+              {/* Send back to Review */}
+              <button
+                onClick={handleBulkSendBackToReview}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: 'transparent', border: '1px solid #473bab', borderRadius: 100, cursor: 'pointer', flexShrink: 0 }}
+              >
+                <AssignmentReturnOutlined style={{ fontSize: 16, color: '#473bab' }} />
+                <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px' }}>Send back to Review</span>
+              </button>
+
+              {/* Export */}
+              <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: 'transparent', border: '1px solid #473bab', borderRadius: 100, cursor: 'pointer', flexShrink: 0 }}>
+                <IosShareOutlined style={{ fontSize: 16, color: '#473bab' }} />
+                <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px' }}>Export</span>
+              </button>
+
+              {/* Actions */}
+              <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: 'transparent', border: '1px solid #473bab', borderRadius: 100, cursor: 'pointer', flexShrink: 0 }}>
+                <BuildOutlined style={{ fontSize: 16, color: '#473bab' }} />
+                <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px' }}>Actions</span>
+              </button>
+
+              {/* Icon-only actions */}
+              <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+                <EditOutlined style={{ fontSize: 20, color: '#686576' }} />
+              </IconButton>
+              <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+                <CropFreeOutlined style={{ fontSize: 20, color: '#686576' }} />
+              </IconButton>
+              <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+                <AutoAwesomeOutlined style={{ fontSize: 20, color: '#686576' }} />
+              </IconButton>
+              <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+                <DeleteOutlined style={{ fontSize: 20, color: '#686576' }} />
+              </IconButton>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Filter icon */}
+            <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+              <FilterList style={{ fontSize: 20, color: '#1f1d25' }} />
+            </IconButton>
+
+            {/* Three-dots */}
+            <IconButton size="small" sx={{ padding: '5px', flexShrink: 0 }}>
+              <MoreVert style={{ fontSize: 20, color: '#1f1d25' }} />
+            </IconButton>
+
+            {/* Search */}
+            <TextField
+              size="small"
+              placeholder="Find below"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              slotProps={{
+                input: { startAdornment: <Search style={{ fontSize: 20, color: '#9c99a9', marginRight: 6, flexShrink: 0 }} /> },
+              }}
+              sx={{
+                minWidth: 160,
+                maxWidth: 211,
+                flex: 1,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '20px',
+                  background: '#f9fafa',
+                  height: 34,
+                  '& fieldset': { borderColor: '#cac9cf' },
+                  '&:hover fieldset': { borderColor: '#9c99a9' },
+                },
+                '& .MuiOutlinedInput-input': {
+                  fontSize: 14, color: '#9c99a9', letterSpacing: '0.15px',
+                  padding: '6px 8px 6px 0',
+                  '&::placeholder': { color: '#9c99a9', opacity: 1 },
+                },
+              }}
+            />
+          </>
+        )}
       </PageHeader>
 
       {/* ── Pending Changes Banner ────────────────────────────── */}
@@ -131,6 +205,7 @@ export const ApprovedPage = () => {
                 asset={asset}
                 selected={selectedIds.has(asset.id)}
                 onSelect={handleSelect}
+                onSendBackToReview={handleSendBackToReview}
               />
             ))}
           </div>

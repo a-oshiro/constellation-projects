@@ -9,6 +9,11 @@ import bg1080_1 from '../assets/backgrounds/1080_1080_1.png';
 import bg1080_2 from '../assets/backgrounds/1080_1080_2.png';
 import bg1080_3 from '../assets/backgrounds/1080_1080_3.png';
 
+export const CURRENT_USER = {
+  name: 'John Doe',
+  avatarUrl: 'https://i.pravatar.cc/40?img=12',
+};
+
 export const PROJECT_INFO = {
   accountName: 'BMW Seattle',
   accountCode: 'WASEABMW',

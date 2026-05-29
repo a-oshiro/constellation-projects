@@ -4,7 +4,7 @@ import { LargePreviewModal } from './LargePreviewModal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { KeyboardArrowDown, OpenInNew } from '@mui/icons-material';
-import { GenerateAssetsIcon } from './GenerateAssetsIcon';
+import { GenerateSplitButton } from './GenerateSplitButton';
 import { StatusBadge } from './StatusBadge';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { useProject } from '../../context/ProjectContext';
@@ -13,7 +13,7 @@ import { useLayout } from '../../context/LayoutContext';
 import { TEMPLATES } from '../../data/mockData';
 
 export const PreviewPanel = () => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [buttonHovered, setButtonHovered] = useState(false);
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [panelCenter, setPanelCenter] = useState<{ left: number; width: number } | null>(null);
@@ -23,7 +23,7 @@ export const PreviewPanel = () => {
   const { pathname } = useLocation();
   const { assets, bulkSetAssetStatus } = useProject();
   const { startProgress } = useProgressIndicator();
-  const { mainPanelRef } = useLayout();
+  const { mainPanelRef, openAdvancedGeneration, closeAdvancedGeneration, addSubmittingIds, clearSubmittingIds } = useLayout();
 
   // Track main panel position so the button stays centered within it
   useEffect(() => {
@@ -62,6 +62,8 @@ export const PreviewPanel = () => {
   const handleSubmitForApproval = () => {
     if (draftAssets.length === 0) return;
     const targetIds = new Set(draftAssets.map((a) => a.id));
+    closeAdvancedGeneration();
+    addSubmittingIds(targetIds);
     startProgress(
       draftAssets.map((a) => ({
         id: a.id,
@@ -71,7 +73,8 @@ export const PreviewPanel = () => {
     );
     setTimeout(() => {
       bulkSetAssetStatus(targetIds, 'awaiting_approval');
-    }, 5000);
+      clearSubmittingIds();
+    }, 3000);
     navigate('/review');
   };
 
@@ -198,37 +201,13 @@ export const PreviewPanel = () => {
               </span>
 
               {/* Submit for Approval */}
-              <button
-                disabled={!hasDraftAssets}
-                onClick={handleSubmitForApproval}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: hasDraftAssets ? '#473bab' : 'rgba(17,16,20,0.12)',
-                  borderRadius: 100,
-                  padding: '4px 10px',
-                  border: 'none',
-                  cursor: hasDraftAssets ? 'pointer' : 'default',
-                  marginLeft: 4,
-                  flexShrink: 0,
-                }}
-              >
-                <GenerateAssetsIcon color={hasDraftAssets ? '#ffffff' : '#9c99a9'} size={16} />
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    fontFamily: 'Roboto, sans-serif',
-                    color: hasDraftAssets ? '#ffffff' : '#9c99a9',
-                    letterSpacing: '0.46px',
-                    lineHeight: '22px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Generate Assets
-                </span>
-              </button>
+              <div style={{ marginLeft: 4, flexShrink: 0 }}>
+                <GenerateSplitButton
+                  disabled={!hasDraftAssets}
+                  onClick={handleSubmitForApproval}
+                  onAdvancedGeneration={() => openAdvancedGeneration([])}
+                />
+              </div>
 
               <div style={{ flex: 1 }} />
 

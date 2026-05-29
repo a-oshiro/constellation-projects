@@ -6,15 +6,30 @@ import { TasksPanel } from './TasksPanel';
 import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
+import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
+
+/** Pages where the Advanced Generation panel should auto-close. */
+const ADV_GEN_HIDDEN_PATHS = ['/approved', '/ads', '/campaigns'];
 
 const MainLayoutInner = ({ children }: { children: ReactNode }) => {
-  const { tasksPanelOpen, closeTasksPanel, mainPanelRef, editingShell, closeAdShellPanel } = useLayout();
+  const {
+    tasksPanelOpen, closeTasksPanel, mainPanelRef,
+    editingShell, closeAdShellPanel,
+    advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
+  } = useLayout();
   const location = useLocation();
 
   // Close the Ad Shell panel whenever the user navigates away from the Ads page
   useEffect(() => {
     if (location.pathname !== '/ads') {
       closeAdShellPanel();
+    }
+  }, [location.pathname]);
+
+  // Close Advanced Generation panel on restricted pages
+  useEffect(() => {
+    if (ADV_GEN_HIDDEN_PATHS.includes(location.pathname)) {
+      closeAdvancedGeneration();
     }
   }, [location.pathname]);
 
@@ -40,6 +55,12 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
               key={editingShell.id}
               shell={editingShell}
               onClose={closeAdShellPanel}
+            />
+          )}
+          {advancedGenerationOpen && (
+            <AdvancedGenerationPanel
+              selectedAssets={advancedGenerationAssets}
+              onClose={closeAdvancedGeneration}
             />
           )}
         </div>
