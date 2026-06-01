@@ -21,6 +21,12 @@ const STATUS_CONFIG: Record<AssetStatus, Config> = {
     color: '#01579b',
     Icon: PendingOutlined,
   },
+  generated: {
+    label: 'Generated',
+    background: '#e8f5e9',
+    color: '#2e7d32',
+    Icon: CheckCircle,
+  },
   approved: {
     label: 'Approved',
     background: '#e8f5e9',

@@ -172,7 +172,7 @@ interface AdvancedGenerationPanelProps {
 }
 
 export const AdvancedGenerationPanel = ({ selectedAssets, onClose, width = 320 }: AdvancedGenerationPanelProps) => {
-  const { assets: allAssets, bulkSetAssetStatus } = useProject();
+  const { assets: allAssets, bulkSetAssetStatus, approvalEnabled } = useProject();
   const { startProgress } = useProgressIndicator();
   const { addSubmittingIds, clearSubmittingIds } = useLayout();
 
@@ -202,7 +202,7 @@ export const AdvancedGenerationPanel = ({ selectedAssets, onClose, width = 320 }
     })));
 
     setTimeout(() => {
-      bulkSetAssetStatus(targetIds, 'awaiting_approval');
+      bulkSetAssetStatus(targetIds, approvalEnabled ? 'awaiting_approval' : 'generated');
       clearSubmittingIds();
     }, 3000);
 

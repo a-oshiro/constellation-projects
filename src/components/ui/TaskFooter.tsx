@@ -2,18 +2,27 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowBack, ArrowForward } from '@mui/icons-material';
 import { TASKS } from '../../data/mockData';
 import type { TaskKey } from '../../data/types';
-
-const VISIBLE_TASKS = TASKS;
+import { useProject } from '../../context/ProjectContext';
 
 interface TaskFooterProps {
   currentTask: TaskKey;
+  /** Optional override — if omitted, reads from ProjectContext */
+  approvalEnabled?: boolean;
 }
 
-export const TaskFooter = ({ currentTask }: TaskFooterProps) => {
+export const TaskFooter = ({ currentTask, approvalEnabled: approvalEnabledProp }: TaskFooterProps) => {
   const navigate = useNavigate();
-  const currentIdx = VISIBLE_TASKS.findIndex((t) => t.key === currentTask);
-  const prevTask = currentIdx > 0 ? VISIBLE_TASKS[currentIdx - 1] : null;
-  const nextTask = currentIdx < VISIBLE_TASKS.length - 1 ? VISIBLE_TASKS[currentIdx + 1] : null;
+  const { approvalEnabled: approvalEnabledCtx } = useProject();
+  const approvalEnabled = approvalEnabledProp ?? approvalEnabledCtx;
+
+  // Filter and relabel tasks based on workflow config
+  const visibleTasks = TASKS
+    .filter((t) => approvalEnabled || t.key !== 'approved')
+    .map((t) => (!approvalEnabled && t.key === 'review') ? { ...t, label: 'Assets' } : t);
+
+  const currentIdx = visibleTasks.findIndex((t) => t.key === currentTask);
+  const prevTask = currentIdx > 0 ? visibleTasks[currentIdx - 1] : null;
+  const nextTask = currentIdx < visibleTasks.length - 1 ? visibleTasks[currentIdx + 1] : null;
 
   return (
     <div

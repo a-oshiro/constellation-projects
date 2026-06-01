@@ -41,6 +41,9 @@ interface ProjectContextValue {
   assetVersions: Record<string, AssetVersion[]>;
   assetComments: Record<string, AssetComment[]>;
   addAssetComment: (assetId: string, text: string) => void;
+  /** Whether the Approved task is enabled in the workflow */
+  approvalEnabled: boolean;
+  setApprovalEnabled: (enabled: boolean) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -99,6 +102,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [removedOfferIds, setRemovedOfferIds] = useState<Set<string>>(new Set());
   const [campaignLoaded, setCampaignLoaded] = useState(false);
   const loadCampaign = useCallback(() => setCampaignLoaded(true), []);
+  const [approvalEnabled, setApprovalEnabled] = useState(true);
+  const approvalEnabledRef = useRef(approvalEnabled);
+  approvalEnabledRef.current = approvalEnabled;
   const [assetVersionHistory, setAssetVersionHistory] = useState<Record<string, AssetVersion[]>>({});
   const [assetComments, setAssetComments] = useState<Record<string, AssetComment[]>>({});
 
@@ -285,11 +291,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setRemovedTemplateIds(new Set());
     setRemovedBgIds(new Set());
 
-    // updated → awaiting_approval; removed → gone
+    // updated → awaiting_approval (or 'generated' when approval is disabled); removed → gone
+    const targetStatus = approvalEnabledRef.current ? 'awaiting_approval' : 'generated';
     setAssetStatuses((prev) => {
       const next = { ...prev };
       Object.keys(next).forEach((id) => {
-        if (next[id] === 'updated') next[id] = 'awaiting_approval';
+        if (next[id] === 'updated') next[id] = targetStatus;
         if (next[id] === 'removed') delete next[id];
       });
       return next;
@@ -367,6 +374,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       assetVersions: assetVersionHistory,
       assetComments,
       addAssetComment,
+      approvalEnabled, setApprovalEnabled,
     }}>
       {children}
     </ProjectContext.Provider>

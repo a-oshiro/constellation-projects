@@ -157,16 +157,22 @@ const MiniShellThumbnail = ({ shell }: { shell: AdShell }) => {
 };
 
 export const CampaignsPage = () => {
-  const { assets, everApprovedIds, campaignLoaded, loadCampaign } = useProject();
+  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled } = useProject();
   const { showSnackbar } = useSnackbar();
   const { shellCustomizations } = useLayout();
 
-  const approvedAssets = assets.filter((a) =>
-    a.status === 'approved' ||
-    a.status === 'updated' ||
-    (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
-    (a.status === 'removed' && everApprovedIds.has(a.id))
-  );
+  const approvedAssets = approvalEnabled
+    ? assets.filter((a) =>
+        a.status === 'approved' ||
+        a.status === 'updated' ||
+        (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
+        (a.status === 'removed' && everApprovedIds.has(a.id))
+      )
+    : assets.filter((a) =>
+        a.status === 'generated' ||
+        a.status === 'updated' ||
+        a.status === 'removed'
+      );
 
   const adShells = useMemo<AdShell[]>(() => {
     const shellMap = new Map<string, typeof approvedAssets>();
@@ -227,7 +233,9 @@ export const CampaignsPage = () => {
   };
 
   const allShellsApproved = hasAdShells && adShells.every((shell) =>
-    shell.assets.every((a) => a.status === 'approved')
+    shell.assets.every((a) =>
+      approvalEnabled ? a.status === 'approved' : a.status === 'generated'
+    )
   );
   const requiredFieldsFilled = campaignName.trim() !== '' && campaignStartDate !== '' && campaignEndDate !== '';
   const canLoad = allShellsApproved && requiredFieldsFilled && !campaignLoaded;
@@ -235,7 +243,9 @@ export const CampaignsPage = () => {
   const tooltipMessage = !hasAdShells
     ? 'Add at least one Ad Shell to load campaign.'
     : !allShellsApproved
-      ? 'Unable to load campaign. One or more Ad Shells contain unapproved assets'
+      ? (approvalEnabled
+          ? 'Unable to load campaign. One or more Ad Shells contain unapproved assets'
+          : 'Unable to load campaign. One or more Ad Shells contain assets with pending changes')
       : !requiredFieldsFilled
         ? 'Unable to load campaign. One or more required fields below are missing'
         : '';

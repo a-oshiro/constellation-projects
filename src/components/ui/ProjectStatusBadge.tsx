@@ -6,6 +6,7 @@ export type ProjectWorkflowStatus =
   | 'awaiting_approval'
   | 'needs_edits'
   | 'assets_generated'
+  | 'assets_generated_no_approval'
   | 'pending_changes'
   | 'campaign_loaded';
 
@@ -40,6 +41,12 @@ const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
   },
   assets_generated: {
     label: 'Assets Approved',
+    background: '#e8f5e9',
+    color: '#1b5e20',
+    Icon: CheckCircle,
+  },
+  assets_generated_no_approval: {
+    label: 'Assets Generated',
     background: '#e8f5e9',
     color: '#1b5e20',
     Icon: CheckCircle,

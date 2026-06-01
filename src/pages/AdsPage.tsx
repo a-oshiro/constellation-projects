@@ -42,20 +42,26 @@ const CreateAdShellSplitButton = () => (
 );
 
 export const AdsPage = () => {
-  const { assets, everApprovedIds } = useProject();
+  const { assets, everApprovedIds, approvalEnabled } = useProject();
   const { openAdShellPanel, editingShell, shellCustomizations } = useLayout();
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Include assets that are currently approved, updated/removed post-approval, or awaiting re-approval.
-  // Assets that were never approved are excluded even if awaiting_approval for the first time.
-  const approvedAssets = assets.filter((a) =>
-    a.status === 'approved' ||
-    (a.status === 'updated' && everApprovedIds.has(a.id)) ||
-    (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
-    (a.status === 'removed' && everApprovedIds.has(a.id))
-  );
+  // In approval mode: include approved/updated/awaiting/removed assets that have been approved before.
+  // In no-approval mode: include generated/updated/removed assets (all were generated at some point).
+  const approvedAssets = approvalEnabled
+    ? assets.filter((a) =>
+        a.status === 'approved' ||
+        (a.status === 'updated' && everApprovedIds.has(a.id)) ||
+        (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
+        (a.status === 'removed' && everApprovedIds.has(a.id))
+      )
+    : assets.filter((a) =>
+        a.status === 'generated' ||
+        a.status === 'updated' ||
+        a.status === 'removed'
+      );
 
   const adShells = useMemo<AdShell[]>(() => {
     const shellMap = new Map<string, typeof approvedAssets>();
@@ -203,7 +209,9 @@ export const AdsPage = () => {
                   margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
                   color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.43, textAlign: 'center',
                 }}>
-                  Ad Shells are created automatically once Assets are approved.
+                  {approvalEnabled
+                    ? 'Ad Shells are created automatically once Assets are approved.'
+                    : 'Ad Shells are created automatically once Assets are generated.'}
                 </p>
               </div>
               <CreateAdShellSplitButton />

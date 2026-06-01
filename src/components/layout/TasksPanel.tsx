@@ -1,15 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
-import { IconButton } from '@mui/material';
-import { ArrowBack, Close, CheckCircle, PendingOutlined, HourglassEmpty, WarningAmber } from '@mui/icons-material';
+import { IconButton, Menu, MenuItem, Checkbox, Popover } from '@mui/material';
+import { ArrowBack, Close, CheckCircle, PendingOutlined, HourglassEmpty, WarningAmber, MoreVert } from '@mui/icons-material';
 import { NeedsEditsIcon } from '../ui/NeedsEditsIcon';
 import { TASKS, PROJECT_INFO, BACKGROUNDS } from '../../data/mockData';
 import { ProjectStatusBadge } from '../ui/ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from '../ui/ProjectStatusBadge';
 
-const HIDDEN_KEYS = new Set<string>([]);
-const VISIBLE_TASKS = TASKS.filter((t) => !HIDDEN_KEYS.has(t.key));
 import { useProject } from '../../context/ProjectContext';
 import type { TaskItem } from '../../data/types';
 
@@ -51,17 +49,29 @@ interface TasksPanelProps {
 export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { offers, assets, templates, removedTemplateIds, removedBgIds, pendingChanges, pendingRemovals, everApprovedIds, campaignLoaded } = useProject();
+  const {
+    offers, assets, templates, removedTemplateIds, removedBgIds,
+    pendingChanges, pendingRemovals, everApprovedIds, campaignLoaded,
+    approvalEnabled, setApprovalEnabled,
+  } = useProject();
+
+  // Three-dots menu anchor
+  const dotsButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
+  const hasAnyGeneratedAsset = assets.some((a) => a.status !== 'draft');
   const hasAwaitingApproval = assets.some((a) => a.status === 'awaiting_approval');
   const hasNeedsEdits = assets.some((a) => a.status === 'needs_edits');
   const hasUpdatedAssets = assets.some((a) => a.status === 'updated');
   const hasRemovedAssets = assets.some((a) => a.status === 'removed');
+  const hasGeneratedAssets = assets.some((a) => a.status === 'generated');
   const hasPendingChanges = hasUpdatedAssets || hasRemovedAssets;
   // All review assets concluded when every non-approved asset is denied (no more actions needed)
   const reviewAssets = assets.filter((a) => a.status !== 'approved');
   const allReviewConcluded = assets.length > 0 && (reviewAssets.length === 0 || reviewAssets.every((a) => a.status === 'denied'));
+  const allAssetsGeneratedNoApproval = !hasDraftAssets && !hasPendingChanges && hasGeneratedAssets;
   const updatedCount = assets.filter((a) => a.status === 'updated').length;
   const removedCount = assets.filter((a) => a.status === 'removed').length;
   const awaitingApprovalCount = assets.filter((a) => a.status === 'awaiting_approval').length;
@@ -95,12 +105,18 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
 
   // Number of Ad Shells (grouped by template+background) that contain at least one 'updated' asset
   const adsUpdatedShellCount = useMemo(() => {
-    const eligibleAssets = assets.filter((a) =>
-      a.status === 'approved' ||
-      a.status === 'updated' ||
-      (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
-      (a.status === 'removed' && everApprovedIds.has(a.id))
-    );
+    const eligibleAssets = approvalEnabled
+      ? assets.filter((a) =>
+          a.status === 'approved' ||
+          a.status === 'updated' ||
+          (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
+          (a.status === 'removed' && everApprovedIds.has(a.id))
+        )
+      : assets.filter((a) =>
+          a.status === 'generated' ||
+          a.status === 'updated' ||
+          a.status === 'removed'
+        );
     const shellMap = new Map<string, boolean>();
     eligibleAssets.forEach((a) => {
       const key = `${a.templateId}__${a.backgroundId}`;
@@ -110,7 +126,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
     let count = 0;
     shellMap.forEach((hasUpdated) => { if (hasUpdated) count++; });
     return count;
-  }, [assets, everApprovedIds]);
+  }, [assets, everApprovedIds, approvalEnabled]);
 
   // Number of Ad Shells that contain at least one asset awaiting re-approval (previously approved)
   const adsAwaitingShellCount = useMemo(() => {
@@ -141,21 +157,39 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
     };
   }, [offers, assets, templates, removedTemplateIds, removedBgIds]);
 
-  const projectWorkflowStatus: ProjectWorkflowStatus = hasDraftAssets
-    ? 'in_progress'
-    : hasPendingChanges
-      ? 'pending_changes'
-      : hasAwaitingApproval
-        ? 'awaiting_approval'
-        : hasNeedsEdits
-          ? 'needs_edits'
+  const projectWorkflowStatus: ProjectWorkflowStatus = approvalEnabled
+    ? (hasDraftAssets
+        ? 'in_progress'
+        : hasPendingChanges
+          ? 'pending_changes'
+          : hasAwaitingApproval
+            ? 'awaiting_approval'
+            : hasNeedsEdits
+              ? 'needs_edits'
+              : campaignLoaded
+                ? 'campaign_loaded'
+                : liveCounts['approved'] > 0
+                  ? 'assets_generated'
+                  : 'in_progress')
+    : (hasDraftAssets
+        ? 'in_progress'
+        : hasPendingChanges
+          ? 'pending_changes'
           : campaignLoaded
             ? 'campaign_loaded'
-            : liveCounts['approved'] > 0
-              ? 'assets_generated'
-              : 'in_progress';
+            : allAssetsGeneratedNoApproval
+              ? 'assets_generated_no_approval'
+              : 'in_progress');
+
+  // Filter tasks based on workflow config
+  const visibleTasks = TASKS.filter((t) => approvalEnabled || t.key !== 'approved');
 
   const isActive = (task: TaskItem) => location.pathname === task.route;
+
+  const handleConfigureWorkflow = () => {
+    setMenuOpen(false);
+    setConfigPanelOpen(true);
+  };
 
   return (
     <div
@@ -273,12 +307,153 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
               <ProjectStatusBadge status={projectWorkflowStatus} />
             </div>
           </div>
+
+          {/* Three-dots menu button */}
+          <IconButton
+            ref={dotsButtonRef}
+            size="small"
+            onClick={() => setMenuOpen(true)}
+            sx={{ padding: '4px', flexShrink: 0, alignSelf: 'flex-start', marginTop: '2px' }}
+          >
+            <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+          </IconButton>
         </div>
+
+        {/* Three-dots dropdown menu */}
+        <Menu
+          anchorEl={dotsButtonRef.current}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              style: {
+                minWidth: 180,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                borderRadius: 8,
+              },
+            },
+          }}
+        >
+          <MenuItem
+            onClick={handleConfigureWorkflow}
+            sx={{
+              fontSize: 13,
+              fontFamily: 'Roboto, sans-serif',
+              color: '#1f1d25',
+              letterSpacing: '0.17px',
+              py: '8px',
+              px: '16px',
+            }}
+          >
+            Configure Workflow
+          </MenuItem>
+        </Menu>
+
+        {/* ── Configure Workflow Popover ───────────────────── */}
+        <Popover
+          open={configPanelOpen}
+          anchorEl={dotsButtonRef.current}
+          onClose={() => setConfigPanelOpen(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          slotProps={{
+            paper: {
+              style: {
+                minWidth: 220,
+                borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.14)',
+                padding: '12px 14px',
+                background: '#ffffff',
+              },
+            },
+          }}
+        >
+          {/* Popover header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                fontFamily: 'Roboto, sans-serif',
+                color: '#1f1d25',
+                letterSpacing: '0.17px',
+              }}
+            >
+              Configure Workflow
+            </span>
+            <IconButton
+              size="small"
+              onClick={() => setConfigPanelOpen(false)}
+              sx={{ padding: '2px' }}
+            >
+              <Close style={{ fontSize: 15, color: '#686576' }} />
+            </IconButton>
+          </div>
+
+          {/* Task checkboxes */}
+          {TASKS.map((task) => {
+            const isToggleable = task.key === 'approved' && !hasAnyGeneratedAsset;
+            const isDisabled = task.key !== 'approved' || hasAnyGeneratedAsset;
+            const isChecked = task.key === 'approved' ? approvalEnabled : true;
+            return (
+              <div
+                key={task.key}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '2px 0',
+                }}
+              >
+                <Checkbox
+                  size="small"
+                  checked={isChecked}
+                  disabled={isDisabled}
+                  onChange={(e) => {
+                    if (isToggleable) setApprovalEnabled(e.target.checked);
+                  }}
+                  sx={{
+                    padding: '2px',
+                    '&.Mui-checked': { color: '#473bab' },
+                    '&.Mui-disabled': { color: '#cac9cf' },
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontFamily: 'Roboto, sans-serif',
+                    color: isDisabled ? '#9c99a9' : '#1f1d25',
+                    letterSpacing: '0.17px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {task.label}
+                </span>
+              </div>
+            );
+          })}
+          {hasAnyGeneratedAsset && (
+            <p style={{
+              margin: '6px 0 0',
+              fontSize: 11,
+              fontFamily: 'Roboto, sans-serif',
+              color: '#9c99a9',
+              letterSpacing: '0.4px',
+              lineHeight: 1.5,
+            }}>
+              Workflow cannot be changed after assets are generated.
+            </p>
+          )}
+        </Popover>
 
         {/* ── Task list ────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-          {VISIBLE_TASKS.map((task, idx) => {
+          {visibleTasks.map((task, idx) => {
             const active = isActive(task);
+            // Rename 'review' to 'Assets' when approval is disabled
+            const taskLabel = (!approvalEnabled && task.key === 'review') ? 'Assets' : task.label;
             return (
               <button
                 key={task.key}
@@ -343,7 +518,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                         flexShrink: 0,
                       }}
                     >
-                      {task.label}
+                      {taskLabel}
                     </span>
                     {(liveCounts[task.key] ?? task.count) > 0 && (
                       <span
@@ -391,7 +566,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                       {removedCount} removed
                     </span>
                   )}
-                  {task.key === 'review' && hasAwaitingApproval && (
+                  {task.key === 'review' && approvalEnabled && hasAwaitingApproval && (
                     <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {awaitingApprovalCount} Awaiting Approval
                     </span>
@@ -441,13 +616,17 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                     ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                     : hasDraftAssets
                       ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
-                      : hasAwaitingApproval
-                        ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                        : hasNeedsEdits
-                          ? <NeedsEditsIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                          : allReviewConcluded
+                      : !approvalEnabled
+                        ? (allAssetsGeneratedNoApproval
                             ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
-                            : <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                            : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />)
+                        : hasAwaitingApproval
+                          ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          : hasNeedsEdits
+                            ? <NeedsEditsIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                            : allReviewConcluded
+                              ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                              : <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                 ) : task.key === 'approved' ? (
                   approvedChangedCount > 0
                     ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
@@ -457,17 +636,23 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                         ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                         : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.key === 'ads' ? (
-                  liveCounts['approved'] === 0 && hasAwaitingApproval
-                    ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
-                    : hasPendingChanges && adsUpdatedShellCount > 0
-                      ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                      : adsAwaitingShellCount > 0
-                        ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                        : allReviewConcluded && liveCounts['approved'] > 0
-                          ? hasPendingChanges
-                            ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                            : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
-                          : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
+                  !approvalEnabled
+                    ? (hasDraftAssets
+                        ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
+                        : hasPendingChanges && adsUpdatedShellCount > 0
+                          ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />)
+                    : liveCounts['approved'] === 0 && hasAwaitingApproval
+                      ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
+                      : hasPendingChanges && adsUpdatedShellCount > 0
+                        ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                        : adsAwaitingShellCount > 0
+                          ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          : allReviewConcluded && liveCounts['approved'] > 0
+                            ? hasPendingChanges
+                              ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                              : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                            : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
                 ) : task.key === 'campaigns' ? (
                   !campaignLoaded
                     ? <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />

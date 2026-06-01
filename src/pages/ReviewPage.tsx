@@ -17,9 +17,11 @@ const STATUS_OPTIONS: AssetStatus[] = [
   'denied',
 ];
 
-const TAB_ORDER: AssetStatus[] = ['draft', 'updated', 'awaiting_approval', 'needs_edits', 'denied', 'removed'];
+const TAB_ORDER: AssetStatus[] = ['draft', 'generated', 'updated', 'awaiting_approval', 'needs_edits', 'denied', 'removed'];
+const TAB_ORDER_NO_APPROVAL: AssetStatus[] = ['updated', 'removed', 'draft', 'generated'];
 const STATUS_TAB_LABELS: Record<string, string> = {
   draft: 'Draft',
+  generated: 'Generated',
   updated: 'Updated',
   awaiting_approval: 'Awaiting Approval',
   needs_edits: 'Needs Edits',
@@ -36,7 +38,7 @@ import { useLayout } from '../context/LayoutContext';
 import { ApplyChangesDialog, RevertChangesDialog } from '../components/ui/ProjectChangesDialogs';
 
 export const ReviewPage = () => {
-  const { assets, offers, bulkSetAssetStatus, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded } = useProject();
+  const { assets, offers, bulkSetAssetStatus, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled } = useProject();
   const { showSnackbar } = useSnackbar();
   const { startProgress } = useProgressIndicator();
   const { openAdvancedGeneration, closeAdvancedGeneration, submittingIds, addSubmittingIds, clearSubmittingIds } = useLayout();
@@ -46,13 +48,18 @@ export const ReviewPage = () => {
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [revertDialogOpen, setRevertDialogOpen] = useState(false);
   const [draftVariant] = useState<DraftVariant>('badge');
+  const tabOrder = approvalEnabled ? TAB_ORDER : TAB_ORDER_NO_APPROVAL;
+
   const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>(() => {
     const nonApproved = assets.filter((a) => a.status !== 'approved');
     return TAB_ORDER.find((s) => nonApproved.some((a) => a.status === s)) ?? 'all';
   });
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
-  const nonApprovedAssets = assets.filter((a) => a.status !== 'approved');
+  // In no-approval mode show all assets (including 'generated'); in approval mode hide approved ones
+  const nonApprovedAssets = approvalEnabled
+    ? assets.filter((a) => a.status !== 'approved')
+    : assets;
   const hasNonDraftAssets = nonApprovedAssets.some((a) => a.status !== 'draft' && a.status !== 'removed');
   const updatedAssets = nonApprovedAssets.filter((a) => a.status === 'updated');
   const removedAssets = nonApprovedAssets.filter((a) => a.status === 'removed');
@@ -76,12 +83,18 @@ export const ReviewPage = () => {
   })();
 
   const adsUpdatedShellCount = useMemo(() => {
-    const eligible = assets.filter((a) =>
-      a.status === 'approved' ||
-      (a.status === 'updated' && everApprovedIds.has(a.id)) ||
-      (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
-      (a.status === 'removed' && everApprovedIds.has(a.id))
-    );
+    const eligible = approvalEnabled
+      ? assets.filter((a) =>
+          a.status === 'approved' ||
+          (a.status === 'updated' && everApprovedIds.has(a.id)) ||
+          (a.status === 'awaiting_approval' && everApprovedIds.has(a.id)) ||
+          (a.status === 'removed' && everApprovedIds.has(a.id))
+        )
+      : assets.filter((a) =>
+          a.status === 'generated' ||
+          a.status === 'updated' ||
+          a.status === 'removed'
+        );
     const shellMap = new Map<string, boolean>();
     eligible.forEach((a) => {
       const key = `${a.templateId}__${a.backgroundId}`;
@@ -131,7 +144,7 @@ export const ReviewPage = () => {
     });
   };
 
-  const dynamicTabs = TAB_ORDER
+  const dynamicTabs = tabOrder
     .filter((status) => nonApprovedAssets.some((a) => a.status === status))
     .map((status) => ({
       status,
@@ -141,7 +154,7 @@ export const ReviewPage = () => {
 
   useEffect(() => {
     if (activeTab !== 'all' && !nonApprovedAssets.some((a) => a.status === activeTab)) {
-      const fallback = TAB_ORDER.find((s) => nonApprovedAssets.some((a) => a.status === s)) ?? 'all';
+      const fallback = tabOrder.find((s) => nonApprovedAssets.some((a) => a.status === s)) ?? 'all';
       setActiveTab(fallback);
     }
   }, [activeTab, assets]);
@@ -188,7 +201,7 @@ export const ReviewPage = () => {
     })));
 
     setTimeout(() => {
-      bulkSetAssetStatus(targetIds, 'awaiting_approval');
+      bulkSetAssetStatus(targetIds, approvalEnabled ? 'awaiting_approval' : 'generated');
       clearSubmittingIds();
     }, 3000);
   };
@@ -199,8 +212,8 @@ export const ReviewPage = () => {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
 
       <PageHeader
-        breadcrumbs={['Projects', 'May Offers - Specials', 'Review']}
-        title="Review"
+        breadcrumbs={['Projects', 'May Offers - Specials', approvalEnabled ? 'Review' : 'Assets']}
+        title={approvalEnabled ? 'Review' : 'Assets'}
         rightExtras={
           <>
             {filteredAssets.length > 0 && (
@@ -259,8 +272,8 @@ export const ReviewPage = () => {
           </span>
         </Tooltip>
 
-        {/* Change Status select — visible when any non-approved asset has a non-draft status */}
-        {hasNonDraftAssets && (
+        {/* Change Status select — visible when approval mode is on and non-draft assets exist */}
+        {approvalEnabled && hasNonDraftAssets && (
           <Tooltip
             title={changeStatusDisabled ? changeStatusTooltip : ''}
             placement="bottom"
@@ -363,7 +376,9 @@ export const ReviewPage = () => {
         }}>
           <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#663c00', letterSpacing: '0.17px', lineHeight: 1.5 }}>
-            Project changes affected the assets below. Apply and approve changes to update Ad Shells and Campaigns.
+            {approvalEnabled
+              ? 'Project changes affected the assets below. Apply and approve changes to update Ad Shells and Campaigns.'
+              : 'Project changes affected the assets below. Apply Changes to immediately update Ad Shells and Campaigns.'}
           </span>
           <button
             onClick={() => setApplyDialogOpen(true)}
@@ -423,10 +438,15 @@ export const ReviewPage = () => {
       <div className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
           <EmptyStateMessage
-            message={[
-              'All assets have been approved and moved to Approved task.',
-              'No new assets pending generation or approval.',
-            ]}
+            message={approvalEnabled
+              ? [
+                  'All assets have been approved and moved to Approved task.',
+                  'No new assets pending generation or approval.',
+                ]
+              : [
+                  'All assets have been generated.',
+                  'No new assets pending generation.',
+                ]}
           />
         ) : (
           <div className="p-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
@@ -458,6 +478,7 @@ export const ReviewPage = () => {
         approvedRemovedCount={approvedRemovedCount}
         adsUpdatedShellCount={adsUpdatedShellCount}
         campaignLoaded={campaignLoaded}
+        approvalEnabled={approvalEnabled}
         onClose={() => setApplyDialogOpen(false)}
         onApply={() => { applyChanges(); setApplyDialogOpen(false); showSnackbar({ message: 'Changes applied.' }); }}
       />

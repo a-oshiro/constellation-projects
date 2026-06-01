@@ -38,6 +38,13 @@ const STATUS_CONFIG: Record<AssetStatus, {
     Icon: PendingOutlined,
     iconColor: '#01579b',
   },
+  generated: {
+    label: 'Generated',
+    bg: '#e8f5e9',
+    textColor: '#2e7d32',
+    Icon: CheckCircle,
+    iconColor: '#2e7d32',
+  },
   approved: {
     label: 'Approved',
     bg: '#e8f5e9',

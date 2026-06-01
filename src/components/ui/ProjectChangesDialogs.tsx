@@ -84,15 +84,18 @@ interface ApplyChangesDialogProps {
   approvedRemovedCount: number;
   adsUpdatedShellCount: number;
   campaignLoaded: boolean;
+  approvalEnabled: boolean;
   onClose: () => void;
   onApply: () => void;
 }
 
-export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemovedCount, adsUpdatedShellCount, campaignLoaded, onClose, onApply }: ApplyChangesDialogProps) {
+export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemovedCount, adsUpdatedShellCount, campaignLoaded, approvalEnabled, onClose, onApply }: ApplyChangesDialogProps) {
   const navigate = useNavigate();
 
   const linkStyle: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', letterSpacing: '0.46px', lineHeight: '22px', borderRadius: 100 };
   const descStyle: React.CSSProperties = { margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43 };
+
+  const assetsTaskLabel = approvalEnabled ? 'Review' : 'Assets';
 
   return (
     <DialogOverlay>
@@ -104,12 +107,12 @@ export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemoved
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Review */}
+          {/* Review / Assets */}
           <ImpactCard>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <img src={multiMediaIcon} alt="" style={{ width: 24, height: 24, flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.1px', lineHeight: 1.57 }}>Review</span>
-              <button onClick={() => { onClose(); navigate('/review'); }} style={linkStyle}>Go to Review</button>
+              <span style={{ flex: 1, fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.1px', lineHeight: 1.57 }}>{assetsTaskLabel}</span>
+              <button onClick={() => { onClose(); navigate('/review'); }} style={linkStyle}>Go to {assetsTaskLabel}</button>
             </div>
             <div style={{ paddingLeft: 32, display: 'flex', flexDirection: 'column', gap: 2 }}>
               {updatedCount > 0 && <p style={descStyle}>{updatedCount} updated</p>}
@@ -117,8 +120,8 @@ export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemoved
             </div>
           </ImpactCard>
 
-          {/* Approved */}
-          {approvedRemovedCount > 0 && (
+          {/* Approved — only in approval flow */}
+          {approvalEnabled && approvedRemovedCount > 0 && (
             <ImpactCard>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <img src={circleCheckIcon} alt="" style={{ width: 24, height: 24, flexShrink: 0 }} />
@@ -141,8 +144,9 @@ export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemoved
             </ImpactCard>
           )}
 
-          {/* Campaigns */}
-          {campaignLoaded && adsUpdatedShellCount > 0 && (
+          {/* Campaigns — approval flow: only when shells affected; no-approval flow: whenever campaign is loaded */}
+          {((approvalEnabled && campaignLoaded && adsUpdatedShellCount > 0) ||
+            (!approvalEnabled && campaignLoaded)) && (
             <ImpactCard>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <img src={megaphoneIcon} alt="" style={{ width: 24, height: 24, flexShrink: 0 }} />

@@ -21,7 +21,7 @@ export const PreviewPanel = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { assets, bulkSetAssetStatus } = useProject();
+  const { assets, bulkSetAssetStatus, approvalEnabled } = useProject();
   const { startProgress } = useProgressIndicator();
   const { mainPanelRef, openAdvancedGeneration, closeAdvancedGeneration, addSubmittingIds, clearSubmittingIds } = useLayout();
 
@@ -72,7 +72,7 @@ export const PreviewPanel = () => {
       }))
     );
     setTimeout(() => {
-      bulkSetAssetStatus(targetIds, 'awaiting_approval');
+      bulkSetAssetStatus(targetIds, approvalEnabled ? 'awaiting_approval' : 'generated');
       clearSubmittingIds();
     }, 3000);
     navigate('/review');
