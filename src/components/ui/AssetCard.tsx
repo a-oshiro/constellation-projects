@@ -106,6 +106,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
   const { Icon: StatusIcon } = status;
 
   const isDraft = asset.status === 'draft';
+  const isUpdated = asset.status === 'updated';
 
   // Determine how to size the template preview within the square thumbnail.
   // Wide templates (e.g. 600×250) are letterboxed; square fills the card fully.
@@ -134,7 +135,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           border: isDraft && draftVariant === 'labeled'
             ? '3px dashed #80C3E8'
             : `${(selected || hover) ? 2 : 1}px solid ${(selected || hover) ? '#473bab' : '#e7e7e9'}`,
-          borderRadius: isDraft && draftVariant === 'badge' ? '8px 8px 0 0' : 8,
+          borderRadius: (isDraft && draftVariant === 'badge') || isUpdated ? '8px 8px 0 0' : 8,
           overflow: 'hidden',
           transition: 'border-color 0.15s',
           display: 'flex',
@@ -289,6 +290,40 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
         </div>
       </div>
 
+      {/* ── Updated variant: Badge bar ────────────────── */}
+      {isUpdated && (
+        <div style={{
+          background: '#FDF4EC',
+          borderRadius: '0 0 8px 8px',
+          padding: '4px 12px',
+          width: '100%',
+          boxSizing: 'border-box',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 400,
+            color: '#c45500',
+            letterSpacing: '0.4px',
+            lineHeight: 1.66,
+          }}>
+            Preview only
+          </span>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 400,
+            color: '#c45500',
+            letterSpacing: '0.4px',
+            lineHeight: 1.66,
+          }}>
+            {asset.width} x {asset.height}
+          </span>
+        </div>
+      )}
+
       {/* ── Draft variant: Badge ───────────────────────── */}
       {isDraft && draftVariant === 'badge' && (
         <div style={{
@@ -355,8 +390,8 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
         </div>
       )}
 
-      {/* ── Content below thumbnail (non-draft) ───────── */}
-      {!isDraft && (
+      {/* ── Content below thumbnail (non-draft, non-updated) ── */}
+      {!isDraft && !isUpdated && (
       <div style={{ paddingTop: 8, paddingBottom: 4, width: '100%' }}>
 
         {/* Title row */}
