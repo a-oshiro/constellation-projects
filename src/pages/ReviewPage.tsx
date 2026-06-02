@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import generationDoneSrc from '../assets/generation-done.svg';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, Select, MenuItem, FormControl, TextField } from '@mui/material';
 import { Search, MoreVert, ViewModule, FilterList, WarningAmber } from '@mui/icons-material';
@@ -36,6 +37,7 @@ import { EmptyStateMessage } from '../components/ui/EmptyStateMessage';
 import { useProject } from '../context/ProjectContext';
 import { useLayout } from '../context/LayoutContext';
 import { ApplyChangesDialog, RevertChangesDialog } from '../components/ui/ProjectChangesDialogs';
+import { ComparisonModal } from '../components/ui/ComparisonModal';
 
 export const ReviewPage = () => {
   const { assets, offers, bulkSetAssetStatus, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled } = useProject();
@@ -47,6 +49,7 @@ export const ReviewPage = () => {
   const [search, setSearch] = useState('');
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [revertDialogOpen, setRevertDialogOpen] = useState(false);
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const [draftVariant] = useState<DraftVariant>('badge');
   const tabOrder = approvalEnabled ? TAB_ORDER : TAB_ORDER_NO_APPROVAL;
 
@@ -116,16 +119,29 @@ export const ReviewPage = () => {
   const submitDisabled = !hasDraftAssets || (hasSelection && selectedHasNonDraft);
   const showSubmitTooltip = hasSelection && selectedHasNonDraft;
 
-  // Change Status: disabled when any selected asset is draft, updated, or removed
+  // Change Status: disabled under several conditions with priority-ordered tooltip messages
   const selectedHasRemoved = selectedAssets.some((a) => a.status === 'removed');
-  const changeStatusDisabled = selectedHasDraft || selectedHasUpdated || selectedHasRemoved;
-  const changeStatusTooltip = selectedHasUpdated
-    ? 'Please apply asset changes below before updating the statuses of these assets.'
-    : selectedHasRemoved
-      ? "Unable to change status of 'Removed' assets."
-      : selectedHasDraft
-        ? "Unable to change status of 'Draft' assets."
-        : '';
+  const allAssetsApproved = approvalEnabled && assets.length > 0 && nonApprovedAssets.length === 0;
+  const changeStatusDisabled =
+    allAssetsApproved ||
+    hasPendingChanges ||
+    !hasNonDraftAssets ||
+    selectedHasDraft ||
+    selectedHasUpdated ||
+    selectedHasRemoved;
+  const changeStatusTooltip = allAssetsApproved
+    ? 'All assets approved.'
+    : hasPendingChanges
+      ? 'Apply changes before changing asset statuses.'
+      : !hasNonDraftAssets
+        ? 'No assets generated yet. Generate assets to change status.'
+        : selectedHasUpdated
+          ? 'Please apply asset changes below before updating the statuses of these assets.'
+          : selectedHasRemoved
+            ? "Unable to change status of 'Removed' assets."
+            : selectedHasDraft
+              ? "Unable to change status of 'Draft' assets."
+              : '';
 
   // Derive the value to display in the Change Status selector
   const selectedNonDraftAssets = selectedAssets.filter((a) => a.status !== 'draft' && a.status !== 'removed');
@@ -158,6 +174,13 @@ export const ReviewPage = () => {
       setActiveTab(fallback);
     }
   }, [activeTab, assets]);
+
+  // Clear selection whenever a generation run starts (covers both regular and Advanced Generation paths)
+  useEffect(() => {
+    if (submittingIds.size > 0) {
+      setSelectedIds(new Set());
+    }
+  }, [submittingIds.size]);
 
   const filteredAssets = nonApprovedAssets
     .filter((a) => activeTab === 'all' || a.status === activeTab)
@@ -255,7 +278,13 @@ export const ReviewPage = () => {
 
         {/* Submit for Approval button */}
         <Tooltip
-          title={showSubmitTooltip ? 'One or more selected assets have already been submitted for Approval' : ''}
+          title={
+            showSubmitTooltip
+              ? 'One or more selected assets have already been submitted for Approval'
+              : !hasDraftAssets
+                ? 'All assets successfully generated.'
+                : ''
+          }
           placement="bottom"
         >
           <span style={{ flexShrink: 0, display: 'inline-flex' }}>
@@ -272,8 +301,8 @@ export const ReviewPage = () => {
           </span>
         </Tooltip>
 
-        {/* Change Status select — visible when approval mode is on and non-draft assets exist */}
-        {approvalEnabled && hasNonDraftAssets && (
+        {/* Change Status select — visible when approval mode is on */}
+        {approvalEnabled && (
           <Tooltip
             title={changeStatusDisabled ? changeStatusTooltip : ''}
             placement="bottom"
@@ -404,8 +433,8 @@ export const ReviewPage = () => {
         </div>
       )}
 
-      {/* ── Tabs ─────────────────────────────────────────────── */}
-      <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
+      {/* ── Tabs — hidden when there are no assets to show ───── */}
+      {nonApprovedAssets.length > 0 && <div style={{ margin: '0px 16px',flexShrink: 0, background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex' }}>
         {([...dynamicTabs, { status: 'all' as const, label: 'All', count: nonApprovedAssets.length }]).map(({ status, label, count }) => {
           const isActive = activeTab === status;
           return (
@@ -432,12 +461,13 @@ export const ReviewPage = () => {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
           <EmptyStateMessage
+            illustration={allAssetsApproved ? generationDoneSrc : undefined}
             message={approvalEnabled
               ? [
                   'All assets have been approved and moved to Approved task.',
@@ -481,6 +511,16 @@ export const ReviewPage = () => {
         approvalEnabled={approvalEnabled}
         onClose={() => setApplyDialogOpen(false)}
         onApply={() => { applyChanges(); setApplyDialogOpen(false); showSnackbar({ message: 'Changes applied.' }); }}
+        onReviewChanges={() => { setApplyDialogOpen(false); setComparisonModalOpen(true); }}
+      />
+    )}
+    {comparisonModalOpen && (
+      <ComparisonModal
+        assets={assets}
+        pendingChanges={pendingChanges}
+        pendingRemovals={pendingRemovals}
+        onBack={() => { setComparisonModalOpen(false); setApplyDialogOpen(true); }}
+        onApply={() => { applyChanges(); setComparisonModalOpen(false); showSnackbar({ message: 'Changes applied.' }); }}
       />
     )}
     {revertDialogOpen && (

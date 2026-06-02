@@ -76,7 +76,7 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: Ad
         }}
       >
         {/* Default state: stacked cards */}
-        {!active && (
+        {!hover && (
           <>
             {/* Layer 3 — back, rotated -5° (left) */}
             {assets[2] && (
@@ -100,7 +100,7 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: Ad
         )}
 
         {/* Hover / editing state: 2-row padded grid */}
-        {active && (() => {
+        {hover && (() => {
           // Row 1 cells are ~square; row 2 cell is ~2:1 (inner area is square, two equal rows).
           // Use percentage dimensions so FilledTemplatePreview (which fills 100%×100%) gets a definite size.
           const hPct = (template.height / template.width) * 100; // % of cell HEIGHT for row-1 (square cells)
@@ -228,9 +228,9 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: Ad
             position: 'absolute',
             bottom: 9,
             right: 9,
-            opacity: active ? 1 : 0,
+            opacity: hover ? 1 : 0,
             transition: 'opacity 0.15s',
-            pointerEvents: active ? 'auto' : 'none',
+            pointerEvents: hover ? 'auto' : 'none',
             zIndex: 3,
           }}
         >

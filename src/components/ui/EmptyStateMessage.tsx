@@ -2,11 +2,12 @@ import emptyFolderSrc from '../../assets/empty-folder.png';
 
 interface EmptyStateMessageProps {
   message: string | string[];
+  illustration?: string;
   actionLabel?: string;
   onAction?: () => void;
 }
 
-export const EmptyStateMessage = ({ message, actionLabel, onAction }: EmptyStateMessageProps) => {
+export const EmptyStateMessage = ({ message, illustration, actionLabel, onAction }: EmptyStateMessageProps) => {
   const lines = Array.isArray(message) ? message : [message];
 
   return (
@@ -20,7 +21,7 @@ export const EmptyStateMessage = ({ message, actionLabel, onAction }: EmptyState
       padding: '40px 16px',
     }}>
       <img
-        src={emptyFolderSrc}
+        src={illustration ?? emptyFolderSrc}
         alt=""
         style={{ width: 200, height: 200, objectFit: 'contain', flexShrink: 0 }}
       />

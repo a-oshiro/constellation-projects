@@ -87,9 +87,10 @@ interface ApplyChangesDialogProps {
   approvalEnabled: boolean;
   onClose: () => void;
   onApply: () => void;
+  onReviewChanges: () => void;
 }
 
-export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemovedCount, adsUpdatedShellCount, campaignLoaded, approvalEnabled, onClose, onApply }: ApplyChangesDialogProps) {
+export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemovedCount, adsUpdatedShellCount, campaignLoaded, approvalEnabled, onClose, onApply, onReviewChanges }: ApplyChangesDialogProps) {
   const navigate = useNavigate();
 
   const linkStyle: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', letterSpacing: '0.46px', lineHeight: '22px', borderRadius: 100 };
@@ -167,7 +168,7 @@ export function ApplyChangesDialog({ updatedCount, removedCount, approvedRemoved
           Cancel
         </button>
         <button
-          onClick={() => { onClose(); navigate('/review'); }}
+          onClick={onReviewChanges}
           style={{ background: 'none', border: '1px solid rgba(99,86,225,0.5)', cursor: 'pointer', padding: '6px 16px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', letterSpacing: '0.4px', lineHeight: '24px', borderRadius: 100 }}
         >
           Review Changes
