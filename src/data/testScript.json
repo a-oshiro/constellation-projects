@@ -1,0 +1,21 @@
+[
+  {
+    "title": "Flow #1: Generate & Approve Assets",
+    "steps": [
+      "Generate assets through Review task (individually or in bulk)",
+      "Review generated assets and approve them",
+      "Review approved assets and ads",
+      "Load Campaign"
+    ]
+  },
+  {
+    "title": "Flow #2: Versioning",
+    "steps": [
+      "Change the monthly payment values of any offer",
+      "Remove any background",
+      "Apply changes",
+      "Approve changed assets",
+      "Review Asset versions and impacts to Ads and Campaigns"
+    ]
+  }
+]

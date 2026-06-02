@@ -7,6 +7,7 @@ import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
 import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
+import { TestWidget } from '../ui/TestWidget';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
 const LEFT_DEFAULT  = 280;
@@ -121,6 +122,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
+      <TestWidget />
       <LeftNav />
       <div className="flex flex-col flex-1 min-w-0" style={{ background: '#f0f2f4' }}>
         <TopBar />
