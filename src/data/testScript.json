@@ -2,7 +2,7 @@
   {
     "title": "Flow #1: Generate & Approve Assets",
     "steps": [
-      "Generate assets through Review task (individually or in bulk)",
+      "Generate assets",
       "Review generated assets and approve them",
       "Review approved assets and ads",
       "Load Campaign"
