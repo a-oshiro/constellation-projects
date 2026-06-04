@@ -170,6 +170,7 @@ export const ApprovedPage = () => {
           gap: 8,
           flexShrink: 0,
           borderBottom: '1px solid rgba(0,0,0,0.06)',
+          margin: '0 16px',
         }}>
           <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#663c00', letterSpacing: '0.17px', lineHeight: 1.5 }}>

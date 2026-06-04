@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react';
 
 // ── Toggle this to show or hide the Test Script widget ────────────────────────
-export const SHOW_TEST_WIDGET = true;
+export const SHOW_TEST_WIDGET = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const WIDGET_EXPANDED_WIDTH = 240;
