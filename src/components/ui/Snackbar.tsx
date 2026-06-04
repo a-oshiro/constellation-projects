@@ -1,4 +1,5 @@
 import { Close } from '@mui/icons-material';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 interface SnackbarProps {
   message: string;
@@ -7,12 +8,14 @@ interface SnackbarProps {
 }
 
 export function AppSnackbar({ message, action, onClose }: SnackbarProps) {
+  const { widgetWidth } = useTestWidget();
   return (
     <div style={{
       position: 'fixed',
       bottom: 24,
-      left: 24,
+      left: widgetWidth + 24,
       zIndex: 9999,
+      transition: 'left 0.2s ease',
     }}>
       <div style={{
         background: '#2a2831',

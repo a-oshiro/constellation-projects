@@ -7,6 +7,7 @@ import type { Asset, Offer } from '../../data/types';
 import type { PendingOfferChange, PendingRemovalChange } from '../../context/ProjectContext';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 interface ComparisonItem {
   asset: Asset;
@@ -47,6 +48,7 @@ export const ComparisonModal = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const previewAreaRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { widgetWidth } = useTestWidget();
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
@@ -164,12 +166,16 @@ export const ComparisonModal = ({
     <div
       style={{
         position: 'fixed',
-        inset: 0,
-        zIndex: 1300,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: widgetWidth,
+        zIndex: 100000,
         background: 'rgba(0, 0, 0, 0.45)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        transition: 'left 0.2s ease',
       }}
     >
       <div

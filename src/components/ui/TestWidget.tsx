@@ -1,26 +1,28 @@
-import { useState } from 'react';
+import ReactDOM from 'react-dom';
+import { useTestWidget, WIDGET_EXPANDED_WIDTH, WIDGET_COLLAPSED_WIDTH, SHOW_TEST_WIDGET } from '../../context/TestWidgetContext';
 import script from '../../data/testScript.json';
 
-const EXPANDED_WIDTH = 240;
-const COLLAPSED_WIDTH = 52;
-
 export const TestWidget = () => {
-  const [expanded, setExpanded] = useState(true);
+  const { expanded, setExpanded, widgetWidth } = useTestWidget();
 
-  return (
+  // ── Visual panel — portaled to document.body so it shares the root
+  // stacking context with other portals (AssetDetailsDialog, LargePreviewModal,
+  // ComparisonModal, etc.) and z-index: 99999 reliably wins over all of them.
+  const panel = (
     <div
       style={{
-        width: expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
-        flexShrink: 0,
-        height: '100%',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        width: widgetWidth,
+        height: '100vh',
         background: '#ffffff',
         borderRight: '1px solid #d6d8da',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         transition: 'width 0.2s ease',
-        position: 'relative',
-        zIndex: 10,
+        zIndex: 99999,
       }}
     >
       {expanded ? (
@@ -63,7 +65,6 @@ export const TestWidget = () => {
                 flexShrink: 0,
               }}
             >
-              {/* Left-pointing chevron: collapse */}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -141,13 +142,9 @@ export const TestWidget = () => {
             paddingTop: 14,
           }}
         >
-          {/* Right-pointing chevron — same vertical position as header arrow */}
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: '#686576' }}>
             <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-
-          {/* 'View Test Script' label — 12px below the arrow.
-              writing-mode makes layout dims match visual dims, so marginTop is a true gap. */}
           <span
             style={{
               marginTop: 12,
@@ -167,5 +164,22 @@ export const TestWidget = () => {
         </button>
       )}
     </div>
+  );
+
+  if (!SHOW_TEST_WIDGET) return null;
+
+  return (
+    <>
+      {/* Spacer: keeps the flex layout intact so app content is pushed to the right */}
+      <div
+        style={{
+          width: expanded ? WIDGET_EXPANDED_WIDTH : WIDGET_COLLAPSED_WIDTH,
+          flexShrink: 0,
+          transition: 'width 0.2s ease',
+        }}
+      />
+      {/* Visual panel: portaled to body, shares root stacking context with all other portals */}
+      {ReactDOM.createPortal(panel, document.body)}
+    </>
   );
 };

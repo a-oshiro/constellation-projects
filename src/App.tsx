@@ -6,6 +6,8 @@ import { MainLayout } from './components/layout/MainLayout';
 import { SnackbarProvider } from './context/SnackbarContext';
 import { ProgressIndicatorProvider } from './context/ProgressIndicatorContext';
 import { ProgressIndicator } from './components/ui/ProgressIndicator';
+import { TestWidgetProvider } from './context/TestWidgetContext';
+import { TestWidget } from './components/ui/TestWidget';
 import { OffersPage } from './pages/OffersPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { ThemeAndLogosPage } from './pages/ThemeAndLogosPage';
@@ -41,31 +43,39 @@ const theme = createTheme({
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <ProjectProvider>
-      <BrowserRouter>
-      <SnackbarProvider>
-      <ProgressIndicatorProvider>
-        <MainLayout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/projects" replace />} />
-            <Route path="/projects" element={<OffersPage />} />
-            <Route path="/offers" element={<OffersPage />} />
-            <Route path="/templates" element={<TemplatesPage />} />
-            <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />
-            <Route path="/review" element={<ReviewPage />} />
-            <Route path="/approved" element={<ApprovedPage />} />
-            <Route path="/ads" element={<AdsPage />} />
-            <Route path="/campaigns" element={<CampaignsPage />} />
-          </Routes>
-        </MainLayout>
-        <ProgressIndicator />
-      </ProgressIndicatorProvider>
-      </SnackbarProvider>
-      </BrowserRouter>
-      </ProjectProvider>
-    </ThemeProvider>
+    <TestWidgetProvider>
+      {/* TestWidget sits outside the app so overlays/snackbars can't render above it */}
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        <TestWidget />
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <ProjectProvider>
+            <BrowserRouter>
+            <SnackbarProvider>
+            <ProgressIndicatorProvider>
+              <MainLayout>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/projects" replace />} />
+                  <Route path="/projects" element={<OffersPage />} />
+                  <Route path="/offers" element={<OffersPage />} />
+                  <Route path="/templates" element={<TemplatesPage />} />
+                  <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />
+                  <Route path="/review" element={<ReviewPage />} />
+                  <Route path="/approved" element={<ApprovedPage />} />
+                  <Route path="/ads" element={<AdsPage />} />
+                  <Route path="/campaigns" element={<CampaignsPage />} />
+                </Routes>
+              </MainLayout>
+              <ProgressIndicator />
+            </ProgressIndicatorProvider>
+            </SnackbarProvider>
+            </BrowserRouter>
+            </ProjectProvider>
+          </ThemeProvider>
+        </div>
+      </div>
+    </TestWidgetProvider>
   );
 }
 

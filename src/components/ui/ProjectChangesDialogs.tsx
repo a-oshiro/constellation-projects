@@ -3,6 +3,7 @@ import { Checkbox } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import type { PendingOfferChange, PendingRemovalChange } from '../../context/ProjectContext';
 import type { Offer } from '../../data/types';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 import multiMediaIcon from '../../assets/icons/multi-media.svg';
 import circleCheckIcon from '../../assets/icons/circle-check.svg';
@@ -14,11 +15,15 @@ import megaphoneIcon from '../../assets/icons/megaphone.svg';
 // ── Shared overlay + dialog shell ─────────────────────────────────────────────
 
 function DialogOverlay({ children }: { children: React.ReactNode }) {
+  const { widgetWidth } = useTestWidget();
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 1300,
+      position: 'fixed',
+      top: 0, right: 0, bottom: 0, left: widgetWidth,
+      zIndex: 100000,
       background: 'rgba(0,0,0,0.45)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
+      transition: 'left 0.2s ease',
     }}>
       <div style={{
         background: '#ffffff',
@@ -202,7 +207,7 @@ export function RevertChangesDialog({ pendingChanges, pendingRemovals, offers, o
   const allRemovalIds = pendingRemovals.map((r) => r.id);
   const allIds = [...allEditIds, ...allRemovalIds];
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allIds));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const allSelected = selectedIds.size === allIds.length;
 

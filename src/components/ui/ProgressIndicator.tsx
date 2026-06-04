@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { CircularProgress } from '@mui/material';
 import { CheckCircle, Close, KeyboardArrowDown } from '@mui/icons-material';
 import { useProgressIndicator } from '../../context/ProgressIndicatorContext';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 export function ProgressIndicator() {
   const { visible, items, done, dismiss } = useProgressIndicator();
+  const { widgetWidth } = useTestWidget();
   const [collapsed, setCollapsed] = useState(false);
 
   if (!visible || items.length === 0) return null;
@@ -13,8 +15,9 @@ export function ProgressIndicator() {
     <div style={{
       position: 'fixed',
       bottom: 0,
-      left: 100,
+      left: widgetWidth + 100,
       zIndex: 9999,
+      transition: 'left 0.2s ease',
       width: 340,
       display: 'flex',
       flexDirection: 'column',

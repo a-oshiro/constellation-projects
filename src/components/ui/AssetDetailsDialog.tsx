@@ -17,6 +17,7 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES, PROJECT_INFO, CURRENT_USER } from '../../data/mockData';
 import type { Asset, AssetVersion, AssetComment } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 const ZOOM_STEPS = [50, 75, 100, 150, 200, 300];
 
@@ -712,6 +713,7 @@ export const AssetDetailsDialog = ({ asset, onClose }: AssetDetailsDialogProps) 
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [previewVersion, setPreviewVersion] = useState<AssetVersion | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const { widgetWidth } = useTestWidget();
 
   // Reset version preview when switching away from History tab
   useEffect(() => {
@@ -778,9 +780,10 @@ export const AssetDetailsDialog = ({ asset, onClose }: AssetDetailsDialogProps) 
       <div
         style={{
           position: 'fixed',
-          inset: 0,
-          zIndex: 9999,
+          top: 0, right: 0, bottom: 0, left: widgetWidth,
+          zIndex: 100000,
           background: 'rgba(0,0,0,0.4)',
+          transition: 'left 0.2s ease',
         }}
         onClick={onClose}
       />
@@ -788,8 +791,9 @@ export const AssetDetailsDialog = ({ asset, onClose }: AssetDetailsDialogProps) 
       <div
         style={{
           position: 'fixed',
-          inset: 16,
-          zIndex: 10000,
+          top: 16, right: 16, bottom: 16, left: widgetWidth + 16,
+          zIndex: 100001,
+          transition: 'left 0.2s ease',
           background: '#ffffff',
           borderRadius: 16,
           boxShadow:

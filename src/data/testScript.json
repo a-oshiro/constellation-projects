@@ -13,6 +13,7 @@
     "steps": [
       "Change the monthly payment values of any offer",
       "Remove any background",
+      "Revert background removal",
       "Apply changes",
       "Approve changed assets",
       "Review Asset versions and impacts to Ads and Campaigns"

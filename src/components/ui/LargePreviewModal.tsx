@@ -5,6 +5,7 @@ import { Close } from '@mui/icons-material';
 import type { Asset } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
+import { useTestWidget } from '../../context/TestWidgetContext';
 
 interface LargePreviewModalProps {
   asset: Asset;
@@ -13,6 +14,7 @@ interface LargePreviewModalProps {
 
 export const LargePreviewModal = ({ asset, onClose }: LargePreviewModalProps) => {
   const template = TEMPLATES.find((t) => t.id === asset.templateId);
+  const { widgetWidth } = useTestWidget();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -30,12 +32,16 @@ export const LargePreviewModal = ({ asset, onClose }: LargePreviewModalProps) =>
     <div
       style={{
         position: 'fixed',
-        inset: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: widgetWidth,
         background: 'rgba(0, 0, 0, 0.45)',
-        zIndex: 9999,
+        zIndex: 100000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        transition: 'left 0.2s ease',
       }}
       onClick={onClose}
     >
