@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Checkbox, IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
-import { MoreVert, Edit, VisibilityOutlined, GridViewOutlined, DeleteOutlined } from '@mui/icons-material';
+import { MoreVert, VisibilityOutlined, GridViewOutlined, DeleteOutlined } from '@mui/icons-material';
 import type { Template } from '../../data/types';
+import { TEMPLATE_REGISTRY } from '../../templates';
 
 interface TemplateCardProps {
   template: Template;
@@ -12,115 +13,16 @@ interface TemplateCardProps {
   onRemove?: (id: string) => void;
 }
 
-// ── Template Preview ───────────────────────────────────────────────────────────
-
-function TemplatePreview({
-  template,
-  hovered,
-}: {
-  template: Template;
-  hovered: boolean;
-}) {
-  const isWide = template.width > template.height;
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-
-      {/* Background placeholder */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: `repeating-linear-gradient(-45deg, #e8eaed 0px, #e8eaed 6px, #f0f2f4 6px, #f0f2f4 14px)`,
-      }} />
-
-      {/* "Background Image" label */}
-      <div style={{
-        position: 'absolute', bottom: isWide ? 6 : 8, left: '50%', transform: 'translateX(-50%)',
-        background: 'rgba(255,255,255,0.75)', border: '1px dashed #9c99a9',
-        borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
-      }}>
-        <span style={{ fontSize: isWide ? 9 : 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.3px' }}>
-          Background Image
-        </span>
-      </div>
-
-      {/* Left: text placeholders */}
-      <div style={{
-        position: 'absolute', left: '4%', top: isWide ? '8%' : '10%',
-        width: isWide ? '44%' : '40%', display: 'flex', flexDirection: 'column', gap: isWide ? 6 : 8,
-      }}>
-        <div style={{ fontSize: isWide ? 11 : 13, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#473bab', lineHeight: 1.25, padding: '2px 5px', background: 'rgba(71,59,171,0.08)', borderRadius: 4 }}>
-          {'{vehicleCondition}'}<br />{'{year} {make} {model}'}<br />{'{trim}'}
-        </div>
-        <div style={{ fontSize: isWide ? 9 : 11, fontFamily: 'Roboto, sans-serif', color: '#473bab', lineHeight: 1.4, padding: '2px 5px', background: 'rgba(71,59,171,0.08)', borderRadius: 4 }}>
-          {'{Offer type} for'}<br />{'${monthlyPayment} / month'}<br />{'for {n} months'}
-        </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#473bab', borderRadius: 100, padding: isWide ? '3px 10px' : '4px 12px', width: 'fit-content' }}>
-          <span style={{ fontSize: isWide ? 9 : 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: 'white', whiteSpace: 'nowrap' }}>More Info</span>
-        </div>
-        <div style={{ height: isWide ? 5 : 6, width: '88%', background: 'rgba(0,0,0,0.12)', borderRadius: 3 }} />
-      </div>
-
-      {/* Right: product image placeholder */}
-      <div style={{
-        position: 'absolute', left: isWide ? '51%' : '46%', top: isWide ? '8%' : '10%',
-        width: isWide ? '44%' : '50%', height: isWide ? '68%' : '60%',
-        border: '2px solid #473bab', borderRadius: 6, background: 'rgba(255,255,255,0.7)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4,
-      }}>
-        <svg width={isWide ? 32 : 40} height={isWide ? 20 : 26} viewBox="0 0 40 26" fill="none">
-          <rect x="2" y="10" width="36" height="13" rx="3" stroke="#473bab" strokeWidth="1.5"/>
-          <path d="M6 10 L10 3 H30 L34 10" stroke="#473bab" strokeWidth="1.5" strokeLinejoin="round"/>
-          <circle cx="10" cy="23" r="3" stroke="#473bab" strokeWidth="1.5"/>
-          <circle cx="30" cy="23" r="3" stroke="#473bab" strokeWidth="1.5"/>
-        </svg>
-        <span style={{ fontSize: isWide ? 9 : 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', textAlign: 'center' }}>
-          Product Image
-        </span>
-      </div>
-
-      {/* Top-right: logo placeholder */}
-      <div style={{
-        position: 'absolute', top: isWide ? '6%' : '5%', right: '3%',
-        width: isWide ? '11%' : '10%', height: isWide ? '18%' : '13%',
-        border: '1.5px dashed #ec4899', borderRadius: 4, background: 'rgba(255,255,255,0.7)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: isWide ? 6 : 7, color: '#ec4899', fontFamily: 'Roboto, sans-serif', textAlign: 'center', lineHeight: 1.2 }}>Logo</span>
-      </div>
-
-      {/* Hover: Edit Template button */}
-      <div style={{
-        position: 'absolute', bottom: 7, right: 7,
-        opacity: hovered ? 1 : 0, transition: 'opacity 0.15s',
-        pointerEvents: hovered ? 'auto' : 'none',
-      }}>
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: '#473bab', color: 'white', border: 'none',
-          borderRadius: 100, padding: '4px 10px', fontSize: 12,
-          fontFamily: 'Roboto, sans-serif', fontWeight: 500,
-          letterSpacing: '0.46px', lineHeight: '22px',
-          cursor: 'pointer', whiteSpace: 'nowrap',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-        }}>
-          <Edit style={{ fontSize: 14 }} />
-          Edit Template
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── TemplateCard ───────────────────────────────────────────────────────────────
-
 export const TemplateCard = ({ template, selected, onSelect, onClick, onRemove }: TemplateCardProps) => {
   const [hovered, setHovered] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const isWide = template.width >= template.height;
-  // Size the template preview to fit inside the square, letterboxing the shorter axis
   const previewWidth = isWide ? '100%' : `${(template.width / template.height) * 100}%`;
   const previewHeight = isWide ? `${(template.height / template.width) * 100}%` : '100%';
+
+  const templateDef = TEMPLATE_REGISTRY[template.id];
+  const PreviewComponent = templateDef?.Preview;
 
   return (
     <div
@@ -145,7 +47,10 @@ export const TemplateCard = ({ template, selected, onSelect, onClick, onRemove }
       }}>
         {/* Template preview — centered, scaled to maintain its aspect ratio */}
         <div style={{ width: previewWidth, height: previewHeight, position: 'relative', flexShrink: 0 }}>
-          <TemplatePreview template={template} hovered={hovered} />
+          {PreviewComponent
+            ? <PreviewComponent hovered={hovered} />
+            : <div style={{ width: '100%', height: '100%', background: '#e8eaed' }} />
+          }
         </div>
 
         {/* Checkbox — top-left */}

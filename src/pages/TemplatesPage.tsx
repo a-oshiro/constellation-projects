@@ -4,6 +4,7 @@ import { Add, MoreVert, Search } from '@mui/icons-material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { TemplateCard } from '../components/ui/TemplateCard';
+import { AddTemplatesDialog } from '../components/ui/AddTemplatesDialog';
 import { BACKGROUNDS } from '../data/mockData';
 import { useProject } from '../context/ProjectContext';
 
@@ -14,6 +15,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
   const { templates, removedTemplateIds, removeTemplate } = useProject();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const handleSelect = (id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -34,6 +36,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
     BACKGROUNDS.find((b) => b.templateId === templateId)?.url;
 
   return (
+    <>
     <div className="flex flex-col h-full" style={{ background: '#f0f2f4' }}>
     <div
       className="flex flex-col flex-1 min-h-0 overflow-hidden"
@@ -47,6 +50,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
           variant="contained"
           startIcon={<Add />}
           size="small"
+          onClick={() => setAddDialogOpen(true)}
           sx={{
             textTransform: 'none',
             background: '#473bab',
@@ -116,5 +120,13 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
       <TaskFooter currentTask="templates" />
     </div>
     </div>
+
+    <AddTemplatesDialog
+      open={addDialogOpen}
+      onClose={() => setAddDialogOpen(false)}
+      projectTemplateIds={new Set(templates.map((t) => t.id))}
+      availableTemplates={visibleTemplates}
+    />
+    </>
   );
 };

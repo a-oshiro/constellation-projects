@@ -11,6 +11,9 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
 import { AssetDetailsDialog } from './AssetDetailsDialog';
 import { LargePreviewModal } from './LargePreviewModal';
+import { useProject } from '../../context/ProjectContext';
+import { getTemplateCtas } from '../../data/destinationUrlOptions';
+import pageTextLinkSvg from '../../assets/icons/page-text-link.svg';
 
 export type DraftVariant = 'default' | 'labeled' | 'badge';
 
@@ -99,6 +102,8 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
   const [showLargePreview, setShowLargePreview] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
+  const { destinationUrls } = useProject();
+
   const visibleTags = asset.tags.slice(0, MAX_VISIBLE_TAGS);
   const overflowCount = asset.tags.length - MAX_VISIBLE_TAGS;
   const status = STATUS_CONFIG[asset.status];
@@ -107,6 +112,12 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
 
   const isDraft = asset.status === 'draft';
   const isUpdated = asset.status === 'updated';
+
+  // Missing Destination URL badge — only for HTML template assets
+  const isHtml = asset.imageType === 'HTML';
+  const htmlCtas = isHtml ? getTemplateCtas(asset.templateId) : [];
+  const assetUrls = destinationUrls[asset.id] ?? {};
+  const hasMissingUrls = isHtml && !isDraft && htmlCtas.some((cta) => !assetUrls[cta.key]);
 
   // Determine how to size the template preview within the square thumbnail.
   // Wide templates (e.g. 600×250) are letterboxed; square fills the card fully.
@@ -253,22 +264,27 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
         />
       </div>
 
-      {/* ── Status chip — absolute top-right of thumbnail ── */}
+      {/* ── Status chip + Missing URL badge stack — top-right ── */}
       <div
         style={{
           position: 'absolute',
           top: 8,
           right: 8,
           zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 4,
         }}
       >
+        {/* Status badge */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
             padding: '3px 8px 3px 6px',
-            borderRadius: 100,
+            borderRadius: 8,
             background: status.bg,
             backdropFilter: 'blur(2px)',
           }}
@@ -288,6 +304,37 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
             {status.label}
           </span>
         </div>
+        
+        {/* Missing Destination URL badge */}
+        {hasMissingUrls && (
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowDialog(true); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 8px 3px 6px',
+              borderRadius: 8,
+              background: '#FDF4EC',
+              cursor: 'pointer',
+            }}
+          >
+            <img src={pageTextLinkSvg} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: 'Roboto, sans-serif',
+                fontWeight: 500,
+                color: '#c45500',
+                letterSpacing: '0.4px',
+                lineHeight: 1.66,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Missing Destination URLs
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Updated variant: Badge bar ────────────────── */}
@@ -468,7 +515,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
               <ContentCopyOutlined sx={{ fontSize: 18, color: '#686576' }} />
               <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Duplicate</span>
             </MenuItem>
-            <MenuItem onClick={() => setMenuAnchor(null)} sx={{ gap: 1.5, py: 1 }}>
+            <MenuItem onClick={() => { setMenuAnchor(null); setShowDialog(true); }} sx={{ gap: 1.5, py: 1 }}>
               <DriveFileRenameOutline sx={{ fontSize: 18, color: '#686576' }} />
               <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Edit Metadata</span>
             </MenuItem>

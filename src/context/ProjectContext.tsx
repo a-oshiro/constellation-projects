@@ -44,6 +44,9 @@ interface ProjectContextValue {
   /** Whether the Approved task is enabled in the workflow */
   approvalEnabled: boolean;
   setApprovalEnabled: (enabled: boolean) => void;
+  /** Destination URLs for HTML asset CTAs: { [assetId]: { [ctaKey]: url } } */
+  destinationUrls: Record<string, Record<string, string>>;
+  setDestinationUrl: (assetId: string, ctaKey: string, url: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -59,7 +62,7 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
         result.push({
           id: `asset-${offer.id}-${tmpl.id}-${bg.id}`,
           name: `${offer.vehicleName}_${dimLabel}_BG${bi + 1}`,
-          description: `Image | ${dimLabel}`,
+          description: `${tmpl.type === 'HTML' ? 'HTML' : 'Image'} | ${dimLabel}`,
           thumbnailUrl: bg.url,
           offerId: offer.id,
           templateId: tmpl.id,
@@ -68,14 +71,14 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
           tags: [
             offer.offerType[0] || 'Lease',
             dimLabel,
-            tmpl.type === 'Facebook Post' ? 'Social' : 'Website',
+            tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website',
           ],
           folder: 'May Offers - Specials',
           width: tmpl.width,
           height: tmpl.height,
-          imageType: 'Image',
+          imageType: tmpl.type === 'HTML' ? 'HTML' : 'Image',
           offerType: offer.offerType[0] || 'Lease',
-          platform: tmpl.type === 'Facebook Post' ? 'Social' : 'Website',
+          platform: tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website',
           offer,
           backgroundUrl: bg.url,
         });
@@ -107,6 +110,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   approvalEnabledRef.current = approvalEnabled;
   const [assetVersionHistory, setAssetVersionHistory] = useState<Record<string, AssetVersion[]>>({});
   const [assetComments, setAssetComments] = useState<Record<string, AssetComment[]>>({});
+  const [destinationUrls, setDestinationUrlsState] = useState<Record<string, Record<string, string>>>({});
+
+  const setDestinationUrl = useCallback((assetId: string, ctaKey: string, url: string) => {
+    setDestinationUrlsState((prev) => ({
+      ...prev,
+      [assetId]: { ...prev[assetId], [ctaKey]: url },
+    }));
+  }, []);
 
   const addAssetComment = useCallback((assetId: string, text: string) => {
     const comment: AssetComment = {
@@ -375,6 +386,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       assetComments,
       addAssetComment,
       approvalEnabled, setApprovalEnabled,
+      destinationUrls, setDestinationUrl,
     }}>
       {children}
     </ProjectContext.Provider>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { IconButton } from '@mui/material';
+import { IconButton, Select, MenuItem, FormControl } from '@mui/material';
 import {
   Close,
   Add,
@@ -18,6 +18,7 @@ import { TEMPLATES, PROJECT_INFO, CURRENT_USER } from '../../data/mockData';
 import type { Asset, AssetVersion, AssetComment } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { useTestWidget } from '../../context/TestWidgetContext';
+import { DESTINATION_URL_OPTIONS, getTemplateCtas } from '../../data/destinationUrlOptions';
 
 const ZOOM_STEPS = [50, 75, 100, 150, 200, 300];
 
@@ -130,8 +131,13 @@ const ChipSelectField = ({ label, chips, placeholder }: ChipSelectFieldProps) =>
 );
 
 const MetadataPanel = ({ asset }: { asset: Asset }) => {
+  const { destinationUrls, setDestinationUrl } = useProject();
   const isLease = asset.offerType?.toLowerCase().includes('lease') ||
     asset.offer.offerType.some((t) => t.toLowerCase().includes('lease'));
+
+  const ctas = getTemplateCtas(asset.templateId);
+  const isHtml = ctas.length > 0;
+  const assetUrls = destinationUrls[asset.id] ?? {};
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -240,6 +246,73 @@ const MetadataPanel = ({ asset }: { asset: Asset }) => {
       <ChipSelectField label="Entity Status" chips={[]} />
       {isLease && (
         <ChipSelectField label="Additional Lease Disclosure" chips={[LEASE_DISCLOSURE]} />
+      )}
+
+      {/* ── Destination URLs — HTML assets only ─────────── */}
+      {isHtml && (
+        <>
+          <hr style={{ border: 'none', borderTop: '1px solid rgba(0,0,0,0.08)', margin: '4px 0 0' }} />
+          <p style={{
+            margin: '4px 0 8px',
+            fontSize: 13,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 500,
+            color: '#1f1d25',
+            letterSpacing: '0.15px',
+            lineHeight: '20px',
+          }}>
+            Destination URLs
+          </p>
+          {ctas.map((cta) => {
+            const currentVal = assetUrls[cta.key] ?? '';
+            return (
+              <div key={cta.key} style={{ display: 'flex', flexDirection: 'column' }}>
+                <p style={LABEL_STYLE}>{cta.label}</p>
+                <FormControl size="small" fullWidth>
+                  <Select
+                    value={currentVal}
+                    onChange={(e) => setDestinationUrl(asset.id, cta.key, e.target.value as string)}
+                    displayEmpty
+                    renderValue={(v) =>
+                      v
+                        ? (DESTINATION_URL_OPTIONS.find((o) => o.url === v)?.label ?? v)
+                        : <span style={{ color: '#9c99a9', fontSize: 12, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px' }}>Select or Type URL</span>
+                    }
+                    MenuProps={{ style: { zIndex: 200000 } }}
+                    sx={{
+                      background: '#f9fafa',
+                      borderRadius: '4px',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.54)' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#473bab',
+                        borderWidth: 2,
+                      },
+                      '& .MuiSelect-select': {
+                        py: '6px',
+                        px: '8px',
+                        fontSize: 12,
+                        fontFamily: 'Roboto, sans-serif',
+                        letterSpacing: '0.17px',
+                        color: '#1f1d25',
+                      },
+                    }}
+                  >
+                    {DESTINATION_URL_OPTIONS.map((opt) => (
+                      <MenuItem
+                        key={opt.url}
+                        value={opt.url}
+                        sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}
+                      >
+                        {opt.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </div>
+            );
+          })}
+        </>
       )}
 
       {/* ── Add Field ───────────────────────────────────── */}

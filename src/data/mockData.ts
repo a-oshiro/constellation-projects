@@ -8,6 +8,9 @@ import bg600_3 from '../assets/backgrounds/600_250_3.png';
 import bg1080_1 from '../assets/backgrounds/1080_1080_1.png';
 import bg1080_2 from '../assets/backgrounds/1080_1080_2.png';
 import bg1080_3 from '../assets/backgrounds/1080_1080_3.png';
+import bgHtml1 from '../assets/backgrounds/html_1100_1.png';
+import bgHtml2 from '../assets/backgrounds/html_1100_2.png';
+import bgHtml3 from '../assets/backgrounds/html_1100_3.png';
 
 export const CURRENT_USER = {
   name: 'John Doe',
@@ -30,10 +33,10 @@ export const PROJECT_INFO = {
 
 export const TASKS: TaskItem[] = [
   { key: 'offers', label: 'Offers', count: 3, route: '/offers', completed: true },
-  { key: 'templates', label: 'Templates', count: 2, route: '/templates', completed: true },
+  { key: 'templates', label: 'Templates', count: 3, route: '/templates', completed: true },
   { key: 'theme_and_logos', label: 'Theme and Logos', count: 4, route: '/theme-and-logos', completed: true },
-  { key: 'review', label: 'Review', count: 18, route: '/review', completed: true },
-  { key: 'approved', label: 'Approved', count: 18, route: '/approved', completed: true },
+  { key: 'review', label: 'Review', count: 27, route: '/review', completed: true },
+  { key: 'approved', label: 'Approved', count: 27, route: '/approved', completed: true },
   { key: 'ads', label: 'Ads', count: 0, route: '/ads', completed: false },
   { key: 'campaigns', label: 'Campaigns', count: 0, route: '/campaigns', completed: false },
 ];
@@ -136,6 +139,15 @@ export const TEMPLATES: Template[] = [
     brand: 'BMW',
     previewUrl: '',
   },
+  {
+    id: 'tmpl-3',
+    name: 'BMW_HTML_1100x560',
+    type: 'HTML',
+    width: 1100,
+    height: 560,
+    brand: 'BMW',
+    previewUrl: '',
+  },
 ];
 
 export const BACKGROUNDS: Background[] = [
@@ -145,6 +157,9 @@ export const BACKGROUNDS: Background[] = [
   { id: 'bg-4', templateId: 'tmpl-2', url: bg1080_1, name: '1080x1080 Background 1' },
   { id: 'bg-5', templateId: 'tmpl-2', url: bg1080_2, name: '1080x1080 Background 2' },
   { id: 'bg-6', templateId: 'tmpl-2', url: bg1080_3, name: '1080x1080 Background 3' },
+  { id: 'bg-7', templateId: 'tmpl-3', url: bgHtml1, name: '1100x560 Background 1' },
+  { id: 'bg-8', templateId: 'tmpl-3', url: bgHtml2, name: '1100x560 Background 2' },
+  { id: 'bg-9', templateId: 'tmpl-3', url: bgHtml3, name: '1100x560 Background 3' },
 ];
 
 const offerNames: Record<string, string> = {
@@ -164,22 +179,24 @@ export const ASSETS: Asset[] = (() => {
       templateBgs.forEach((bg, bi) => {
         const dimLabel = `${tmpl.width} x ${tmpl.height}`;
         const bgNum = bi + 1;
+        const mediaType = tmpl.type === 'HTML' ? 'HTML' : 'Image';
+        const platform = tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website';
         assets.push({
           id: `asset-${idx++}`,
           name: `${offerNames[offer.id]}_${dimLabel}_BG${bgNum}`,
-          description: `Image | ${dimLabel}`,
+          description: `${mediaType} | ${dimLabel}`,
           thumbnailUrl: bg.url,
           offerId: offer.id,
           templateId: tmpl.id,
           backgroundId: bg.id,
           status: 'approved',
-          tags: [offer.offerType[0] || 'Lease', dimLabel, tmpl.type === 'Facebook Post' ? 'Social' : 'Website'],
+          tags: [offer.offerType[0] || 'Lease', dimLabel, platform],
           folder: 'May Offers - Specials',
           width: tmpl.width,
           height: tmpl.height,
-          imageType: 'Image',
+          imageType: mediaType,
           offerType: offer.offerType[0] || 'Lease',
-          platform: tmpl.type === 'Facebook Post' ? 'Social' : 'Website',
+          platform,
           offer,
           backgroundUrl: bg.url,
         });
