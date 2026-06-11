@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { IconButton, Select, MenuItem, FormControl } from '@mui/material';
+import { IconButton, Autocomplete, TextField } from '@mui/material';
 import {
   Close,
   Add,
@@ -129,6 +129,102 @@ const ChipSelectField = ({ label, chips, placeholder }: ChipSelectFieldProps) =>
     </svg>
   </div>
 );
+
+const DestinationUrlField = ({
+  assetId,
+  ctaKey,
+  value: currentVal,
+}: {
+  assetId: string;
+  ctaKey: string;
+  value: string;
+}) => {
+  const { setDestinationUrl } = useProject();
+  const matchingOption = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
+  const [inputValue, setInputValue] = useState(matchingOption ? matchingOption.label : currentVal);
+
+  useEffect(() => {
+    const opt = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
+    setInputValue(opt ? opt.label : currentVal);
+  }, [currentVal]);
+
+  const commitValue = (val: string) => {
+    const byLabel = DESTINATION_URL_OPTIONS.find(o => o.label.toLowerCase() === val.toLowerCase());
+    setDestinationUrl(assetId, ctaKey, byLabel ? byLabel.url : val);
+  };
+
+  return (
+    <Autocomplete
+      freeSolo
+      fullWidth
+      size="medium"
+      options={DESTINATION_URL_OPTIONS}
+      value={matchingOption ?? (currentVal || null)}
+      inputValue={inputValue}
+      onInputChange={(_, val) => setInputValue(val)}
+      onChange={(_, newValue) => {
+        if (newValue === null) {
+          setInputValue('');
+          setDestinationUrl(assetId, ctaKey, '');
+        } else if (typeof newValue === 'string') {
+          commitValue(newValue);
+        } else {
+          setInputValue(newValue.label);
+          setDestinationUrl(assetId, ctaKey, newValue.url);
+        }
+      }}
+      onBlur={() => {
+        const stored = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal);
+        if (!stored || stored.label !== inputValue) commitValue(inputValue);
+      }}
+      getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.label}
+      isOptionEqualToValue={(opt, val) =>
+        typeof val === 'string' ? opt.url === val : opt.url === val.url
+      }
+      filterOptions={(options, { inputValue: iv }) => {
+        const lower = iv.toLowerCase();
+        return options.filter(o =>
+          o.label.toLowerCase().includes(lower) ||
+          o.url.toLowerCase().includes(lower)
+        );
+      }}
+      slotProps={{ popper: { sx: { zIndex: 200000 } } }}
+      renderOption={(props, opt) => {
+        const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
+        return (
+          <li key={key} {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
+            {opt.label}
+          </li>
+        );
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          placeholder="Select or Type URL"
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              background: '#f9fafa',
+              borderRadius: '4px',
+              padding: '0 32px 0 0 !important',
+              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
+              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.54)' },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
+            },
+            '& .MuiOutlinedInput-input': {
+              py: '6px',
+              px: '8px',
+              fontSize: 12,
+              fontFamily: 'Roboto, sans-serif',
+              letterSpacing: '0.17px',
+              color: '#1f1d25',
+              '&::placeholder': { color: '#9c99a9', opacity: 1 },
+            },
+          }}
+        />
+      )}
+    />
+  );
+};
 
 const MetadataPanel = ({ asset }: { asset: Asset }) => {
   const { destinationUrls, setDestinationUrl } = useProject();
@@ -268,47 +364,7 @@ const MetadataPanel = ({ asset }: { asset: Asset }) => {
             return (
               <div key={cta.key} style={{ display: 'flex', flexDirection: 'column' }}>
                 <p style={LABEL_STYLE}>{cta.label}</p>
-                <FormControl size="small" fullWidth>
-                  <Select
-                    value={currentVal}
-                    onChange={(e) => setDestinationUrl(asset.id, cta.key, e.target.value as string)}
-                    displayEmpty
-                    renderValue={(v) =>
-                      v
-                        ? (DESTINATION_URL_OPTIONS.find((o) => o.url === v)?.label ?? v)
-                        : <span style={{ color: '#9c99a9', fontSize: 12, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px' }}>Select or Type URL</span>
-                    }
-                    MenuProps={{ style: { zIndex: 200000 } }}
-                    sx={{
-                      background: '#f9fafa',
-                      borderRadius: '4px',
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
-                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.54)' },
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#473bab',
-                        borderWidth: 2,
-                      },
-                      '& .MuiSelect-select': {
-                        py: '6px',
-                        px: '8px',
-                        fontSize: 12,
-                        fontFamily: 'Roboto, sans-serif',
-                        letterSpacing: '0.17px',
-                        color: '#1f1d25',
-                      },
-                    }}
-                  >
-                    {DESTINATION_URL_OPTIONS.map((opt) => (
-                      <MenuItem
-                        key={opt.url}
-                        value={opt.url}
-                        sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}
-                      >
-                        {opt.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <DestinationUrlField assetId={asset.id} ctaKey={cta.key} value={currentVal} />
               </div>
             );
           })}

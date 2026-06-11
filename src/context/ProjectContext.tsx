@@ -47,6 +47,8 @@ interface ProjectContextValue {
   /** Destination URLs for HTML asset CTAs: { [assetId]: { [ctaKey]: url } } */
   destinationUrls: Record<string, Record<string, string>>;
   setDestinationUrl: (assetId: string, ctaKey: string, url: string) => void;
+  /** Bulk-apply destination URLs: { [assetId]: { [ctaKey]: url } } */
+  bulkSetDestinationUrls: (updates: Record<string, Record<string, string>>) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -119,6 +121,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const bulkSetDestinationUrls = useCallback((updates: Record<string, Record<string, string>>) => {
+    setDestinationUrlsState((prev) => {
+      const next = { ...prev };
+      Object.entries(updates).forEach(([assetId, ctaMap]) => {
+        next[assetId] = { ...next[assetId], ...ctaMap };
+      });
+      return next;
+    });
+  }, []);
+
   const addAssetComment = useCallback((assetId: string, text: string) => {
     const comment: AssetComment = {
       id: `comment-${assetId}-${Date.now()}`,
@@ -144,8 +156,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   assetStatusesRef.current = assetStatuses;
 
   const assets = useMemo(
-    () => rawAssets.map((a) => assetStatuses[a.id] ? { ...a, status: assetStatuses[a.id] } : a),
-    [rawAssets, assetStatuses],
+    () => rawAssets
+      .map((a) => assetStatuses[a.id] ? { ...a, status: assetStatuses[a.id] } : a)
+      .filter((a) => {
+        // Non-draft assets remain visible (they show as 'removed' in the Review task)
+        if (a.status !== 'draft') return true;
+        // Hide draft assets whose template, offer, or background is pending removal
+        return (
+          !removedTemplateIds.has(a.templateId) &&
+          !removedOfferIds.has(a.offerId) &&
+          !removedBgIds.has(a.backgroundId)
+        );
+      }),
+    [rawAssets, assetStatuses, removedTemplateIds, removedOfferIds, removedBgIds],
   );
 
   const updateOffer = useCallback((id: string, updated: Partial<Offer>) => {
@@ -386,7 +409,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       assetComments,
       addAssetComment,
       approvalEnabled, setApprovalEnabled,
-      destinationUrls, setDestinationUrl,
+      destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
     }}>
       {children}
     </ProjectContext.Provider>

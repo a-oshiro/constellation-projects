@@ -81,36 +81,36 @@ export function TemplatePreview({ hovered }: TemplatePreviewProps) {
         <span style={{ fontSize: 7, color: '#3949ab', fontFamily: 'Roboto, sans-serif' }}>Jellybean</span>
       </div>
 
-      {/* Claim Special button */}
+      {/* Claim Offer button */}
       <div style={{
         position: 'absolute', top: '44.67%', left: '2.71%', right: '76.46%', bottom: '41.33%',
         background: '#473bab', borderRadius: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 6, color: 'white', fontFamily: 'Roboto, sans-serif', fontWeight: 500, whiteSpace: 'nowrap' }}>
-          Claim Special
+          Claim Offer
         </span>
       </div>
 
-      {/* View Inventory button */}
+      {/* See New Vehicles button */}
       <div style={{
         position: 'absolute', top: '61.33%', left: '2.71%', right: '75.9%', bottom: '24.67%',
         background: '#473bab', borderRadius: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 6, color: 'white', fontFamily: 'Roboto, sans-serif', fontWeight: 500, whiteSpace: 'nowrap' }}>
-          View Inventory
+          See New Vehicles
         </span>
       </div>
 
-      {/* Value Trade button */}
+      {/* Trade-In button */}
       <div style={{
         position: 'absolute', top: '78%', left: '2.71%', right: '77.36%', bottom: '8%',
         background: '#473bab', borderRadius: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 6, color: 'white', fontFamily: 'Roboto, sans-serif', fontWeight: 500, whiteSpace: 'nowrap' }}>
-          Value Trade
+          Trade-In
         </span>
       </div>
 
@@ -195,7 +195,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         <BmwLogo size={logoSize} />
       </div>
 
-      {/* Claim Special button */}
+      {/* Claim Offer button */}
       <div style={{
         position: 'absolute',
         top: height * 0.4467,
@@ -210,11 +210,11 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
         }}>
-          CLAIM SPECIAL
+          CLAIM OFFER
         </div>
       </div>
 
-      {/* View Inventory button */}
+      {/* See New Vehicles button */}
       <div style={{
         position: 'absolute',
         top: height * 0.6133,
@@ -229,11 +229,11 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
         }}>
-          VIEW INVENTORY
+          SEE NEW VEHICLES
         </div>
       </div>
 
-      {/* Value Trade button */}
+      {/* Trade-In button */}
       <div style={{
         position: 'absolute',
         top: height * 0.78,
@@ -248,7 +248,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
         }}>
-          VALUE TRADE
+          TRADE-IN
         </div>
       </div>
 

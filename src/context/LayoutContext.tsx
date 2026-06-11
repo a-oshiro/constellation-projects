@@ -1,12 +1,22 @@
-import { createContext, useContext, useState, useRef } from 'react';
+import { createContext, useContext, useState, useRef, useCallback } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { AdShell } from '../components/ui/AdShellCard';
 import type { Asset } from '../data/types';
+import { DEFAULT_FILTER_STATE } from '../utils/assetFilters';
+import type { FilterState } from '../utils/assetFilters';
+
+export type { FilterState };
 
 interface LayoutContextValue {
   tasksPanelOpen: boolean;
   openTasksPanel: () => void;
   closeTasksPanel: () => void;
+  filterPanelOpen: boolean;
+  openFilterPanel: () => void;
+  closeFilterPanel: () => void;
+  filterState: FilterState;
+  updateFilterState: (updates: Partial<FilterState>) => void;
+  resetFilterState: () => void;
   mainPanelRef: RefObject<HTMLDivElement | null>;
   editingShell: AdShell | null;
   openAdShellPanel: (shell: AdShell) => void;
@@ -27,6 +37,12 @@ const LayoutContext = createContext<LayoutContextValue>({
   tasksPanelOpen: true,
   openTasksPanel: () => {},
   closeTasksPanel: () => {},
+  filterPanelOpen: false,
+  openFilterPanel: () => {},
+  closeFilterPanel: () => {},
+  filterState: DEFAULT_FILTER_STATE,
+  updateFilterState: () => {},
+  resetFilterState: () => {},
   mainPanelRef: { current: null },
   editingShell: null,
   openAdShellPanel: () => {},
@@ -44,6 +60,8 @@ const LayoutContext = createContext<LayoutContextValue>({
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
   const [editingShell, setEditingShell] = useState<AdShell | null>(null);
   const [shellCustomizations, setShellCustomizations] = useState<Record<string, Partial<AdShell>>>({});
   const [advancedGenerationOpen, setAdvancedGenerationOpen] = useState(false);
@@ -51,11 +69,25 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
   const mainPanelRef = useRef<HTMLDivElement | null>(null);
 
+  const updateFilterState = useCallback((updates: Partial<FilterState>) => {
+    setFilterState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const resetFilterState = useCallback(() => {
+    setFilterState(DEFAULT_FILTER_STATE);
+  }, []);
+
   return (
     <LayoutContext.Provider value={{
       tasksPanelOpen,
       openTasksPanel: () => setTasksPanelOpen(true),
       closeTasksPanel: () => setTasksPanelOpen(false),
+      filterPanelOpen,
+      openFilterPanel: () => setFilterPanelOpen(true),
+      closeFilterPanel: () => setFilterPanelOpen(false),
+      filterState,
+      updateFilterState,
+      resetFilterState,
       mainPanelRef,
       editingShell,
       openAdShellPanel: (shell) => setEditingShell(shell),

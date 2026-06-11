@@ -4,7 +4,7 @@ import bmwLogoSrc from '../../assets/bmw-logo.png';
 import { IconButton, Menu, MenuItem, Checkbox, Popover } from '@mui/material';
 import { ArrowBack, Close, CheckCircle, PendingOutlined, HourglassEmpty, WarningAmber, MoreVert } from '@mui/icons-material';
 import { NeedsEditsIcon } from '../ui/NeedsEditsIcon';
-import { TASKS, PROJECT_INFO, BACKGROUNDS } from '../../data/mockData';
+import { TASKS, PROJECT_INFO } from '../../data/mockData';
 import { ProjectStatusBadge } from '../ui/ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from '../ui/ProjectStatusBadge';
 
@@ -50,7 +50,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    offers, assets, templates, removedTemplateIds, removedBgIds,
+    offers, assets, templates, backgrounds, removedTemplateIds, removedBgIds,
     pendingChanges, pendingRemovals, everApprovedIds, campaignLoaded,
     approvalEnabled, setApprovalEnabled,
   } = useProject();
@@ -151,7 +151,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
     return {
       offers: offers.length,
       templates: templates.filter((t) => !removedTemplateIds.has(t.id)).length,
-      theme_and_logos: BACKGROUNDS.filter((b) => !removedBgIds.has(b.id)).length,
+      theme_and_logos: backgrounds.filter((b) => !removedBgIds.has(b.id) && !removedTemplateIds.has(b.templateId)).length,
       review: assets.filter((a) => a.status !== 'approved').length,
       approved: assets.filter((a) => a.status === 'approved').length,
     };

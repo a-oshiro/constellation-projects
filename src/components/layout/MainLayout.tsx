@@ -7,6 +7,7 @@ import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
 import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
+import { FilterPanel } from './FilterPanel';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
 const LEFT_DEFAULT  = 280;
@@ -84,10 +85,13 @@ const ResizeHandle = ({ onDrag }: ResizeHandleProps) => {
 
 /** Pages where the Advanced Generation panel should auto-close. */
 const ADV_GEN_HIDDEN_PATHS = ['/approved', '/ads', '/campaigns'];
+/** Pages where the filter panel is available. */
+const FILTER_PANEL_PATHS = ['/review', '/assets', '/approved'];
 
 const MainLayoutInner = ({ children }: { children: ReactNode }) => {
   const {
     tasksPanelOpen, closeTasksPanel, mainPanelRef,
+    filterPanelOpen, closeFilterPanel,
     editingShell, closeAdShellPanel,
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
   } = useLayout();
@@ -119,15 +123,27 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname]);
 
+  // Close filter panel when navigating to pages where it's not available
+  useEffect(() => {
+    if (!FILTER_PANEL_PATHS.includes(location.pathname)) {
+      closeFilterPanel();
+    }
+  }, [location.pathname]);
+
+  const showLeftPanel = tasksPanelOpen || filterPanelOpen;
+
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
       <LeftNav />
       <div className="flex flex-col flex-1 min-w-0" style={{ background: '#f0f2f4' }}>
         <TopBar />
         <div className="flex flex-1 min-h-0">
-          {tasksPanelOpen && (
+          {showLeftPanel && (
             <>
-              <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
+              {filterPanelOpen
+                ? <FilterPanel width={leftWidth} />
+                : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
+              }
               <ResizeHandle onDrag={handleLeftDrag} />
             </>
           )}
