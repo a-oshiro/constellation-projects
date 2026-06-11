@@ -98,9 +98,8 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
             gap: 24,
-            maxWidth: 900,
           }}
         >
           {filtered.map((tmpl) => (

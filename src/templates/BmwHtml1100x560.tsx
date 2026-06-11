@@ -179,7 +179,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
   const titleTop = height * 0.0857;             // 48px
   const logoWidth = width * 0.12;             // 81px
   const logoHeight = height * 0.12;           // 74px
-  const contentCenterY = contentH / 2;          // 223.5px
+  const contentCenterY = contentH / 1.7;          // 223.5px
 
   return (
     <div style={{ position: 'relative', width, height, overflow: 'hidden', fontFamily: 'Roboto, sans-serif' }}>

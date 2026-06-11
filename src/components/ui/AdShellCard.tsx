@@ -99,72 +99,78 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: Ad
           </>
         )}
 
-        {/* Hover / editing state: 2-row padded grid */}
+        {/* Hover / editing state: 2×2 padded grid */}
         {hover && (() => {
-          // Row 1 cells are ~square; row 2 cell is ~2:1 (inner area is square, two equal rows).
-          // Use percentage dimensions so FilledTemplatePreview (which fills 100%×100%) gets a definite size.
-          const hPct = (template.height / template.width) * 100; // % of cell HEIGHT for row-1 (square cells)
-          const r = template.width / template.height;
-          // Row 2: if asset is wider than ~2:1 cell → width-constrained; otherwise height-constrained
-          const row2WidthConstrained = r > 2;
-          const row2Style = row2WidthConstrained
-            ? { width: '100%', height: `${2 * (template.height / template.width) * 100}%` }
-            : { height: '100%', width: `${(template.width / template.height) / 2 * 100}%` };
+          // Each cell is square; hPct scales the template preview to maintain aspect ratio.
+          const hPct = (template.height / template.width) * 100;
+          // How many assets are hidden (shown in the +N badge on the 4th cell)
+          const hiddenCount = Math.max(0, assets.length - 4);
 
           return (
             <div style={{ position: 'absolute', inset: 0, padding: 16 }}>
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
 
-                {/* Row 1 — two equal square cells */}
+                {/* Row 1 — assets[0] and assets[1] */}
                 <div style={{ flex: 1, display: 'flex', gap: 4, minHeight: 0 }}>
                   {[0, 1].map((i) => (
                     <div
                       key={i}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        borderRadius: 4,
-                        borderBottom: `2px solid ${assets[i + 1] ? '#e7e7e9' : 'transparent'}`,
-                        minWidth: 0,
-                      }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 4, minWidth: 0 }}
                     >
                       {assets[i] && (
                         <div style={{ width: '100%', height: `${hPct}%`, position: 'relative', flexShrink: 0 }}>
-                          <FilledTemplatePreview
-                            template={template}
-                            offer={assets[i]!.offer}
-                            backgroundUrl={assets[i]!.backgroundUrl}
-                          />
+                          <FilledTemplatePreview template={template} offer={assets[i]!.offer} backgroundUrl={assets[i]!.backgroundUrl} />
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
 
-                {/* Row 2 — single asset, contains within ~2:1 cell */}
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    borderRadius: 4,
-                    minHeight: 0,
-                  }}
-                >
-                  {assets[2] && (
-                    <div style={{ ...row2Style, position: 'relative', flexShrink: 0 }}>
-                      <FilledTemplatePreview
-                        template={template}
-                        offer={assets[2].offer}
-                        backgroundUrl={assets[2].backgroundUrl}
-                      />
-                    </div>
-                  )}
+                {/* Row 2 — assets[2] and assets[3]; 4th cell gets +N overlay when hidden > 0 */}
+                <div style={{ flex: 1, display: 'flex', gap: 4, minHeight: 0 }}>
+                  {/* Cell 3 */}
+                  <div
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 4, minWidth: 0 }}
+                  >
+                    {assets[2] && (
+                      <div style={{ width: '100%', height: `${hPct}%`, position: 'relative', flexShrink: 0 }}>
+                        <FilledTemplatePreview template={template} offer={assets[2].offer} backgroundUrl={assets[2].backgroundUrl} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cell 4 — with optional dark overlay + counter */}
+                  <div
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 4, minWidth: 0, position: 'relative' }}
+                  >
+                    {assets[3] && (
+                      <div style={{ width: '100%', height: `${hPct}%`, position: 'relative', flexShrink: 0 }}>
+                        <FilledTemplatePreview template={template} offer={assets[3].offer} backgroundUrl={assets[3].backgroundUrl} />
+                      </div>
+                    )}
+                    {hiddenCount > 0 && (
+                      <>
+                        {/* Dark overlay */}
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1 }} />
+                        {/* +N counter */}
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+                          <span
+                            style={{
+                              fontSize: 34,
+                              fontFamily: 'Roboto, sans-serif',
+                              fontWeight: 400,
+                              color: '#ffffff',
+                              letterSpacing: '0.25px',
+                              lineHeight: 1.235,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            +{hiddenCount}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
               </div>

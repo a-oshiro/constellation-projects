@@ -145,9 +145,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           padding: `${width * 0.02}px ${width * 0.06}px`,
           width: 'fit-content',
           boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-          marginTop: width * 0.035,
         }}>
-          <span style={{ fontSize: width * 0.05, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: 'white', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: width * 0.03, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: 'white', whiteSpace: 'nowrap' }}>
             More Info
           </span>
         </div>
@@ -156,8 +155,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       {/* Right: vehicle image */}
       <div style={{
         position: 'absolute',
-        left: '30%', top: '25%',
-        width: '80%', height: '62%',
+        right: '5%', top: '32%',
+        width: '65%',
         zIndex: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -171,12 +170,11 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       {/* Top-right: BMW logo */}
       <div style={{
         position: 'absolute',
-        top: '5%', right: '3%',
-        width: '20%', height: '20%',
+        top: '10%', right: '5%',
         zIndex: 3,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <BmwLogo size={width * 0.058} />
+        <BmwLogo size={width * 0.15} />
       </div>
     </div>
   );
