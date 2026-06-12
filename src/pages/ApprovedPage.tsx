@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import noFilterResultsSrc from '../assets/no-filter-results.svg';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, TextField } from '@mui/material';
 import {
@@ -264,11 +265,18 @@ export const ApprovedPage = () => {
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
-          <EmptyStateMessage
-            message="No asset approved yet. Go to Review to approve assets."
-            actionLabel="Go to Review"
-            onAction={() => navigate('/review')}
-          />
+          (search.trim().length > 0 || hasActiveFilters(filterState)) ? (
+            <EmptyStateMessage
+              illustration={noFilterResultsSrc}
+              message="No matches. Clear filters or search."
+            />
+          ) : (
+            <EmptyStateMessage
+              message="No asset approved yet. Go to Review to approve assets."
+              actionLabel="Go to Review"
+              onAction={() => navigate('/review')}
+            />
+          )
         ) : (
           <div className="p-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
             {filteredAssets.map((asset) => (

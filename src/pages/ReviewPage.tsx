@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import generationDoneSrc from '../assets/generation-done.svg';
+import noFilterResultsSrc from '../assets/no-filter-results.svg';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, Select, MenuItem, FormControl, TextField } from '@mui/material';
 import {
@@ -260,7 +261,7 @@ export const ReviewPage = () => {
   const handleSubmitForApproval = () => {
     let targetAssets = hasSelection
       ? nonApprovedAssets.filter((a) => selectedIds.has(a.id) && a.status === 'draft')
-      : assets.filter((a) => a.status === 'draft');
+      : baseFilteredAssets.filter((a) => a.status === 'draft');
 
     if (targetAssets.length === 0) return;
 
@@ -488,7 +489,7 @@ export const ReviewPage = () => {
                   onAdvancedGeneration={() => {
                     const sel = selectedIds.size > 0
                       ? nonApprovedAssets.filter((a) => selectedIds.has(a.id))
-                      : [];
+                      : baseFilteredAssets.filter((a) => a.status === 'draft');
                     openAdvancedGeneration(sel);
                   }}
                 />
@@ -662,18 +663,25 @@ export const ReviewPage = () => {
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
-          <EmptyStateMessage
-            illustration={allAssetsApproved ? generationDoneSrc : undefined}
-            message={approvalEnabled
-              ? [
-                  'All assets have been approved and moved to Approved task.',
-                  'No new assets pending generation or approval.',
-                ]
-              : [
-                  'All assets have been generated.',
-                  'No new assets pending generation.',
-                ]}
-          />
+          (search.trim().length > 0 || hasActiveFilters(filterState)) ? (
+            <EmptyStateMessage
+              illustration={noFilterResultsSrc}
+              message="No matches. Clear filters or search."
+            />
+          ) : (
+            <EmptyStateMessage
+              illustration={allAssetsApproved ? generationDoneSrc : undefined}
+              message={approvalEnabled
+                ? [
+                    'All assets have been approved and moved to Approved task.',
+                    'No new assets pending generation or approval.',
+                  ]
+                : [
+                    'All assets have been generated.',
+                    'No new assets pending generation.',
+                  ]}
+            />
+          )
         ) : (
           <div className="p-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
             {filteredAssets.map((asset) =>
