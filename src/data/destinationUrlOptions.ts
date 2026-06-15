@@ -1,3 +1,5 @@
+import type { Asset } from './types';
+
 // ── Editable URL options list ─────────────────────────────────────────────────
 // Add, remove or edit entries here to update the available destination URLs
 // across all HTML asset metadata panels.
@@ -84,4 +86,53 @@ export const HTML_TEMPLATE_CTAS: Record<string, CtaField[]> = {
 /** Returns the CTA fields for a given templateId, or [] if not an HTML template. */
 export function getTemplateCtas(templateId: string): CtaField[] {
   return HTML_TEMPLATE_CTAS[templateId] ?? [];
+}
+
+// ── Auto-fill mapping ──────────────────────────────────────────────────────────
+// Maps each CTA key to a function that returns the target URL label for a given
+// offer model string (e.g. "X1", "i4", "330i"). Returns null for unmapped CTAs.
+
+const CTA_URL_LABEL: Record<string, (model: string) => string | null> = {
+  claimSpecial:   (model) => `Specials ${model}`,
+  viewInventory:  (model) => `New Inventory - ${model}`,
+  offerDetails:   (model) => `Offer Details ${model}`,
+  seeNewVehicles: (model) => `New Inventory - ${model}`,
+  valueTrade:     ()      => 'Value Trade',
+  tradeIn:        ()      => 'Value Trade',
+};
+
+/**
+ * Derives destination URL auto-fills for a set of HTML assets.
+ * Only populates empty fields — never overwrites an already-set URL.
+ * Returns a record compatible with bulkSetDestinationUrls.
+ */
+export function autoFillDestinationUrls(
+  assets: Asset[],
+  existingUrls: Record<string, Record<string, string>>,
+): Record<string, Record<string, string>> {
+  const updates: Record<string, Record<string, string>> = {};
+
+  for (const asset of assets) {
+    if (asset.imageType !== 'HTML') continue;
+    const ctas = getTemplateCtas(asset.templateId);
+    if (!ctas.length) continue;
+
+    const model = asset.offer.model;
+    const existing = existingUrls[asset.id] ?? {};
+    const assetUpdates: Record<string, string> = {};
+
+    for (const cta of ctas) {
+      if (existing[cta.key]) continue; // never overwrite
+      const labelFn = CTA_URL_LABEL[cta.key];
+      if (!labelFn) continue;
+      const label = labelFn(model);
+      if (!label) continue;
+      const option = DESTINATION_URL_OPTIONS.find(o => o.label === label);
+      if (option) assetUpdates[cta.key] = option.url;
+    }
+
+    if (Object.keys(assetUpdates).length) updates[asset.id] = assetUpdates;
+  }
+
+  return updates;
 }

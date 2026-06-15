@@ -8,7 +8,7 @@ import {
   Close, IosShareOutlined, BuildOutlined, EditOutlined,
   CropFreeOutlined, AutoAwesomeOutlined, DeleteOutlined,
 } from '@mui/icons-material';
-import { getTemplateCtas } from '../data/destinationUrlOptions';
+import { getTemplateCtas, autoFillDestinationUrls } from '../data/destinationUrlOptions';
 import { GenerateSplitButton } from '../components/ui/GenerateSplitButton';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Tooltip } from '../components/ui/Tooltip';
@@ -50,7 +50,7 @@ import { ComparisonModal } from '../components/ui/ComparisonModal';
 import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 
 export const ReviewPage = () => {
-  const { assets, offers, bulkSetAssetStatus, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls } = useProject();
+  const { assets, offers, bulkSetAssetStatus, bulkSetDestinationUrls, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls } = useProject();
   const { showSnackbar } = useSnackbar();
   const { startProgress } = useProgressIndicator();
   const { openAdvancedGeneration, closeAdvancedGeneration, submittingIds, addSubmittingIds, clearSubmittingIds, filterPanelOpen, openFilterPanel, closeFilterPanel, filterState } = useLayout();
@@ -269,6 +269,9 @@ export const ReviewPage = () => {
     closeAdvancedGeneration();
     addSubmittingIds(targetIds);
     setSelectedIds(new Set());
+
+    const urlUpdates = autoFillDestinationUrls(targetAssets, destinationUrls);
+    if (Object.keys(urlUpdates).length) bulkSetDestinationUrls(urlUpdates);
 
     startProgress(targetAssets.map((a) => ({
       id: a.id,
