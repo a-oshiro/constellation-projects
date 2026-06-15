@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { IconButton, Autocomplete, TextField } from '@mui/material';
+import { IconButton, Autocomplete, TextField, Tooltip } from '@mui/material';
 import {
   Close,
   Add,
@@ -130,6 +130,8 @@ const ChipSelectField = ({ label, chips, placeholder }: ChipSelectFieldProps) =>
   </div>
 );
 
+const TOOLTIP_SX = { fontSize: 11, fontFamily: 'Roboto, sans-serif', maxWidth: 360, wordBreak: 'break-all' } as const;
+
 const DestinationUrlField = ({
   assetId,
   ctaKey,
@@ -142,6 +144,7 @@ const DestinationUrlField = ({
   const { setDestinationUrl } = useProject();
   const matchingOption = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
   const [inputValue, setInputValue] = useState(matchingOption ? matchingOption.label : currentVal);
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const opt = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
@@ -153,76 +156,93 @@ const DestinationUrlField = ({
     setDestinationUrl(assetId, ctaKey, byLabel ? byLabel.url : val);
   };
 
+  const isFilled = !!currentVal;
+
   return (
-    <Autocomplete
-      freeSolo
-      fullWidth
-      size="medium"
-      options={DESTINATION_URL_OPTIONS}
-      value={matchingOption ?? (currentVal || null)}
-      inputValue={inputValue}
-      onInputChange={(_, val) => setInputValue(val)}
-      onChange={(_, newValue) => {
-        if (newValue === null) {
-          setInputValue('');
-          setDestinationUrl(assetId, ctaKey, '');
-        } else if (typeof newValue === 'string') {
-          commitValue(newValue);
-        } else {
-          setInputValue(newValue.label);
-          setDestinationUrl(assetId, ctaKey, newValue.url);
-        }
-      }}
-      onBlur={() => {
-        const stored = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal);
-        if (!stored || stored.label !== inputValue) commitValue(inputValue);
-      }}
-      getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.label}
-      isOptionEqualToValue={(opt, val) =>
-        typeof val === 'string' ? opt.url === val : opt.url === val.url
-      }
-      filterOptions={(options, { inputValue: iv }) => {
-        const lower = iv.toLowerCase();
-        return options.filter(o =>
-          o.label.toLowerCase().includes(lower) ||
-          o.url.toLowerCase().includes(lower)
-        );
-      }}
-      slotProps={{ popper: { sx: { zIndex: 200000 } } }}
-      renderOption={(props, opt) => {
-        const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
-        return (
-          <li key={key} {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
-            {opt.label}
-          </li>
-        );
-      }}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          placeholder="Select or Type URL"
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              background: '#f9fafa',
-              borderRadius: '4px',
-              padding: '0 32px 0 0 !important',
-              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.54)' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
-            },
-            '& .MuiOutlinedInput-input': {
-              py: '6px',
-              px: '8px',
-              fontSize: 12,
-              fontFamily: 'Roboto, sans-serif',
-              letterSpacing: '0.17px',
-              color: '#1f1d25',
-              '&::placeholder': { color: '#9c99a9', opacity: 1 },
-            },
+    <Tooltip
+      title={!focused && isFilled ? currentVal : ''}
+      placement="bottom-start"
+      enterDelay={400}
+      disableFocusListener
+      disableTouchListener
+      slotProps={{ popper: { sx: { zIndex: 199999 } }, tooltip: { sx: TOOLTIP_SX } }}
+    >
+      <div>
+        <Autocomplete
+          freeSolo
+          fullWidth
+          size="medium"
+          options={DESTINATION_URL_OPTIONS}
+          value={matchingOption ?? (currentVal || null)}
+          inputValue={inputValue}
+          onInputChange={(_, val) => setInputValue(val)}
+          onChange={(_, newValue) => {
+            if (newValue === null) {
+              setInputValue('');
+              setDestinationUrl(assetId, ctaKey, '');
+            } else if (typeof newValue === 'string') {
+              commitValue(newValue);
+            } else {
+              setInputValue(newValue.label);
+              setDestinationUrl(assetId, ctaKey, newValue.url);
+            }
           }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            const stored = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal);
+            if (!stored || stored.label !== inputValue) commitValue(inputValue);
+          }}
+          getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.label}
+          isOptionEqualToValue={(opt, val) =>
+            typeof val === 'string' ? opt.url === val : opt.url === val.url
+          }
+          filterOptions={(options, { inputValue: iv }) => {
+            const lower = iv.toLowerCase();
+            return options.filter(o =>
+              o.label.toLowerCase().includes(lower) ||
+              o.url.toLowerCase().includes(lower)
+            );
+          }}
+          slotProps={{ popper: { sx: { zIndex: 200000 } } }}
+          renderOption={(props, opt) => {
+            const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
+            return (
+              <Tooltip key={key} title={opt.url} placement="right" enterDelay={300} slotProps={{ popper: { sx: { zIndex: 200001 } }, tooltip: { sx: TOOLTIP_SX } }}>
+                <li {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
+                  {opt.label}
+                </li>
+              </Tooltip>
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Select or Type URL"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  background: '#f9fafa',
+                  borderRadius: '4px',
+                  padding: '0 32px 0 0 !important',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#cac9cf' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,0,0,0.54)' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
+                },
+                '& .MuiOutlinedInput-input': {
+                  py: '6px',
+                  px: '8px',
+                  fontSize: 12,
+                  fontFamily: 'Roboto, sans-serif',
+                  letterSpacing: '0.17px',
+                  color: '#1f1d25',
+                  '&::placeholder': { color: '#9c99a9', opacity: 1 },
+                },
+              }}
+            />
+          )}
         />
-      )}
-    />
+      </div>
+    </Tooltip>
   );
 };
 

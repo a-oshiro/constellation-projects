@@ -69,78 +69,89 @@ function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate }: UrlC
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <Autocomplete
-          freeSolo
-          fullWidth
-          size="medium"
-          options={DESTINATION_URL_OPTIONS}
-          value={matchingOption ?? (value && value !== MIXED ? value : null)}
-          inputValue={showAsPending ? pendingValue : inputValue}
-          onInputChange={(_, val) => { if (!showAsPending) setInputValue(val); }}
-          onChange={(_, newValue) => {
-            if (newValue === null) { setInputValue(''); onChange(''); }
-            else if (typeof newValue === 'string') { commitValue(newValue); }
-            else { setInputValue(newValue.label); onChange(newValue.url); }
-          }}
-          onFocus={() => {
-            setFocused(true);
-            if (showAsPending) setInputValue('');
-          }}
-          onBlur={() => {
-            setFocused(false);
-            // If no real value and pendingValue exists, restore pending display
-            if (!value && pendingValue) {
-              setInputValue(pendingValue);
-            } else {
-              const stored = DESTINATION_URL_OPTIONS.find(o => o.url === value);
-              if (!stored || stored.label !== inputValue) commitValue(inputValue);
+      <Tooltip
+        title={!focused && isFilled ? value : ''}
+        placement="bottom-start"
+        enterDelay={400}
+        disableFocusListener
+        disableTouchListener
+        slotProps={{ popper: { sx: { zIndex: 199999 } }, tooltip: { sx: { fontSize: 11, fontFamily: 'Roboto, sans-serif', maxWidth: 360, wordBreak: 'break-all' } } }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Autocomplete
+            freeSolo
+            fullWidth
+            size="medium"
+            options={DESTINATION_URL_OPTIONS}
+            value={matchingOption ?? (value && value !== MIXED ? value : null)}
+            inputValue={showAsPending ? pendingValue : inputValue}
+            onInputChange={(_, val) => { if (!showAsPending) setInputValue(val); }}
+            onChange={(_, newValue) => {
+              if (newValue === null) { setInputValue(''); onChange(''); }
+              else if (typeof newValue === 'string') { commitValue(newValue); }
+              else { setInputValue(newValue.label); onChange(newValue.url); }
+            }}
+            onFocus={() => {
+              setFocused(true);
+              if (showAsPending) setInputValue('');
+            }}
+            onBlur={() => {
+              setFocused(false);
+              // If no real value and pendingValue exists, restore pending display
+              if (!value && pendingValue) {
+                setInputValue(pendingValue);
+              } else {
+                const stored = DESTINATION_URL_OPTIONS.find(o => o.url === value);
+                if (!stored || stored.label !== inputValue) commitValue(inputValue);
+              }
+            }}
+            getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.label}
+            isOptionEqualToValue={(opt, val) =>
+              typeof val === 'string' ? opt.url === val : opt.url === val.url
             }
-          }}
-          getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.label}
-          isOptionEqualToValue={(opt, val) =>
-            typeof val === 'string' ? opt.url === val : opt.url === val.url
-          }
-          filterOptions={(options, { inputValue: iv }) => {
-            const lower = iv.toLowerCase();
-            return options.filter(o =>
-              o.label.toLowerCase().includes(lower) || o.url.toLowerCase().includes(lower)
-            );
-          }}
-          slotProps={{ popper: { sx: { zIndex: 200000 } } }}
-          renderOption={(props, opt) => {
-            const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
-            return (
-              <li key={key} {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
-                {opt.label}
-              </li>
-            );
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              placeholder={showAsPending ? '' : (isMixed && inputValue === '' ? 'Mixed' : 'Select or Type URL')}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  background: showAsPending ? 'rgba(99,86,225,0.04)' : '#f9fafa',
-                  borderRadius: '4px',
-                  padding: '0 32px 0 0 !important',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.3)' : '#cac9cf' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.5)' : 'rgba(0,0,0,0.54)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
-                },
-                '& .MuiOutlinedInput-input': {
-                  py: '5px', px: '8px', fontSize: 12,
-                  fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px',
-                  color: showAsPending ? '#9c99a9' : (isMixed && inputValue === '' ? '#9c99a9' : '#1f1d25'),
-                  fontStyle: showAsPending ? 'italic' : (isMixed && inputValue === '' ? 'italic' : 'normal'),
-                  '&::placeholder': { color: '#9c99a9', opacity: 1, fontStyle: 'italic' },
-                },
-              }}
-            />
-          )}
-        />
-      </div>
+            filterOptions={(options, { inputValue: iv }) => {
+              const lower = iv.toLowerCase();
+              return options.filter(o =>
+                o.label.toLowerCase().includes(lower) || o.url.toLowerCase().includes(lower)
+              );
+            }}
+            slotProps={{ popper: { sx: { zIndex: 200000 } } }}
+            renderOption={(props, opt) => {
+              const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
+              return (
+                <Tooltip key={key} title={opt.url} placement="right" enterDelay={300} slotProps={{ popper: { sx: { zIndex: 200001 } }, tooltip: { sx: { fontSize: 11, fontFamily: 'Roboto, sans-serif', maxWidth: 360, wordBreak: 'break-all' } } }}>
+                  <li {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
+                    {opt.label}
+                  </li>
+                </Tooltip>
+              );
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={showAsPending ? '' : (isMixed && inputValue === '' ? 'Mixed' : 'Select or Type URL')}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    background: showAsPending ? 'rgba(99,86,225,0.04)' : '#f9fafa',
+                    borderRadius: '4px',
+                    padding: '0 32px 0 0 !important',
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.3)' : '#cac9cf' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.5)' : 'rgba(0,0,0,0.54)' },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    py: '5px', px: '8px', fontSize: 12,
+                    fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px',
+                    color: showAsPending ? '#9c99a9' : (isMixed && inputValue === '' ? '#9c99a9' : '#1f1d25'),
+                    fontStyle: showAsPending ? 'italic' : (isMixed && inputValue === '' ? 'italic' : 'normal'),
+                    '&::placeholder': { color: '#9c99a9', opacity: 1, fontStyle: 'italic' },
+                  },
+                }}
+              />
+            )}
+          />
+        </div>
+      </Tooltip>
 
       <Tooltip title={isFilled ? 'Apply to column' : ''} placement="top">
         <span>
