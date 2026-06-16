@@ -62,6 +62,7 @@ export const ReviewPage = () => {
   const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const [draftVariant] = useState<DraftVariant>('badge');
   const [addUrlsDialogOpen, setAddUrlsDialogOpen] = useState(false);
+  const [urlsDialogWarningMode, setUrlsDialogWarningMode] = useState(false);
   const tabOrder = approvalEnabled ? TAB_ORDER : TAB_ORDER_NO_APPROVAL;
 
   const [activeTab, setActiveTab] = useState<AssetStatus | 'all'>(() => {
@@ -154,6 +155,19 @@ export const ReviewPage = () => {
   const selectedHtmlTemplateIds = useMemo(() =>
     [...new Set(selectedHtmlAssets.map(a => a.templateId))],
   [selectedHtmlAssets]);
+
+  // All non-draft HTML assets — used when opening dialog from the badge
+  const allApprovedGeneratedHtmlAssets = useMemo(() =>
+    assets.filter(a => a.status !== 'draft' && a.status !== 'removed' && a.imageType === 'HTML'),
+  [assets]);
+  const allApprovedGeneratedHtmlTemplateIds = useMemo(() =>
+    [...new Set(allApprovedGeneratedHtmlAssets.map(a => a.templateId))],
+  [allApprovedGeneratedHtmlAssets]);
+
+  const handleOpenUrlsDialogFromBadge = () => {
+    setUrlsDialogWarningMode(true);
+    setAddUrlsDialogOpen(true);
+  };
 
   // Submit for Approval: disabled when no draft assets exist, or when selection includes non-draft assets
   const submitDisabled = !hasDraftAssets || (hasSelection && selectedHasNonDraft);
@@ -697,6 +711,7 @@ export const ReviewPage = () => {
                   selected={selectedIds.has(asset.id)}
                   draftVariant={draftVariant}
                   onSelect={handleSelect}
+                  onOpenUrlsDialog={handleOpenUrlsDialogFromBadge}
                 />
               )
             )}
@@ -742,9 +757,10 @@ export const ReviewPage = () => {
     )}
     <AddDestinationUrlsDialog
       open={addUrlsDialogOpen}
-      onClose={() => setAddUrlsDialogOpen(false)}
-      allAssets={selectedHtmlAssets}
-      selectedTemplateIds={selectedHtmlTemplateIds}
+      onClose={() => { setAddUrlsDialogOpen(false); setUrlsDialogWarningMode(false); }}
+      allAssets={urlsDialogWarningMode ? allApprovedGeneratedHtmlAssets : selectedHtmlAssets}
+      selectedTemplateIds={urlsDialogWarningMode ? allApprovedGeneratedHtmlTemplateIds : selectedHtmlTemplateIds}
+      warningMode={urlsDialogWarningMode}
     />
     </>
   );

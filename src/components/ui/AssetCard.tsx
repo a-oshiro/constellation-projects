@@ -25,6 +25,7 @@ interface AssetCardProps {
   onSelect?: (id: string, checked: boolean) => void;
   onStatusChange?: (id: string, status: AssetStatus) => void;
   onSendBackToReview?: (id: string) => void;
+  onOpenUrlsDialog?: () => void;
 }
 
 const STATUS_CONFIG: Record<AssetStatus, {
@@ -96,7 +97,7 @@ const MAX_VISIBLE_TAGS = 2;
 
 const LARGE_PREVIEW_STATUSES: AssetStatus[] = ['updated', 'draft'];
 
-export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect, onSendBackToReview }: AssetCardProps) => {
+export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default', onSelect, onSendBackToReview, onOpenUrlsDialog }: AssetCardProps) => {
   const [hover, setHover] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [showLargePreview, setShowLargePreview] = useState(false);
@@ -308,7 +309,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
         {/* Missing Destination URL badge */}
         {hasMissingUrls && (
           <div
-            onClick={(e) => { e.stopPropagation(); setShowDialog(true); }}
+            onClick={(e) => { e.stopPropagation(); if (onOpenUrlsDialog) { onOpenUrlsDialog(); } else { setShowDialog(true); } }}
             style={{
               display: 'flex',
               alignItems: 'center',

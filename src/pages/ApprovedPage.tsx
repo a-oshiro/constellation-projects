@@ -27,6 +27,7 @@ export const ApprovedPage = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [addUrlsDialogOpen, setAddUrlsDialogOpen] = useState(false);
+  const [urlsDialogWarningMode, setUrlsDialogWarningMode] = useState(false);
 
   const approvedAssets = assets.filter((a) => a.status === 'approved');
   const updatedAssets = assets.filter((a) => a.status === 'updated');
@@ -74,6 +75,19 @@ export const ApprovedPage = () => {
   const selectedHtmlTemplateIds = useMemo(() =>
     [...new Set(selectedHtmlAssets.map(a => a.templateId))],
   [selectedHtmlAssets]);
+
+  // All non-draft HTML assets — used when opening dialog from the badge
+  const allApprovedGeneratedHtmlAssets = useMemo(() =>
+    assets.filter(a => a.status !== 'draft' && a.status !== 'removed' && a.imageType === 'HTML'),
+  [assets]);
+  const allApprovedGeneratedHtmlTemplateIds = useMemo(() =>
+    [...new Set(allApprovedGeneratedHtmlAssets.map(a => a.templateId))],
+  [allApprovedGeneratedHtmlAssets]);
+
+  const handleOpenUrlsDialogFromBadge = () => {
+    setUrlsDialogWarningMode(true);
+    setAddUrlsDialogOpen(true);
+  };
 
   return (
     <>
@@ -286,6 +300,7 @@ export const ApprovedPage = () => {
                 selected={selectedIds.has(asset.id)}
                 onSelect={handleSelect}
                 onSendBackToReview={handleSendBackToReview}
+                onOpenUrlsDialog={handleOpenUrlsDialogFromBadge}
               />
             ))}
           </div>
@@ -298,9 +313,10 @@ export const ApprovedPage = () => {
 
     <AddDestinationUrlsDialog
       open={addUrlsDialogOpen}
-      onClose={() => setAddUrlsDialogOpen(false)}
-      allAssets={selectedHtmlAssets}
-      selectedTemplateIds={selectedHtmlTemplateIds}
+      onClose={() => { setAddUrlsDialogOpen(false); setUrlsDialogWarningMode(false); }}
+      allAssets={urlsDialogWarningMode ? allApprovedGeneratedHtmlAssets : selectedHtmlAssets}
+      selectedTemplateIds={urlsDialogWarningMode ? allApprovedGeneratedHtmlTemplateIds : selectedHtmlTemplateIds}
+      warningMode={urlsDialogWarningMode}
     />
     </>
   );

@@ -23,6 +23,8 @@ interface Props {
   allAssets: Asset[];
   /** Template IDs to show in the left column (from selected HTML assets) */
   selectedTemplateIds: string[];
+  /** When true, empty URL fields show a yellow warning border until filled or focused */
+  warningMode?: boolean;
 }
 
 // ── Destination URL autocomplete cell ─────────────────────────────────────────
@@ -32,9 +34,10 @@ interface UrlCellProps {
   onChange: (url: string) => void;
   pendingValue?: string;
   onApplyToTemplate: (url: string) => void;
+  warning?: boolean;
 }
 
-function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate }: UrlCellProps) {
+function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate, warning = false }: UrlCellProps) {
   const isMixed = value === MIXED;
   const matchingOption = DESTINATION_URL_OPTIONS.find(o => o.url === value) ?? null;
   const [inputValue, setInputValue] = useState(isMixed ? '' : (matchingOption ? matchingOption.label : value));
@@ -126,7 +129,9 @@ function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate }: UrlC
                 </Tooltip>
               );
             }}
-            renderInput={(params) => (
+            renderInput={(params) => {
+              const showWarning = warning && !isFilled && !focused;
+              return (
               <TextField
                 {...params}
                 placeholder={showAsPending ? '' : (isMixed && inputValue === '' ? 'Mixed' : 'Select or Type URL')}
@@ -135,8 +140,8 @@ function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate }: UrlC
                     background: showAsPending ? 'rgba(99,86,225,0.04)' : '#f9fafa',
                     borderRadius: '4px',
                     padding: '0 32px 0 0 !important',
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.3)' : '#cac9cf' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: showAsPending ? 'rgba(99,86,225,0.5)' : 'rgba(0,0,0,0.54)' },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: showWarning ? '#F59E0B' : (showAsPending ? 'rgba(99,86,225,0.3)' : '#cac9cf'), borderWidth: showWarning ? 2 : undefined },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: showWarning ? '#F59E0B' : (showAsPending ? 'rgba(99,86,225,0.5)' : 'rgba(0,0,0,0.54)') },
                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
                   },
                   '& .MuiOutlinedInput-input': {
@@ -148,7 +153,8 @@ function UrlCell({ value, onChange, pendingValue = '', onApplyToTemplate }: UrlC
                   },
                 }}
               />
-            )}
+              );
+            }}
           />
         </div>
       </Tooltip>
@@ -310,7 +316,7 @@ function TemplateListItem({
 
 // ── Main dialog ────────────────────────────────────────────────────────────────
 
-export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTemplateIds }: Props) {
+export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTemplateIds, warningMode = false }: Props) {
   const { destinationUrls, bulkSetDestinationUrls, offers, templates } = useProject();
 
   // HTML templates in the order they appear in the selected set, filtered to HTML_TEMPLATE_CTAS
@@ -619,13 +625,6 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
   const [copyDialogSourceLabel, setCopyDialogSourceLabel] = useState('');
 
   const [tableScrolled, setTableScrolled] = useState(false);
-  useEffect(() => {
-    const container = tableContainerRef.current;
-    if (!container) return;
-    const onScroll = () => setTableScrolled(container.scrollLeft > 0);
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => container.removeEventListener('scroll', onScroll);
-  }, []);
 
   const handleApplyToTemplate = (ctaKey: string, url: string, forTemplateId: string) => {
     setGlobalMatrix(prev => {
@@ -778,7 +777,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
             </div>
 
             {/* Matrix table */}
-            <div ref={tableContainerRef} style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px 0', position: 'relative' }}>
+            <div ref={tableContainerRef} onScroll={(e) => setTableScrolled((e.currentTarget as HTMLDivElement).scrollLeft > 0)} style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px 0', position: 'relative' }}>
               <table style={{ width: selectedTemplateId === ALL_TEMPLATES_ID ? 'max-content' : '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
                   {/* Offer column */}
@@ -790,7 +789,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                 </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff', boxShadow: tableScrolled ? '4px 0 8px -2px rgba(0,0,0,0.1)' : 'none' }}>
+                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff', boxShadow: tableScrolled ? '4px 0 10px 0 rgba(0,0,0,0.12)' : 'none', borderRight: tableScrolled ? '1px solid rgba(0,0,0,0.12)' : undefined }}>
                       Offer
                     </th>
                     {ctas.map(c => {
@@ -858,7 +857,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                     return (
                       <tr key={offer.id} ref={el => { rowRefs.current[offer.id] = el; }}>
                         {/* Offer cell */}
-                        <td style={{ padding: '10px 8px 10px 24px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', left: 0, zIndex: 3, background: '#fff', boxShadow: tableScrolled ? '4px 0 8px -2px rgba(0,0,0,0.1)' : 'none' }}>
+                        <td style={{ padding: '10px 8px 10px 24px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', left: 0, zIndex: 3, background: '#fff', boxShadow: tableScrolled ? '4px 0 10px 0 rgba(0,0,0,0.12)' : 'none', borderRight: tableScrolled ? '1px solid rgba(0,0,0,0.12)' : undefined }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', flexShrink: 0}}>
                               {offer.imageUrl ? (
@@ -902,6 +901,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                                 pendingValue={isSmartFillActive ? (smartFill!.predictions[offer.id] ?? '') : ''}
                                 onChange={(url) => setCellValue(offer.id, cta.key, url, cta.templateId)}
                                 onApplyToTemplate={(url) => handleApplyToTemplate(cta.key, url, cta.templateId)}
+                                warning={warningMode}
                               />
                             </td>
                           );
