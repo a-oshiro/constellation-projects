@@ -192,7 +192,7 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit, onOp
         })()}
 
         {/* Auto Generated badge — top right */}
-        {/* Top-right badge stack: Auto Generated + optional status badge */}
+        {/* Top-right badge stack: Auto Generated + optional status badge + optional missing URLs chip */}
         <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <div
             style={{
@@ -221,26 +221,25 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit, onOp
             </span>
           </div>
           {shellStatus && <StatusBadge status={shellStatus} />}
-        </div>
-
-        {/* Missing Destination URLs badge — bottom strip */}
-        {hasMissingUrls && (
-          <div
-            onClick={(e) => { e.stopPropagation(); onOpenUrlsDialog?.(); }}
-            style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-              padding: '4px 8px',
-              background: 'rgba(253, 244, 236, 0.95)',
-              cursor: 'pointer',
-            }}
-          >
-            <img src={pageTextLinkSvg} alt="" style={{ width: 12, height: 12, flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#c45500', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
-              Missing Destination URLs
+          {hasMissingUrls && (
+            <span
+              onClick={(e) => { e.stopPropagation(); onOpenUrlsDialog?.(); }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: '#FDF4EC',
+                borderRadius: 8,
+                paddingLeft: 6, paddingRight: 8, paddingTop: 3, paddingBottom: 3,
+                flexShrink: 0, cursor: 'pointer',
+                backdropFilter: 'blur(2px)',
+              }}
+            >
+              <img src={pageTextLinkSvg} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#c45500', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+                Missing Destination URLs
+              </span>
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Platform icon — bottom left */}
         <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 10 }}>
