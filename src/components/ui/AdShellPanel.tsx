@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Close, Add, KeyboardArrowUp, KeyboardArrowDown,
@@ -8,7 +8,9 @@ import { Checkbox, IconButton, MenuItem, Select, Tooltip } from '@mui/material';
 import type { AdShell } from './AdShellCard';
 import { AssetHorizontalCard } from './AssetHorizontalCard';
 import { fieldInputStyle } from './AssetHorizontalCard';
+import { AddDestinationUrlsDialog } from './AddDestinationUrlsDialog';
 import { useLayout } from '../../context/LayoutContext';
+import { useProject } from '../../context/ProjectContext';
 import type { Asset } from '../../data/types';
 
 interface AdShellPanelProps {
@@ -138,6 +140,19 @@ function EnableLeadFormDialog({ ctaValue, onCtaChange, onCancel, onEnable }: Ena
 
 export const AdShellPanel = ({ shell, onClose, width = 320 }: AdShellPanelProps) => {
   const { updateAdShell } = useLayout();
+  const { assets } = useProject();
+
+  // URL dialog state
+  const [urlsDialogOpen, setUrlsDialogOpen] = useState(false);
+
+  const allHtmlAssets = useMemo(
+    () => assets.filter((a) => a.status !== 'draft' && a.status !== 'removed' && a.imageType === 'HTML'),
+    [assets]
+  );
+  const allHtmlTemplateIds = useMemo(
+    () => Array.from(new Set(allHtmlAssets.map((a) => a.templateId))),
+    [allHtmlAssets]
+  );
 
   // Shell settings
   const [name,           setName]           = useState(shell.name);
@@ -417,6 +432,7 @@ export const AdShellPanel = ({ shell, onClose, width = 320 }: AdShellPanelProps)
                   onLeadFormCtaChange={(cta) =>
                     setLeadFormMap((prev) => ({ ...prev, [asset.id]: { ...prev[asset.id], cta } }))
                   }
+                  onOpenUrlsDialog={() => setUrlsDialogOpen(true)}
                 />
               ))}
             </div>
@@ -449,6 +465,15 @@ export const AdShellPanel = ({ shell, onClose, width = 320 }: AdShellPanelProps)
           onEnable={handleEnableLeadForm}
         />
       )}
+
+      {/* Add Destination URLs dialog */}
+      <AddDestinationUrlsDialog
+        open={urlsDialogOpen}
+        onClose={() => setUrlsDialogOpen(false)}
+        allAssets={allHtmlAssets}
+        selectedTemplateIds={allHtmlTemplateIds}
+        warningMode
+      />
     </>
   );
 };

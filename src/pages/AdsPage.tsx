@@ -4,6 +4,7 @@ import { Search, MoreVert, Add, ArrowDropDown, InfoOutlined } from '@mui/icons-m
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { AdShellCard } from '../components/ui/AdShellCard';
+import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 import { useLayout } from '../context/LayoutContext';
 import emptyFolderSrc from '../assets/empty-folder.png';
 import { useProject } from '../context/ProjectContext';
@@ -47,6 +48,16 @@ export const AdsPage = () => {
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [urlsDialogOpen, setUrlsDialogOpen] = useState(false);
+
+  const allHtmlAssets = useMemo(
+    () => assets.filter((a) => a.status !== 'draft' && a.status !== 'removed' && a.imageType === 'HTML'),
+    [assets]
+  );
+  const allHtmlTemplateIds = useMemo(
+    () => Array.from(new Set(allHtmlAssets.map((a) => a.templateId))),
+    [allHtmlAssets]
+  );
 
   // In approval mode: include approved/updated/awaiting/removed assets that have been approved before.
   // In no-approval mode: include generated/updated/removed assets (all were generated at some point).
@@ -230,6 +241,7 @@ export const AdsPage = () => {
                   isEditing={editingShell?.id === shell.id}
                   onSelect={handleSelect}
                   onEdit={openAdShellPanel}
+                  onOpenUrlsDialog={() => setUrlsDialogOpen(true)}
                 />
               ))}
             </div>
@@ -238,6 +250,14 @@ export const AdsPage = () => {
 
         <TaskFooter currentTask="ads" />
       </div>
+
+      <AddDestinationUrlsDialog
+        open={urlsDialogOpen}
+        onClose={() => setUrlsDialogOpen(false)}
+        allAssets={allHtmlAssets}
+        selectedTemplateIds={allHtmlTemplateIds}
+        warningMode
+      />
     </div>
   );
 };

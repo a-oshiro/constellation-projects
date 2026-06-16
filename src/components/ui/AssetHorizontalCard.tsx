@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { Checkbox, FormControlLabel } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Checkbox, FormControlLabel, Autocomplete, TextField } from '@mui/material';
 import { ExpandMore, ExpandLess, WarningAmber, HourglassEmpty, HighlightOff } from '@mui/icons-material';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
 import type { Asset, AssetStatus } from '../../data/types';
+import { useProject } from '../../context/ProjectContext';
+import { getTemplateCtas, DESTINATION_URL_OPTIONS } from '../../data/destinationUrlOptions';
+import pageTextLinkSvg from '../../assets/icons/page-text-link.svg';
 
 // ── Status chip ───────────────────────────────────────────────────────────────
 
@@ -62,6 +65,117 @@ export const fieldInputStyle: React.CSSProperties = {
   borderRadius: 4, outline: 'none', boxSizing: 'border-box',
 };
 
+// ── CTA-specific destination URL autocomplete ─────────────────────────────────
+
+const DestinationUrlHorizontalField = ({
+  assetId,
+  ctaKey,
+  value: currentVal,
+  warning,
+}: {
+  assetId: string;
+  ctaKey: string;
+  value: string;
+  warning?: boolean;
+}) => {
+  const { setDestinationUrl } = useProject();
+  const matchingOption = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
+  const [inputValue, setInputValue] = useState(matchingOption ? matchingOption.label : currentVal);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const opt = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal) ?? null;
+    setInputValue(opt ? opt.label : currentVal);
+  }, [currentVal]);
+
+  const commitValue = (val: string) => {
+    const byLabel = DESTINATION_URL_OPTIONS.find(o => o.label.toLowerCase() === val.toLowerCase());
+    setDestinationUrl(assetId, ctaKey, byLabel ? byLabel.url : val);
+  };
+
+  const isFilled = !!currentVal;
+  const showWarning = warning && !isFilled && !focused;
+
+  return (
+    <Autocomplete
+      freeSolo
+      fullWidth
+      size="small"
+      options={DESTINATION_URL_OPTIONS}
+      value={matchingOption ?? (currentVal || null)}
+      inputValue={inputValue}
+      onInputChange={(_, val) => setInputValue(val)}
+      onChange={(_, newValue) => {
+        if (newValue === null) {
+          setInputValue('');
+          setDestinationUrl(assetId, ctaKey, '');
+        } else if (typeof newValue === 'string') {
+          commitValue(newValue);
+        } else {
+          setInputValue((newValue as { label: string; url: string }).label);
+          setDestinationUrl(assetId, ctaKey, (newValue as { label: string; url: string }).url);
+        }
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        const stored = DESTINATION_URL_OPTIONS.find(o => o.url === currentVal);
+        if (!stored || stored.label !== inputValue) commitValue(inputValue);
+      }}
+      getOptionLabel={(opt) => typeof opt === 'string' ? opt : (opt as { label: string }).label}
+      isOptionEqualToValue={(opt, val) =>
+        typeof val === 'string' ? opt.url === val : opt.url === (val as { url: string }).url
+      }
+      filterOptions={(options, { inputValue: iv }) => {
+        const lower = iv.toLowerCase();
+        return options.filter(o =>
+          o.label.toLowerCase().includes(lower) ||
+          o.url.toLowerCase().includes(lower)
+        );
+      }}
+      slotProps={{ popper: { sx: { zIndex: 200000 } } }}
+      renderOption={(props, opt) => {
+        const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: React.Key };
+        return (
+          <li key={key} {...rest} style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', padding: '6px 12px' }}>
+            {(opt as { label: string }).label}
+          </li>
+        );
+      }}
+      renderInput={(params) => {
+        return (
+          <TextField
+            {...params}
+            placeholder="Select or Type URL"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                background: '#f9fafa',
+                borderRadius: '4px',
+                padding: '0 32px 0 0 !important',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: showWarning ? '#F59E0B' : '#cac9cf',
+                  borderWidth: showWarning ? 2 : 1,
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: showWarning ? '#F59E0B' : 'rgba(0,0,0,0.54)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#473bab', borderWidth: 2 },
+              },
+              '& .MuiOutlinedInput-input': {
+                py: '4px',
+                px: '8px',
+                fontSize: 12,
+                fontFamily: 'Roboto, sans-serif',
+                letterSpacing: '0.17px',
+                color: '#1f1d25',
+                '&::placeholder': { color: '#9c99a9', opacity: 1 },
+              },
+            }}
+          />
+        );
+      }}
+    />
+  );
+};
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface AssetHorizontalCardProps {
@@ -74,6 +188,7 @@ export interface AssetHorizontalCardProps {
   leadFormCta?: string;
   onLeadFormEnabledChange?: (enabled: boolean) => void;
   onLeadFormCtaChange?: (cta: string) => void;
+  onOpenUrlsDialog?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -86,9 +201,16 @@ export const AssetHorizontalCard = ({
   leadFormCta = 'Claim Offer',
   onLeadFormEnabledChange,
   onLeadFormCtaChange,
+  onOpenUrlsDialog,
 }: AssetHorizontalCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const template = TEMPLATES.find((t) => t.id === asset.templateId);
+
+  const { destinationUrls } = useProject();
+  const ctas = getTemplateCtas(asset.templateId);
+  const isHtml = ctas.length > 0;
+  const assetUrls = destinationUrls[asset.id] ?? {};
+  const hasMissingUrls = isHtml && asset.status !== 'draft' && asset.status !== 'removed' && ctas.some((cta) => !assetUrls[cta.key]);
 
   const isWide = asset.width > asset.height;
   const innerWidthPct  = isWide ? 100 : (asset.width / asset.height) * 100;
@@ -161,6 +283,21 @@ export const AssetHorizontalCard = ({
             <span>|</span>
             <span>{asset.width} x {asset.height}</span>
           </div>
+          {hasMissingUrls && (
+            <div
+              onClick={(e) => { e.stopPropagation(); onOpenUrlsDialog?.(); }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px 3px 6px', borderRadius: 8,
+                background: '#FDF4EC', cursor: 'pointer', alignSelf: 'flex-start',
+              }}
+            >
+              <img src={pageTextLinkSvg} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#c45500', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+                Missing Destination URLs
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -189,10 +326,24 @@ export const AssetHorizontalCard = ({
             <input type="text" value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} style={fieldInputStyle} />
           </div>
 
-          <div>
-            <p style={fieldLabelStyle}>Destination URL</p>
-            <input type="text" value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} style={fieldInputStyle} />
-          </div>
+          {isHtml ? (
+            ctas.map((cta) => (
+              <div key={cta.key}>
+                <p style={fieldLabelStyle}>{cta.label}</p>
+                <DestinationUrlHorizontalField
+                  assetId={asset.id}
+                  ctaKey={cta.key}
+                  value={assetUrls[cta.key] ?? ''}
+                  warning={!assetUrls[cta.key]}
+                />
+              </div>
+            ))
+          ) : (
+            <div>
+              <p style={fieldLabelStyle}>Destination URL</p>
+              <input type="text" value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} style={fieldInputStyle} />
+            </div>
+          )}
 
           <div>
             <p style={fieldLabelStyle}>Disclaimer</p>

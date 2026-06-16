@@ -4,6 +4,9 @@ import { MoreVert, FolderOutlined, Language, AutoAwesome, Edit } from '@mui/icon
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { StatusBadge } from './StatusBadge';
 import type { Asset, AssetStatus, Template } from '../../data/types';
+import { useProject } from '../../context/ProjectContext';
+import { getTemplateCtas } from '../../data/destinationUrlOptions';
+import pageTextLinkSvg from '../../assets/icons/page-text-link.svg';
 
 export interface AdShell {
   id: string;
@@ -27,6 +30,7 @@ interface AdShellCardProps {
   isEditing?: boolean;
   onSelect?: (id: string, checked: boolean) => void;
   onEdit?: (shell: AdShell) => void;
+  onOpenUrlsDialog?: () => void;
 }
 
 // Renders a single asset preview letterboxed within its container
@@ -44,10 +48,19 @@ const AssetLayerContent = ({ asset, template }: { asset: Asset; template: Templa
   );
 };
 
-export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: AdShellCardProps) => {
+export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit, onOpenUrlsDialog }: AdShellCardProps) => {
   const [hover, setHover] = useState(false);
   const active = hover || isEditing;
   const { assets, template, name, platform, adType, folder } = shell;
+
+  const { destinationUrls } = useProject();
+  const hasMissingUrls = assets.some((asset) => {
+    if (asset.status === 'draft' || asset.status === 'removed') return false;
+    const ctas = getTemplateCtas(asset.templateId);
+    if (!ctas.length) return false;
+    const assetUrls = destinationUrls[asset.id] ?? {};
+    return ctas.some((cta) => !assetUrls[cta.key]);
+  });
 
   // Derive shell status: awaiting_approval > updated (also shown when assets are removed)
   const shellStatus: AssetStatus | null = (() => {
@@ -209,6 +222,25 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit }: Ad
           </div>
           {shellStatus && <StatusBadge status={shellStatus} />}
         </div>
+
+        {/* Missing Destination URLs badge — bottom strip */}
+        {hasMissingUrls && (
+          <div
+            onClick={(e) => { e.stopPropagation(); onOpenUrlsDialog?.(); }}
+            style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              padding: '4px 8px',
+              background: 'rgba(253, 244, 236, 0.95)',
+              cursor: 'pointer',
+            }}
+          >
+            <img src={pageTextLinkSvg} alt="" style={{ width: 12, height: 12, flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#c45500', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+              Missing Destination URLs
+            </span>
+          </div>
+        )}
 
         {/* Platform icon — bottom left */}
         <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 10 }}>
