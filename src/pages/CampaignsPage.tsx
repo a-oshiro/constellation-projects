@@ -5,10 +5,13 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { FilledTemplatePreview } from '../components/ui/FilledTemplatePreview';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 import type { AdShell } from '../components/ui/AdShellCard';
 import type { AssetStatus } from '../data/types';
 import bmwLogoSrc from '../assets/bmw-logo.png';
+import pageTextLinkSvg from '../assets/icons/page-text-link.svg';
 import { PROJECT_INFO, TEMPLATES, BACKGROUNDS } from '../data/mockData';
+import { getTemplateCtas } from '../data/destinationUrlOptions';
 import { useProject } from '../context/ProjectContext';
 import { useSnackbar } from '../context/SnackbarContext';
 import { useLayout } from '../context/LayoutContext';
@@ -157,9 +160,20 @@ const MiniShellThumbnail = ({ shell }: { shell: AdShell }) => {
 };
 
 export const CampaignsPage = () => {
-  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled } = useProject();
+  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled, destinationUrls } = useProject();
   const { showSnackbar } = useSnackbar();
   const { shellCustomizations } = useLayout();
+
+  const [urlsDialogOpen, setUrlsDialogOpen] = useState(false);
+
+  const allHtmlAssets = useMemo(
+    () => assets.filter((a) => a.status !== 'draft' && a.status !== 'removed' && a.imageType === 'HTML'),
+    [assets]
+  );
+  const allHtmlTemplateIds = useMemo(
+    () => Array.from(new Set(allHtmlAssets.map((a) => a.templateId))),
+    [allHtmlAssets]
+  );
 
   const approvedAssets = approvalEnabled
     ? assets.filter((a) =>
@@ -232,23 +246,35 @@ export const CampaignsPage = () => {
     return null;
   };
 
+  const shellHasMissingUrls = (shell: AdShell): boolean =>
+    shell.assets.some((asset) => {
+      if (asset.status === 'draft' || asset.status === 'removed') return false;
+      const ctas = getTemplateCtas(asset.templateId);
+      if (!ctas.length) return false;
+      const assetUrls = destinationUrls[asset.id] ?? {};
+      return ctas.some((cta) => !assetUrls[cta.key]);
+    });
+
   const allShellsApproved = hasAdShells && adShells.every((shell) =>
     shell.assets.every((a) =>
       approvalEnabled ? a.status === 'approved' : a.status === 'generated'
     )
   );
   const requiredFieldsFilled = campaignName.trim() !== '' && campaignStartDate !== '' && campaignEndDate !== '';
-  const canLoad = allShellsApproved && requiredFieldsFilled && !campaignLoaded;
+  const anyShellHasMissingUrls = hasAdShells && adShells.some(shellHasMissingUrls);
+  const canLoad = allShellsApproved && requiredFieldsFilled && !campaignLoaded && !anyShellHasMissingUrls;
 
   const tooltipMessage = !hasAdShells
     ? 'Add at least one Ad Shell to load campaign.'
-    : !allShellsApproved
-      ? (approvalEnabled
-          ? 'Unable to load campaign. One or more Ad Shells contain unapproved assets'
-          : 'Unable to load campaign. One or more Ad Shells contain assets with pending changes')
-      : !requiredFieldsFilled
-        ? 'Unable to load campaign. One or more required fields below are missing'
-        : '';
+    : anyShellHasMissingUrls
+      ? 'One or more asset has missing URLs. Unable to load campaign.'
+      : !allShellsApproved
+        ? (approvalEnabled
+            ? 'Unable to load campaign. One or more Ad Shells contain unapproved assets'
+            : 'Unable to load campaign. One or more Ad Shells contain assets with pending changes')
+        : !requiredFieldsFilled
+          ? 'Unable to load campaign. One or more required fields below are missing'
+          : '';
 
   // Derive overall campaign row status from shells (when loaded)
   const campaignRowStatus = useMemo<AssetStatus | null>(() => {
@@ -481,11 +507,27 @@ export const CampaignsPage = () => {
                   </div>
 
                   {/* Status */}
-                  <div style={{ width: COL_STATUS, paddingLeft: 16, paddingRight: 12, flexShrink: 0 }}>
+                  <div style={{ width: COL_STATUS, paddingLeft: 16, paddingRight: 12, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
                     {campaignLoaded
                       ? (status ? <StatusBadge status={status} /> : <ActiveBadge />)
                       : (status && <StatusBadge status={status} />)
                     }
+                    {shellHasMissingUrls(shell) && (
+                      <span
+                        onClick={() => setUrlsDialogOpen(true)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: '#FDF4EC', borderRadius: 8,
+                          paddingLeft: 6, paddingRight: 8, paddingTop: 3, paddingBottom: 3,
+                          cursor: 'pointer', alignSelf: 'flex-start',
+                        }}
+                      >
+                        <img src={pageTextLinkSvg} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#c45500', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+                          Missing Destination URLs
+                        </span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Start Date */}
@@ -558,6 +600,14 @@ export const CampaignsPage = () => {
 
         <TaskFooter currentTask="campaigns" />
       </div>
+
+      <AddDestinationUrlsDialog
+        open={urlsDialogOpen}
+        onClose={() => setUrlsDialogOpen(false)}
+        allAssets={allHtmlAssets}
+        selectedTemplateIds={allHtmlTemplateIds}
+        warningMode
+      />
     </div>
   );
 };

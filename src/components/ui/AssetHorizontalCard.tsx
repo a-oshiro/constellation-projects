@@ -100,7 +100,7 @@ const DestinationUrlHorizontalField = ({
     <Autocomplete
       freeSolo
       fullWidth
-      size="small"
+      size="medium"
       options={DESTINATION_URL_OPTIONS}
       value={matchingOption ?? (currentVal || null)}
       inputValue={inputValue}
@@ -149,7 +149,7 @@ const DestinationUrlHorizontalField = ({
             placeholder="Select or Type URL"
             sx={{
               '& .MuiOutlinedInput-root': {
-                background: '#f9fafa',
+                background: '#ffffff',
                 borderRadius: '4px',
                 padding: '0 32px 0 0 !important',
                 '& .MuiOutlinedInput-notchedOutline': {
