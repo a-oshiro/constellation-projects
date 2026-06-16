@@ -776,8 +776,21 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
               </span>
             </div>
 
-            {/* Matrix table */}
-            <div ref={tableContainerRef} onScroll={(e) => setTableScrolled((e.currentTarget as HTMLDivElement).scrollLeft > 0)} style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px 0', position: 'relative' }}>
+            {/* Matrix table — wrapper provides anchor for the scroll-shadow overlay */}
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            {/* Offer-column scroll shadow overlay — above scrolling cells (z0) but below sticky column (z3/4) */}
+            {tableScrolled && (
+              <div style={{
+                position: 'absolute', top: 0, left: 0, bottom: 0,
+                width: 180,
+                pointerEvents: 'none',
+                zIndex: 2,
+                background: '#fff',
+                borderRight: '1px solid rgba(0,0,0,0.12)',
+                boxShadow: '4px 0 10px 0 rgba(0,0,0,0.12)',
+              }} />
+            )}
+            <div ref={tableContainerRef} onScroll={(e) => setTableScrolled((e.currentTarget as HTMLDivElement).scrollLeft > 0)} style={{ height: '100%', overflow: 'auto', padding: '0 24px 24px 0', position: 'relative' }}>
               <table style={{ width: selectedTemplateId === ALL_TEMPLATES_ID ? 'max-content' : '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
                   {/* Offer column */}
@@ -789,7 +802,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                 </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff', boxShadow: tableScrolled ? '4px 0 10px 0 rgba(0,0,0,0.12)' : 'none', borderRight: tableScrolled ? '1px solid rgba(0,0,0,0.12)' : undefined }}>
+                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff' }}>
                       Offer
                     </th>
                     {ctas.map(c => {
@@ -857,7 +870,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                     return (
                       <tr key={offer.id} ref={el => { rowRefs.current[offer.id] = el; }}>
                         {/* Offer cell */}
-                        <td style={{ padding: '10px 8px 10px 24px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', left: 0, zIndex: 3, background: '#fff', boxShadow: tableScrolled ? '4px 0 10px 0 rgba(0,0,0,0.12)' : 'none', borderRight: tableScrolled ? '1px solid rgba(0,0,0,0.12)' : undefined }}>
+                        <td style={{ padding: '10px 8px 10px 24px', verticalAlign: 'middle', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', left: 0, zIndex: 3, background: '#fff' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ width: 38, height: 38, borderRadius: 3, overflow: 'hidden', flexShrink: 0}}>
                               {offer.imageUrl ? (
@@ -929,6 +942,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                   <WizardBubble onAccept={handleSmartFillAccept} onIgnore={handleSmartFillIgnore} placement={bubblePlacement} />
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>
