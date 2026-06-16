@@ -790,7 +790,7 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                 </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#686576', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff', boxShadow: tableScrolled ? '4px 0 8px -2px rgba(0,0,0,0.1)' : 'none' }}>
+                    <th style={{ padding: '12px 8px 8px 24px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', borderBottom: '1px solid rgba(0,0,0,0.08)', position: 'sticky', left: 0, zIndex: 4, background: '#fff', boxShadow: tableScrolled ? '4px 0 8px -2px rgba(0,0,0,0.1)' : 'none' }}>
                       Offer
                     </th>
                     {ctas.map(c => {
@@ -807,8 +807,8 @@ export function AddDestinationUrlsDialog({ open, onClose, allAssets, selectedTem
                           onMouseLeave={() => setHoveredHeaderKey(null)}
                           onClick={(e) => { e.stopPropagation(); setHighlightedCol(isCopyHighlighted ? null : { ctaKey: c.key, templateId: c.templateId }); }}
                           style={{
-                            padding: '8px 8px 8px', textAlign: 'left', fontSize: 12, fontFamily: 'Roboto, sans-serif',
-                            fontWeight: 500, color: '#686576', letterSpacing: '0.4px', minWidth: 220,
+                            padding: '8px 8px 8px', textAlign: 'left', fontSize: 14, fontFamily: 'Roboto, sans-serif',
+                            fontWeight: 500, color: '#1F1D25', letterSpacing: '0.4px', minWidth: 220,
                             borderBottom: '1px solid rgba(0,0,0,0.08)',
                             cursor: 'pointer', userSelect: 'none',
                             background: isActive ? 'rgba(99,86,225,0.08)' : undefined,

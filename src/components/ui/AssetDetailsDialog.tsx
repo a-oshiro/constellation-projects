@@ -364,6 +364,28 @@ const MetadataPanel = ({ asset }: { asset: Asset }) => {
         <ChipSelectField label="Additional Lease Disclosure" chips={[LEASE_DISCLOSURE]} />
       )}
 
+
+      {/* ── Add Field ───────────────────────────────────── */}
+      <button
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px 0',
+          fontSize: 13,
+          fontFamily: 'Roboto, sans-serif',
+          fontWeight: 500,
+          color: '#473bab',
+          letterSpacing: '0.46px',
+          alignSelf: 'flex-start',
+        }}
+      >
+        + Add Field
+      </button>
+
       {/* ── Destination URLs — HTML assets only ─────────── */}
       {isHtml && (
         <>
@@ -390,27 +412,6 @@ const MetadataPanel = ({ asset }: { asset: Asset }) => {
           })}
         </>
       )}
-
-      {/* ── Add Field ───────────────────────────────────── */}
-      <button
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '2px 0',
-          fontSize: 13,
-          fontFamily: 'Roboto, sans-serif',
-          fontWeight: 500,
-          color: '#473bab',
-          letterSpacing: '0.46px',
-          alignSelf: 'flex-start',
-        }}
-      >
-        + Add Field
-      </button>
 
       {/* ── Divider ─────────────────────────────────────── */}
       <hr style={{ border: 'none', borderTop: '1px solid rgba(0,0,0,0.08)', margin: '16px 0 0 0' }} />
