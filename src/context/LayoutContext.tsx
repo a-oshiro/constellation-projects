@@ -7,7 +7,18 @@ import type { FilterState } from '../utils/assetFilters';
 
 export type { FilterState };
 
+export type OffersPanelType = 'vehicle-info' | 'write-pane';
+
+export interface OffersPanel {
+  type: OffersPanelType;
+  offerId: string;
+  offerTypeId?: string;
+}
+
 interface LayoutContextValue {
+  offersPanel: OffersPanel | null;
+  openOffersPanel: (type: OffersPanelType, offerId: string, offerTypeId?: string) => void;
+  closeOffersPanel: () => void;
   tasksPanelOpen: boolean;
   openTasksPanel: () => void;
   closeTasksPanel: () => void;
@@ -34,6 +45,9 @@ interface LayoutContextValue {
 }
 
 const LayoutContext = createContext<LayoutContextValue>({
+  offersPanel: null,
+  openOffersPanel: (_type, _offerId, _offerTypeId) => {},
+  closeOffersPanel: () => {},
   tasksPanelOpen: true,
   openTasksPanel: () => {},
   closeTasksPanel: () => {},
@@ -62,6 +76,7 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
+  const [offersPanel, setOffersPanel] = useState<OffersPanel | null>(null);
   const [editingShell, setEditingShell] = useState<AdShell | null>(null);
   const [shellCustomizations, setShellCustomizations] = useState<Record<string, Partial<AdShell>>>({});
   const [advancedGenerationOpen, setAdvancedGenerationOpen] = useState(false);
@@ -79,6 +94,9 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <LayoutContext.Provider value={{
+      offersPanel,
+      openOffersPanel: (type, offerId, offerTypeId) => setOffersPanel({ type, offerId, offerTypeId }),
+      closeOffersPanel: () => setOffersPanel(null),
       tasksPanelOpen,
       openTasksPanel: () => setTasksPanelOpen(true),
       closeTasksPanel: () => setTasksPanelOpen(false),

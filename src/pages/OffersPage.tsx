@@ -1,26 +1,54 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, IconButton, TextField } from '@mui/material';
 import { MoreVert, Search, AutoAwesome, TravelExplore, History } from '@mui/icons-material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { OfferCard } from '../components/ui/OfferCard';
-import { OfferWritePane } from '../components/ui/OfferWritePane';
 import { useProject } from '../context/ProjectContext';
-import type { Offer } from '../data/types';
+import { useLayout } from '../context/LayoutContext';
+import type { OfferTypeName, OfferTypeData } from '../data/types';
+
+function createDefaultOfferType(type: OfferTypeName): OfferTypeData {
+  const id = `ot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  switch (type) {
+    case 'Lease':    return { id, type: 'Lease', source: 'National', rebates: [] };
+    case 'Finance':  return { id, type: 'Finance', source: 'National' };
+    case 'Purchase': return { id, type: 'Purchase', source: 'National', purchaseRebates: [], purchaseCondRebates: [], purchaseManualInputs: [] };
+    case 'ZD Lease': return { id, type: 'ZD Lease', source: 'National', zdLeaseRebates: [], zdLeaseManualInputs: [] };
+    case 'Custom':   return { id, type: 'Custom', source: 'National', customFields: [] };
+  }
+}
 
 export const OffersPage = () => {
   const { offers, updateOffer } = useProject();
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
 
-  const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? null;
+  useEffect(() => () => closeOffersPanel(), []);
 
   const filteredOffers = offers.filter((o) =>
     o.vehicleName.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleSave = (id: string, updated: Partial<Offer>) => {
-    updateOffer(id, updated);
+  const handleAddOfferType = (offerId: string, type: OfferTypeName) => {
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) return;
+    const newEntry = createDefaultOfferType(type);
+    updateOffer(offerId, { offerTypes: [...offer.offerTypes, newEntry] });
+    openOffersPanel('write-pane', offerId, newEntry.id);
+  };
+
+  const handleRemoveOfferType = (offerId: string, offerTypeId: string) => {
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) return;
+    updateOffer(offerId, { offerTypes: offer.offerTypes.filter((ot) => ot.id !== offerTypeId) });
+    if (offersPanel?.offerId === offerId && offersPanel?.offerTypeId === offerTypeId) {
+      closeOffersPanel();
+    }
+  };
+
+  const handleReorderOfferTypes = (offerId: string, newTypes: OfferTypeData[]) => {
+    updateOffer(offerId, { offerTypes: newTypes });
   };
 
   return (
@@ -95,20 +123,14 @@ export const OffersPage = () => {
                   },
                 }}
                 sx={{
-                  minWidth: 160,
-                  maxWidth: 211,
-                  flex: 1,
+                  minWidth: 160, maxWidth: 211, flex: 1,
                   '& .MuiOutlinedInput-root': {
-                    borderRadius: '20px',
-                    background: '#f9fafa',
-                    height: 34,
+                    borderRadius: '20px', background: '#f9fafa', height: 34,
                     '& fieldset': { borderColor: '#cac9cf' },
                     '&:hover fieldset': { borderColor: '#9c99a9' },
                   },
                   '& .MuiOutlinedInput-input': {
-                    fontSize: 14,
-                    color: '#9c99a9',
-                    letterSpacing: '0.15px',
+                    fontSize: 14, color: '#9c99a9', letterSpacing: '0.15px',
                     padding: '6px 8px 6px 0',
                     '&::placeholder': { color: '#9c99a9', opacity: 1 },
                   },
@@ -132,9 +154,21 @@ export const OffersPage = () => {
               <OfferCard
                 key={offer.id}
                 offer={offer}
-                selected={selectedOfferId === offer.id}
-                onSelect={(id, checked) => setSelectedOfferId(checked ? id : null)}
-                onClick={() => setSelectedOfferId(offer.id)}
+                selected={offersPanel?.offerId === offer.id}
+                activeOfferTypeId={offersPanel?.offerId === offer.id ? offersPanel.offerTypeId : undefined}
+                onSelect={(_, checked) => {
+                  if (checked) {
+                    const first = offer.offerTypes[0];
+                    if (first) openOffersPanel('write-pane', offer.id, first.id);
+                  } else {
+                    closeOffersPanel();
+                  }
+                }}
+                onVehicleClick={() => openOffersPanel('vehicle-info', offer.id)}
+                onOfferTypeClick={(offerTypeId) => openOffersPanel('write-pane', offer.id, offerTypeId)}
+                onAddOfferType={(type) => handleAddOfferType(offer.id, type)}
+                onRemoveOfferType={(offerTypeId) => handleRemoveOfferType(offer.id, offerTypeId)}
+                onReorderOfferTypes={(newTypes) => handleReorderOfferTypes(offer.id, newTypes)}
               />
             ))}
           </div>
@@ -142,15 +176,6 @@ export const OffersPage = () => {
 
         <TaskFooter currentTask="offers" />
       </div>
-
-      {/* ── Write pane ─────────────────────────────────────────── */}
-      {selectedOffer && (
-        <OfferWritePane
-          offer={selectedOffer}
-          onClose={() => setSelectedOfferId(null)}
-          onSave={handleSave}
-        />
-      )}
     </div>
   );
 };

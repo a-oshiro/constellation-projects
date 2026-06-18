@@ -5,6 +5,7 @@ import { ExpandMore, ExpandLess, WarningAmber, HourglassEmpty, HighlightOff } fr
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
 import type { Asset, AssetStatus } from '../../data/types';
+import { getPrimaryLeaseData } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { getTemplateCtas, DESTINATION_URL_OPTIONS } from '../../data/destinationUrlOptions';
 import pageTextLinkSvg from '../../assets/icons/page-text-link.svg';
@@ -43,9 +44,10 @@ function buildDisclaimer(asset: Asset): string {
 }
 function buildDisclaimerContent(asset: Asset): string {
   const { offer } = asset;
+  const lease = getPrimaryLeaseData(offer);
   return (
-    `${offer.monthlyPayment}/mo. lease for ${offer.term} mos. $${offer.downPayment} due at signing. ` +
-    `${offer.milesPerYear.toLocaleString()} miles/year. Offer expires ${offer.expirationDate}. ` +
+    `${lease.monthlyPayment ?? 0}/mo. lease for ${lease.term ?? 0} mos. $${lease.downPayment ?? 0} due at signing. ` +
+    `${(lease.milesPerYear ?? 0).toLocaleString()} miles/year. Offer expires ${lease.expirationDate ?? ''}. ` +
     `Not all buyers will qualify. Subject to credit approval. Residency restrictions apply. ` +
     `See dealer for complete details. Tax, title, license, and dealer fees extra.`
   );
@@ -310,7 +312,7 @@ export const AssetHorizontalCard = ({
   const innerWidthPct  = isWide ? 100 : (asset.width / asset.height) * 100;
   const innerHeightPct = !isWide ? 100 : (asset.height / asset.width) * 100;
 
-  const [expirationDate,    setExpirationDate]    = useState(asset.offer.expirationDate);
+  const [expirationDate,    setExpirationDate]    = useState(getPrimaryLeaseData(asset.offer).expirationDate ?? '');
   const [destinationUrl,    setDestinationUrl]    = useState(buildDestinationUrl(asset));
   const [disclaimer,        setDisclaimer]        = useState(buildDisclaimer(asset));
   const [disclaimerContent, setDisclaimerContent] = useState(buildDisclaimerContent(asset));

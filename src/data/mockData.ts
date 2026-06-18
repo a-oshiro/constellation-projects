@@ -1,14 +1,6 @@
-import type { Offer, Template, Background, Asset, TaskItem } from './types';
-import bmwi4 from '../assets/offers/i4.png';
-import bmw228i from '../assets/offers/228i.png';
-import bmw330i from '../assets/offers/330i.png';
-import bmwi5 from '../assets/offers/i5.png';
-import bmwiX from '../assets/offers/iX.png';
-import bmwX1 from '../assets/offers/X1.png';
-import bmwX3 from '../assets/offers/X3.png';
-import bmwX5 from '../assets/offers/X5.png';
-import bmwX6 from '../assets/offers/X6.png';
-import bmwX7 from '../assets/offers/X7.png';
+import type { Template, Background, Asset, TaskItem } from './types';
+import { OFFERS } from './offers';
+export { OFFERS } from './offers';
 import bg600_1 from '../assets/backgrounds/600_250_1.png';
 import bg600_2 from '../assets/backgrounds/600_250_2.png';
 import bg600_3 from '../assets/backgrounds/600_250_3.png';
@@ -49,301 +41,6 @@ export const TASKS: TaskItem[] = [
   { key: 'approved', label: 'Approved', count: 27, route: '/approved', completed: true },
   { key: 'ads', label: 'Ads', count: 0, route: '/ads', completed: false },
   { key: 'campaigns', label: 'Campaigns', count: 0, route: '/campaigns', completed: false },
-];
-
-export const OFFERS: Offer[] = [
-  {
-    id: "offer-1",
-    vehicleName: "2026 BMW X1 xDrive28i",
-    year: 2026,
-    make: "BMW",
-    model: "X1",
-    trim: "xDrive28i",
-    inStock: 22,
-    monthlyPayment: 429,
-    term: 36,
-    downPayment: 2500,
-    salesPrice: 43200,
-    totalDueAtSigning: 3299,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease"],
-    pvi: 88,
-    aging: 72,
-    sales: 85,
-    inventory: 22,
-    imageUrl: bmwX1,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 1500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 1000, status: "applied", checked: false },
-      { id: "r3", name: "College Grad Rebate", amount: 1000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 750, status: "non_stackable", checked: false },
-      { id: "r5", name: "Corporate Fleet", amount: 500, status: "applied", checked: true }
-    ]
-  },
-  {
-    id: "offer-2",
-    vehicleName: "2026 BMW X3 30 xDrive",
-    year: 2026,
-    make: "BMW",
-    model: "X3",
-    trim: "30 xDrive",
-    inStock: 18,
-    monthlyPayment: 539,
-    term: 36,
-    downPayment: 3000,
-    salesPrice: 52650,
-    totalDueAtSigning: 3799,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 91,
-    aging: 68,
-    sales: 88,
-    inventory: 18,
-    imageUrl: bmwX3,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 2000, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 1500, status: "applied", checked: false },
-      { id: "r3", name: "College Grad Rebate", amount: 1000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 1000, status: "non_stackable", checked: false },
-      { id: "r5", name: "Corporate Fleet", amount: 750, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-3",
-    vehicleName: "2026 BMW X5 xDrive40i",
-    year: 2026,
-    make: "BMW",
-    model: "X5",
-    trim: "xDrive40i",
-    inStock: 14,
-    monthlyPayment: 849,
-    term: 36,
-    downPayment: 4000,
-    salesPrice: 83220,
-    totalDueAtSigning: 5499,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 94,
-    aging: 55,
-    sales: 80,
-    inventory: 14,
-    imageUrl: bmwX5,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 3000, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2000, status: "applied", checked: false },
-      { id: "r3", name: "Corporate Fleet", amount: 1500, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 2500, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 1000, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-4",
-    vehicleName: "2027 BMW X6 xDrive40i AWD",
-    year: 2027,
-    make: "BMW",
-    model: "X6",
-    trim: "xDrive40i AWD",
-    inStock: 9,
-    monthlyPayment: 899,
-    term: 36,
-    downPayment: 5000,
-    salesPrice: 86650,
-    totalDueAtSigning: 6499,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 87,
-    aging: 48,
-    sales: 74,
-    inventory: 9,
-    imageUrl: bmwX6,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 3500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2000, status: "applied", checked: false },
-      { id: "r3", name: "Corporate Fleet", amount: 2000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 2500, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 1000, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-5",
-    vehicleName: "2027 BMW X7 xDrive40i",
-    year: 2027,
-    make: "BMW",
-    model: "X7",
-    trim: "xDrive40i",
-    inStock: 7,
-    monthlyPayment: 979,
-    term: 36,
-    downPayment: 5000,
-    salesPrice: 91850,
-    totalDueAtSigning: 6999,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 85,
-    aging: 42,
-    sales: 70,
-    inventory: 7,
-    imageUrl: bmwX7,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 4000, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2500, status: "applied", checked: false },
-      { id: "r3", name: "Corporate Fleet", amount: 2000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 3000, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 1500, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-6",
-    vehicleName: "2027 BMW i4 eDrive40",
-    year: 2027,
-    make: "BMW",
-    model: "i4",
-    trim: "eDrive40",
-    inStock: 16,
-    monthlyPayment: 499,
-    term: 36,
-    downPayment: 2500,
-    salesPrice: 57900,
-    totalDueAtSigning: 3499,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease"],
-    pvi: 96,
-    aging: 90,
-    sales: 92,
-    inventory: 16,
-    imageUrl: bmwi4,
-    rebates: [
-      { id: "r1", name: "EV Lease Credit", amount: 7500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2000, status: "applied", checked: false },
-      { id: "r3", name: "Loyalty Credit", amount: 3000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 2500, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 1500, status: "applied", checked: true },
-      { id: "r6", name: "Corporate Fleet", amount: 1000, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-7",
-    vehicleName: "2026 BMW 228i Gran Coupe",
-    year: 2026,
-    make: "BMW",
-    model: "228i",
-    trim: "Gran Coupe",
-    inStock: 20,
-    monthlyPayment: 389,
-    term: 36,
-    downPayment: 2000,
-    salesPrice: 39900,
-    totalDueAtSigning: 2999,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 82,
-    aging: 78,
-    sales: 79,
-    inventory: 20,
-    imageUrl: bmw228i,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 1500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 1000, status: "applied", checked: false },
-      { id: "r3", name: "College Grad Rebate", amount: 1000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 750, status: "non_stackable", checked: false }
-    ]
-  },
-  {
-    id: "offer-8",
-    vehicleName: "2026 BMW 330i Sedan",
-    year: 2026,
-    make: "BMW",
-    model: "330i",
-    trim: "Sedan",
-    inStock: 25,
-    monthlyPayment: 469,
-    term: 36,
-    downPayment: 2500,
-    salesPrice: 48675,
-    totalDueAtSigning: 3299,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease", "Finance"],
-    pvi: 90,
-    aging: 81,
-    sales: 86,
-    inventory: 25,
-    imageUrl: bmw330i,
-    rebates: [
-      { id: "r1", name: "Loyalty Credit", amount: 2000, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 1500, status: "applied", checked: false },
-      { id: "r3", name: "College Grad Rebate", amount: 1000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 1000, status: "non_stackable", checked: false },
-      { id: "r5", name: "Corporate Fleet", amount: 750, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-9",
-    vehicleName: "2026 BMW iX xDrive45 AWD",
-    year: 2026,
-    make: "BMW",
-    model: "iX",
-    trim: "xDrive45 AWD",
-    inStock: 11,
-    monthlyPayment: 849,
-    term: 36,
-    downPayment: 4500,
-    salesPrice: 86820,
-    totalDueAtSigning: 5999,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease"],
-    pvi: 93,
-    aging: 60,
-    sales: 77,
-    inventory: 11,
-    imageUrl: bmwiX,
-    rebates: [
-      { id: "r1", name: "EV Lease Credit", amount: 7500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2500, status: "applied", checked: false },
-      { id: "r3", name: "Loyalty Credit", amount: 3500, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 3000, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 2000, status: "applied", checked: true },
-      { id: "r6", name: "Corporate Fleet", amount: 1500, status: "applied", checked: false }
-    ]
-  },
-  {
-    id: "offer-10",
-    vehicleName: "2027 BMW i5 eDrive40",
-    year: 2027,
-    make: "BMW",
-    model: "i5",
-    trim: "eDrive40",
-    inStock: 13,
-    monthlyPayment: 679,
-    term: 36,
-    downPayment: 3500,
-    salesPrice: 67100,
-    totalDueAtSigning: 4499,
-    milesPerYear: 10000,
-    expirationDate: "06/30/2026",
-    offerType: ["Lease"],
-    pvi: 95,
-    aging: 74,
-    sales: 83,
-    inventory: 13,
-    imageUrl: bmwi5,
-    rebates: [
-      { id: "r1", name: "EV Lease Credit", amount: 7500, status: "applied", checked: true },
-      { id: "r2", name: "Military Incentive", amount: 2000, status: "applied", checked: false },
-      { id: "r3", name: "Loyalty Credit", amount: 3000, status: "applied", checked: true },
-      { id: "r4", name: "APR Credit", amount: 2500, status: "non_stackable", checked: false },
-      { id: "r5", name: "Mobility Program", amount: 2000, status: "applied", checked: true },
-      { id: "r6", name: "Corporate Fleet", amount: 1000, status: "applied", checked: false }
-    ]
-  }
 ];
 
 export const TEMPLATES: Template[] = [
@@ -412,6 +109,7 @@ export const ASSETS: Asset[] = (() => {
   let idx = 1;
 
   OFFERS.forEach((offer) => {
+    const primaryType = offer.offerTypes[0]?.type ?? 'Lease';
     TEMPLATES.forEach((tmpl) => {
       const templateBgs = BACKGROUNDS.filter((b) => b.templateId === tmpl.id);
       templateBgs.forEach((bg, bi) => {
@@ -428,12 +126,12 @@ export const ASSETS: Asset[] = (() => {
           templateId: tmpl.id,
           backgroundId: bg.id,
           status: 'approved',
-          tags: [offer.offerType[0] || 'Lease', dimLabel, platform],
+          tags: [primaryType, dimLabel, platform],
           folder: 'May Offers - Specials',
           width: tmpl.width,
           height: tmpl.height,
           imageType: mediaType,
-          offerType: offer.offerType[0] || 'Lease',
+          offerType: primaryType,
           platform,
           offer,
           backgroundUrl: bg.url,
@@ -444,4 +142,3 @@ export const ASSETS: Asset[] = (() => {
 
   return assets;
 })();
-
