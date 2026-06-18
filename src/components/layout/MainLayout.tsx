@@ -8,6 +8,10 @@ import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
 import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
 import { FilterPanel } from './FilterPanel';
+import { VehicleInfo } from '../ui/VehicleInfo';
+import { OfferDetails } from '../ui/OfferDetails';
+import { useProject } from '../../context/ProjectContext';
+import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
 const LEFT_DEFAULT  = 280;
@@ -94,7 +98,26 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     filterPanelOpen, closeFilterPanel,
     editingShell, closeAdShellPanel,
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
+    offersPanel, closeOffersPanel,
   } = useLayout();
+  const { offers, updateOffer } = useProject();
+
+  const offersPanelOffer = offersPanel
+    ? (offers.find((o) => o.id === offersPanel.offerId) ?? null)
+    : null;
+
+  const offersPanelOfferType = offersPanelOffer && offersPanel?.offerTypeId
+    ? offersPanelOffer.offerTypes.find((ot) => ot.id === offersPanel.offerTypeId) ?? null
+    : null;
+
+  const handleOffersSave = (offerId: string, offerTypeId: string, draft: Record<string, unknown>) => {
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) return;
+    const newOfferTypes = offer.offerTypes.map((ot) =>
+      ot.id === offerTypeId ? { ...ot, ...draft } : ot
+    );
+    updateOffer(offerId, { offerTypes: newOfferTypes } as Partial<Offer>);
+  };
   const location = useLocation();
 
   const [leftWidth,  setLeftWidth]  = useState(LEFT_DEFAULT);
@@ -157,6 +180,21 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             </div>
             <PreviewPanel />
           </div>
+          {offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
+            <VehicleInfo
+              offer={offersPanelOffer}
+              onClose={closeOffersPanel}
+              onSave={handleOffersSave}
+            />
+          )}
+          {offersPanelOffer && offersPanel?.type === 'write-pane' && offersPanelOfferType && (
+            <OfferDetails
+              offer={offersPanelOffer}
+              offerType={offersPanelOfferType}
+              onClose={closeOffersPanel}
+              onSave={handleOffersSave}
+            />
+          )}
           {hasRightPanel && <ResizeHandle onDrag={handleRightDrag} />}
           {editingShell && (
             <AdShellPanel

@@ -71,7 +71,7 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
           backgroundId: bg.id,
           status: 'draft',
           tags: [
-            offer.offerType[0] || 'Lease',
+            offer.offerTypes[0]?.type ?? 'Lease',
             dimLabel,
             tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website',
           ],
@@ -79,7 +79,7 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
           width: tmpl.width,
           height: tmpl.height,
           imageType: tmpl.type === 'HTML' ? 'HTML' : 'Image',
-          offerType: offer.offerType[0] || 'Lease',
+          offerType: offer.offerTypes[0]?.type ?? 'Lease',
           platform: tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website',
           offer,
           backgroundUrl: bg.url,

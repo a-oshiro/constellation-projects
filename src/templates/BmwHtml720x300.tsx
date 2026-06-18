@@ -1,5 +1,6 @@
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import type { Offer } from '../data/types';
+import { getPrimaryLeaseData } from '../data/types';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -8,11 +9,12 @@ const BmwLogo = ({ size }: { size: number }) => (
 );
 
 function buildSocialHeader(offer: Offer): string {
-  const type = (offer.offerType[0] || 'Lease').toLowerCase();
+  const leaseData = getPrimaryLeaseData(offer);
+  const type = (offer.offerTypes[0]?.type ?? 'Lease').toLowerCase();
   if (type.includes('apr')) {
-    return `0% APR Financing for ${offer.term} mos. on approved credit.`;
+    return `0% APR Financing for ${leaseData.term ?? 0} mos. on approved credit.`;
   }
-  return `$${offer.monthlyPayment}/mo. for ${offer.term} mos. on approved credit.`;
+  return `$${leaseData.monthlyPayment ?? 0}/mo. for ${leaseData.term ?? 0} mos. on approved credit.`;
 }
 
 // ── Preview (wireframe for TemplateCard and AddTemplatesDialog) ───────────────

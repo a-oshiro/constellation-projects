@@ -1,5 +1,6 @@
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import type { Offer } from '../data/types';
+import { getPrimaryLeaseData } from '../data/types';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ export interface TemplateFilledProps {
 }
 
 export function TemplateFilled({ offer, backgroundUrl, width, height }: TemplateFilledProps) {
+  const leaseData = getPrimaryLeaseData(offer);
   const isWide = width > height;
 
   return (
@@ -141,7 +143,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           New {offer.year} {offer.make} {offer.model} {offer.trim}
         </div>
         <div style={{ fontSize: isWide ? width * 0.033 : width * 0.05, fontFamily: 'Roboto, sans-serif', color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-          {offer.offerType[0] || 'Lease'} for ${offer.monthlyPayment}/month<br/>for {offer.term} months
+          {offer.offerTypes[0]?.type ?? 'Lease'} for ${leaseData.monthlyPayment ?? 0}/month<br/>for {leaseData.term ?? 0} months
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

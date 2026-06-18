@@ -1,5 +1,6 @@
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import type { Offer } from '../data/types';
+import { getPrimaryLeaseData } from '../data/types';
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -168,6 +169,7 @@ export interface TemplateFilledProps {
 }
 
 export function TemplateFilled({ offer, backgroundUrl, width, height }: TemplateFilledProps) {
+  const leaseData = getPrimaryLeaseData(offer);
   const contentH = height * CONTENT_PCT; // 447px
   const footerH = height * FOOTER_PCT;   // 113px
 
@@ -244,13 +246,13 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         }}>
           {/* Offer type */}
           <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 1, textTransform: 'uppercase', lineHeight: 2.66 }}>
-            {offer.offerType[0] || 'APR'}
+            {offer.offerTypes[0]?.type ?? 'APR'}
           </span>
 
           {/* Monthly payment */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, lineHeight: 1, }}>
             <span style={{ fontSize: 36, fontWeight: 700, color: '#111014', letterSpacing: 0.25 }}>
-              ${offer.monthlyPayment}
+              ${leaseData.monthlyPayment ?? 0}
             </span>
             <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 1, textTransform: 'uppercase' }}>
               / MONTH
@@ -259,13 +261,13 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
 
           {/* Details */}
           <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 0.15, lineHeight: 1.5 }}>
-            {offer.term}-month lease
+            {leaseData.term ?? 0}-month lease
           </span>
           <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 0.15, lineHeight: 1.5 }}>
-            {offer.milesPerYear.toLocaleString()} miles per year
+            {(leaseData.milesPerYear ?? 0).toLocaleString()} miles per year
           </span>
           <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 0.15, lineHeight: 1.5 }}>
-            ${offer.downPayment.toLocaleString()} down
+            ${(leaseData.downPayment ?? 0).toLocaleString()} down
           </span>
         </div>
 
