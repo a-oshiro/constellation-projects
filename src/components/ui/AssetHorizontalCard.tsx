@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Checkbox, FormControlLabel, Autocomplete, TextField } from '@mui/material';
+import { useState, useEffect, useRef } from 'react';
+import { Checkbox, FormControlLabel, Autocomplete, TextField, Popover } from '@mui/material';
+import { HexColorPicker } from 'react-colorful';
 import { ExpandMore, ExpandLess, WarningAmber, HourglassEmpty, HighlightOff } from '@mui/icons-material';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
@@ -176,6 +177,99 @@ const DestinationUrlHorizontalField = ({
   );
 };
 
+// ── CTA color picker ──────────────────────────────────────────────────────────
+
+const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+const DEFAULT_CTA_COLOR = '#473bab';
+
+const CtaColorField = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (hex: string) => void;
+}) => {
+  const swatchRef = useRef<HTMLDivElement>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
+  const [hexInput, setHexInput] = useState(value || DEFAULT_CTA_COLOR);
+
+  // Keep input in sync when the value prop changes from outside
+  useEffect(() => {
+    if (value && HEX_RE.test(value)) setHexInput(value);
+  }, [value]);
+
+  const liveColor = HEX_RE.test(hexInput) ? hexInput : (value || DEFAULT_CTA_COLOR);
+
+  const handlePickerChange = (hex: string) => {
+    setHexInput(hex);
+    onChange(hex);
+  };
+
+  const handleTextChange = (raw: string) => {
+    // Auto-prepend # when the user starts typing without it
+    const normalized = raw.startsWith('#') ? raw : `#${raw}`;
+    setHexInput(normalized.slice(0, 7));
+    if (HEX_RE.test(normalized)) onChange(normalized);
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Colored swatch — click to open picker */}
+        <div
+          ref={swatchRef}
+          onClick={() => setAnchorEl(swatchRef.current)}
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 4,
+            background: liveColor,
+            border: '1px solid #dddce0',
+            cursor: 'pointer',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+          }}
+        />
+        {/* Hex text input */}
+        <input
+          type="text"
+          value={hexInput}
+          onChange={(e) => handleTextChange(e.target.value)}
+          maxLength={7}
+          placeholder="#000000"
+          style={{ ...fieldInputStyle, flex: 1 }}
+        />
+      </div>
+
+      {/* Color picker popover */}
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{ paper: { sx: { mt: '4px', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)', overflow: 'hidden' } } }}
+      >
+        <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <HexColorPicker color={liveColor} onChange={handlePickerChange} style={{ width: 220, height: 180 }} />
+          {/* Hex input inside popover for convenience */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 4, background: liveColor, border: '1px solid #dddce0', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={hexInput}
+              onChange={(e) => handleTextChange(e.target.value)}
+              maxLength={7}
+              placeholder="#000000"
+              style={{ ...fieldInputStyle, flex: 1, fontSize: 12 }}
+            />
+          </div>
+        </div>
+      </Popover>
+    </>
+  );
+};
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface AssetHorizontalCardProps {
@@ -220,6 +314,10 @@ export const AssetHorizontalCard = ({
   const [destinationUrl,    setDestinationUrl]    = useState(buildDestinationUrl(asset));
   const [disclaimer,        setDisclaimer]        = useState(buildDisclaimer(asset));
   const [disclaimerContent, setDisclaimerContent] = useState(buildDisclaimerContent(asset));
+  // ctaKey → hex color
+  const [ctaColors, setCtaColors] = useState<Record<string, string>>({});
+  const setCtaColor = (ctaKey: string, hex: string) =>
+    setCtaColors((prev) => ({ ...prev, [ctaKey]: hex }));
 
   return (
     <div
@@ -328,14 +426,23 @@ export const AssetHorizontalCard = ({
 
           {isHtml ? (
             ctas.map((cta) => (
-              <div key={cta.key}>
-                <p style={fieldLabelStyle}>{cta.label}</p>
-                <DestinationUrlHorizontalField
-                  assetId={asset.id}
-                  ctaKey={cta.key}
-                  value={assetUrls[cta.key] ?? ''}
-                  warning={!assetUrls[cta.key]}
-                />
+              <div key={cta.key} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <p style={fieldLabelStyle}>{cta.label}</p>
+                  <DestinationUrlHorizontalField
+                    assetId={asset.id}
+                    ctaKey={cta.key}
+                    value={assetUrls[cta.key] ?? ''}
+                    warning={!assetUrls[cta.key]}
+                  />
+                </div>
+                <div>
+                  <p style={fieldLabelStyle}>CTA Color</p>
+                  <CtaColorField
+                    value={ctaColors[cta.key] ?? DEFAULT_CTA_COLOR}
+                    onChange={(hex) => setCtaColor(cta.key, hex)}
+                  />
+                </div>
               </div>
             ))
           ) : (
