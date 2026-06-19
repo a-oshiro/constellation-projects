@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Checkbox, IconButton, Menu, MenuItem } from '@mui/material';
-import { MoreVert, InfoOutlined, Add, Delete, DragIndicator } from '@mui/icons-material';
+import { MoreVert, InfoOutlined, Add, Delete } from '@mui/icons-material';
 import type { Offer, OfferTypeData, OfferTypeName } from '../../data/types';
 
 const ALL_OFFER_TYPES: OfferTypeName[] = ['Lease', 'Finance', 'Purchase', 'ZD Lease', 'Custom'];
@@ -66,18 +66,22 @@ export const OfferCard = ({
   onOfferTypeClick,
   onAddOfferType,
   onRemoveOfferType,
-  onReorderOfferTypes,
 }: OfferCardProps) => {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
-  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
-  const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [activeTabId, setActiveTabId] = useState<string | null>(
+    offer.offerTypes[0]?.id ?? null
+  );
+  const [hoveredContent, setHoveredContent] = useState(false);
 
   const existingTypes = new Set(offer.offerTypes.map(ot => ot.type));
   const availableTypes = ALL_OFFER_TYPES.filter(t => !existingTypes.has(t));
 
-  const handleAddClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+  // Resolve active tab: prefer one currently open in panel if it belongs to this offer
+  const panelTab = offer.offerTypes.find(ot => ot.id === activeOfferTypeId);
+  const localTab = offer.offerTypes.find(ot => ot.id === activeTabId);
+  const activeTab = panelTab ?? localTab ?? offer.offerTypes[0] ?? null;
+
+  const handleAddClick = (e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
     setMenuAnchor(e.currentTarget);
   };
@@ -87,6 +91,20 @@ export const OfferCard = ({
   const handleTypeSelect = (type: OfferTypeName) => {
     handleMenuClose();
     onAddOfferType?.(type);
+  };
+
+  const handleTabClick = (ot: OfferTypeData) => {
+    setActiveTabId(ot.id);
+    onOfferTypeClick?.(ot.id);
+  };
+
+  const handleRemoveTab = (e: React.MouseEvent, otId: string) => {
+    e.stopPropagation();
+    if (activeTabId === otId) {
+      const remaining = offer.offerTypes.filter(ot => ot.id !== otId);
+      setActiveTabId(remaining[0]?.id ?? null);
+    }
+    onRemoveOfferType?.(otId);
   };
 
   return (
@@ -100,7 +118,7 @@ export const OfferCard = ({
         transition: 'border-color 0.15s, box-shadow 0.15s',
       }}
     >
-      {/* Top: image + content — click opens Vehicle Info */}
+      {/* Top: image + content */}
       <div
         style={{ display: 'flex', alignItems: 'stretch', cursor: 'pointer' }}
         onClick={(e) => { e.stopPropagation(); onVehicleClick?.(); }}
@@ -186,75 +204,111 @@ export const OfferCard = ({
         </div>
       </div>
 
-      {/* Offer type rows */}
-      <div style={{ padding: '0 8px 4px' }}>
-        {offer.offerTypes.map((ot, i) => {
-          const isActive = ot.id === activeOfferTypeId;
-          const isHovered = hoveredRowId === ot.id && dragFromIndex === null;
-          const isDragOver = dragOverIndex === i && dragFromIndex !== null && dragFromIndex !== i;
-          const fields = getOfferTypeDisplayFields(ot);
-          return (
+      {/* Bottom: tabs + active offer content */}
+      {offer.offerTypes.length > 0 && (
+        <div style={{ padding: '0 8px 8px' }}>
+          {/* Tab strip */}
+          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              {offer.offerTypes.map((ot) => {
+                const isActive = ot.id === activeTab?.id;
+                return (
+                  <div
+                    key={ot.id}
+                    onClick={() => handleTabClick(ot)}
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '4px 8px',
+                    }}>
+                      <span style={{
+                        fontSize: 13,
+                        fontFamily: 'Roboto, sans-serif',
+                        fontWeight: 500,
+                        letterSpacing: '0.46px',
+                        lineHeight: '22px',
+                        color: isActive ? '#473bab' : '#686576',
+                        textTransform: 'capitalize',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {ot.type}
+                      </span>
+                    </div>
+                    {/* Active underline indicator */}
+                    {isActive && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 2,
+                        background: '#473bab',
+                        borderRadius: '2px 2px 0 0',
+                      }} />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Plus icon — opens add-type menu */}
+              {availableTypes.length > 0 && (
+                <div
+                  onClick={handleAddClick}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    color: '#686576',
+                  }}
+                >
+                  <Add style={{ fontSize: 20 }} />
+                </div>
+              )}
+            </div>
+
+            {/* Divider below tabs */}
+            <div style={{ height: 1, background: 'rgba(0,0,0,0.12)', width: '100%' }} />
+          </div>
+
+          {/* Active tab content */}
+          {activeTab && (
             <div
-              key={ot.id}
-              draggable
-              onDragStart={(e) => {
-                e.stopPropagation();
-                setDragFromIndex(i);
-                e.dataTransfer.effectAllowed = 'move';
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (dragOverIndex !== i) setDragOverIndex(i);
-              }}
-              onDragLeave={() => setDragOverIndex(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragFromIndex !== null && dragFromIndex !== i) {
-                  const newTypes = [...offer.offerTypes];
-                  const [moved] = newTypes.splice(dragFromIndex, 1);
-                  newTypes.splice(i, 0, moved);
-                  onReorderOfferTypes?.(newTypes);
-                }
-                setDragFromIndex(null);
-                setDragOverIndex(null);
-              }}
-              onDragEnd={() => {
-                setDragFromIndex(null);
-                setDragOverIndex(null);
-              }}
-              onClick={(e) => { e.stopPropagation(); onOfferTypeClick?.(ot.id); }}
-              onMouseEnter={() => setHoveredRowId(ot.id)}
-              onMouseLeave={() => setHoveredRowId(null)}
+              onClick={(e) => { e.stopPropagation(); onOfferTypeClick?.(activeTab.id); }}
+              onMouseEnter={() => setHoveredContent(true)}
+              onMouseLeave={() => setHoveredContent(false)}
               style={{
                 position: 'relative',
-                borderTop: i === 0 ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(0,0,0,0.06)',
-                padding: '8px',
+                padding: '8px 8px 0',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
                 cursor: 'pointer',
-                borderRadius: i === offer.offerTypes.length - 1 && availableTypes.length === 0 ? '0 0 4px 4px' : 0,
-                background: isDragOver
-                  ? 'rgba(99,86,225,0.08)'
-                  : isHovered
-                  ? '#F5F5F6'
-                  : isActive
-                  ? 'rgba(99,86,225,0.05)'
-                  : 'transparent',
+                background: hoveredContent ? '#F5F5F6' : 'transparent',
                 transition: 'background 0.12s',
-                outline: isDragOver ? '1px dashed #6356e1' : 'none',
               }}
             >
               {/* Trash icon — top-right on hover */}
-              {isHovered && (
+              {hoveredContent && (
                 <div
                   style={{ position: 'absolute', top: 4, right: 4 }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <IconButton
                     size="small"
-                    onClick={(e) => { e.stopPropagation(); onRemoveOfferType?.(ot.id); }}
+                    onClick={(e) => { e.stopPropagation(); handleRemoveTab(e, activeTab.id); }}
                     sx={{
                       padding: '2px',
                       color: '#9e9e9e',
@@ -265,7 +319,6 @@ export const OfferCard = ({
                   </IconButton>
                 </div>
               )}
-
               {/* Tags row */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                 <div style={{
@@ -278,10 +331,10 @@ export const OfferCard = ({
                     fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
                     color: '#6356e1', letterSpacing: '0.16px', lineHeight: '18px', whiteSpace: 'nowrap',
                   }}>
-                    {ot.type}
+                    {activeTab.type}
                   </span>
                 </div>
-                {ot.source && (
+                {activeTab.source && (
                   <div style={{
                     display: 'flex', alignItems: 'center',
                     background: '#f0f2f4', borderRadius: 8,
@@ -291,69 +344,42 @@ export const OfferCard = ({
                       fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
                       color: '#686576', letterSpacing: '0.16px', lineHeight: '18px', whiteSpace: 'nowrap',
                     }}>
-                      {ot.source}
+                      {activeTab.source}
                     </span>
-                  </div>
-                )}
-                {/* Drag handle — appears right of source tag on hover */}
-                {isHovered && (
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', cursor: 'grab' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <DragIndicator style={{ fontSize: 14, color: '#9e9e9e' }} />
                   </div>
                 )}
               </div>
 
               {/* Fields row */}
               <div style={{ display: 'flex', gap: 4, alignItems: 'flex-start' }}>
-                {fields.map((f, fi) => (
+                {getOfferTypeDisplayFields(activeTab).map((f, fi) => (
                   <PaymentField key={fi} label={f.label} value={f.value} infoIcon={f.info} />
                 ))}
               </div>
             </div>
-          );
-        })}
+          )}
+        </div>
+      )}
 
-        {/* Add Offer Type button */}
-        {availableTypes.length > 0 && (
-          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', padding: '6px 4px' }}>
-            <button
-              ref={addBtnRef}
-              onClick={handleAddClick}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 2,
-                border: 'none', background: 'transparent',
-                cursor: 'pointer', color: '#473bab',
-                fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
-                padding: '2px 4px', borderRadius: 4,
-              }}
-            >
-              <Add style={{ fontSize: 15 }} />
-              Add Offer Type
-            </button>
-            <Menu
-              anchorEl={menuAnchor}
-              open={Boolean(menuAnchor)}
-              onClose={handleMenuClose}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-              slotProps={{ paper: { style: { minWidth: 160 } } }}
-            >
-              {availableTypes.map((type) => (
-                <MenuItem
-                  key={type}
-                  onClick={(e) => { e.stopPropagation(); handleTypeSelect(type); }}
-                  sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif' }}
-                >
-                  {type}
-                </MenuItem>
-              ))}
-            </Menu>
-          </div>
-        )}
-      </div>
+      {/* Add type menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{ paper: { style: { minWidth: 160 } } }}
+      >
+        {availableTypes.map((type) => (
+          <MenuItem
+            key={type}
+            onClick={(e) => { e.stopPropagation(); handleTypeSelect(type); }}
+            sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif' }}
+          >
+            {type}
+          </MenuItem>
+        ))}
+      </Menu>
     </div>
   );
 };
