@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { Checkbox, IconButton, Menu, MenuItem } from '@mui/material';
-import { MoreVert, InfoOutlined, Add, Delete, DragIndicator } from '@mui/icons-material';
+import { Checkbox, IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
+import { MoreVert, InfoOutlined, Delete, DragIndicator } from '@mui/icons-material';
 import type { Offer, OfferTypeData, OfferTypeName } from '../../data/types';
 
 const ALL_OFFER_TYPES: OfferTypeName[] = ['Lease', 'Finance', 'Purchase', 'ZD Lease', 'Custom'];
@@ -68,24 +68,36 @@ export const OfferCard = ({
   onRemoveOfferType,
   onReorderOfferTypes,
 }: OfferCardProps) => {
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const [cardMenuAnchor, setCardMenuAnchor] = useState<null | HTMLElement>(null);
+  const [addTypeMenuOpen, setAddTypeMenuOpen] = useState(false);
+  const moreVertRef = useRef<HTMLButtonElement>(null);
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const existingTypes = new Set(offer.offerTypes.map(ot => ot.type));
   const availableTypes = ALL_OFFER_TYPES.filter(t => !existingTypes.has(t));
+  const allTypesAdded = availableTypes.length === 0;
 
-  const handleAddClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleCardMenuOpen = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    setMenuAnchor(e.currentTarget);
+    setCardMenuAnchor(e.currentTarget);
   };
 
-  const handleMenuClose = () => setMenuAnchor(null);
+  const handleCardMenuClose = () => setCardMenuAnchor(null);
+
+  const handleAddOfferTypeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCardMenuAnchor(null);
+    // Defer so the card menu's backdrop finishes processing the click before
+    // the type submenu opens, otherwise the backdrop captures it and closes immediately.
+    setTimeout(() => setAddTypeMenuOpen(true), 0);
+  };
+
+  const handleAddTypeMenuClose = () => setAddTypeMenuOpen(false);
 
   const handleTypeSelect = (type: OfferTypeName) => {
-    handleMenuClose();
+    handleAddTypeMenuClose();
     onAddOfferType?.(type);
   };
 
@@ -176,12 +188,59 @@ export const OfferCard = ({
 
           <div style={{ position: 'absolute', top: 6, right: 6 }}>
             <IconButton
+              ref={moreVertRef}
               size="small"
-              onClick={(e) => e.stopPropagation()}
+              onClick={handleCardMenuOpen}
               sx={{ padding: '5px', borderRadius: '100px', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
             >
               <MoreVert style={{ fontSize: 20, color: '#1f1d25' }} />
             </IconButton>
+            {/* Card menu */}
+            <Menu
+              anchorEl={cardMenuAnchor}
+              open={Boolean(cardMenuAnchor)}
+              onClose={handleCardMenuClose}
+              onClick={(e) => e.stopPropagation()}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{ paper: { style: { minWidth: 180 } } }}
+            >
+              <Tooltip
+                title={allTypesAdded ? 'All offer types added.' : ''}
+                placement="left"
+                arrow
+              >
+                <span>
+                  <MenuItem
+                    onClick={handleAddOfferTypeClick}
+                    disabled={allTypesAdded}
+                    sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif' }}
+                  >
+                    Add Offer Type
+                  </MenuItem>
+                </span>
+              </Tooltip>
+            </Menu>
+            {/* Add offer type submenu */}
+            <Menu
+              anchorEl={moreVertRef.current}
+              open={addTypeMenuOpen}
+              onClose={handleAddTypeMenuClose}
+              onClick={(e) => e.stopPropagation()}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{ paper: { style: { minWidth: 160 } } }}
+            >
+              {availableTypes.map((type) => (
+                <MenuItem
+                  key={type}
+                  onClick={(e) => { e.stopPropagation(); handleTypeSelect(type); }}
+                  sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif' }}
+                >
+                  {type}
+                </MenuItem>
+              ))}
+            </Menu>
           </div>
         </div>
       </div>
@@ -234,7 +293,7 @@ export const OfferCard = ({
                 flexDirection: 'column',
                 gap: 4,
                 cursor: 'pointer',
-                borderRadius: i === offer.offerTypes.length - 1 && availableTypes.length === 0 ? '0 0 4px 4px' : 0,
+                borderRadius: i === offer.offerTypes.length - 1 ? '0 0 4px 4px' : 0,
                 background: isDragOver
                   ? 'rgba(99,86,225,0.08)'
                   : isHovered
@@ -316,43 +375,6 @@ export const OfferCard = ({
           );
         })}
 
-        {/* Add Offer Type button */}
-        {availableTypes.length > 0 && (
-          <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', padding: '6px 4px' }}>
-            <button
-              ref={addBtnRef}
-              onClick={handleAddClick}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 2,
-                border: 'none', background: 'transparent',
-                cursor: 'pointer', color: '#473bab',
-                fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
-                padding: '2px 4px', borderRadius: 4,
-              }}
-            >
-              <Add style={{ fontSize: 15 }} />
-              Add Offer Type
-            </button>
-            <Menu
-              anchorEl={menuAnchor}
-              open={Boolean(menuAnchor)}
-              onClose={handleMenuClose}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-              slotProps={{ paper: { style: { minWidth: 160 } } }}
-            >
-              {availableTypes.map((type) => (
-                <MenuItem
-                  key={type}
-                  onClick={(e) => { e.stopPropagation(); handleTypeSelect(type); }}
-                  sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif' }}
-                >
-                  {type}
-                </MenuItem>
-              ))}
-            </Menu>
-          </div>
-        )}
       </div>
     </div>
   );
