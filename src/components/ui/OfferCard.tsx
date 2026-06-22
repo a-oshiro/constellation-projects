@@ -110,6 +110,7 @@ export const OfferCard = ({
         overflow: 'hidden',
         boxShadow: selected ? '0 0 0 1px #473bab' : 'none',
         transition: 'border-color 0.15s, box-shadow 0.15s',
+        height: 'fit-content',
       }}
     >
       {/* Top: image + content — click opens Vehicle Info */}
