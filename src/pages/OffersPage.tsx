@@ -149,7 +149,7 @@ export const OffersPage = () => {
           </div>
 
           {/* Offer cards grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {filteredOffers.map((offer) => (
               <OfferCard
                 key={offer.id}
