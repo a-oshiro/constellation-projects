@@ -94,7 +94,12 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [backgrounds, setBackgrounds] = useState<Background[]>(BACKGROUNDS);
   const [templates, setTemplates] = useState<Template[]>(TEMPLATES);
-  const [offers, setOffers] = useState<Offer[]>(OFFERS);
+  const [offers, setOffers] = useState<Offer[]>(
+    OFFERS.map((o) => ({
+      ...o,
+      offerTypes: o.offerTypes.filter((ot) => ot.type === 'Lease' || ot.type === 'Finance'),
+    }))
+  );
   const [assetStatuses, setAssetStatuses] = useState<Record<string, AssetStatus>>({});
   const [everApprovedIds, setEverApprovedIds] = useState<Set<string>>(new Set());
   const [pendingChanges, setPendingChanges] = useState<PendingOfferChange[]>([]);

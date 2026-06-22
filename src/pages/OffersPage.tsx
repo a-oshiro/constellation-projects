@@ -7,6 +7,7 @@ import { OfferCard } from '../components/ui/OfferCard';
 import { useProject } from '../context/ProjectContext';
 import { useLayout } from '../context/LayoutContext';
 import type { OfferTypeName, OfferTypeData } from '../data/types';
+import { OFFERS } from '../data/offers';
 
 function createDefaultOfferType(type: OfferTypeName): OfferTypeData {
   const id = `ot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -33,7 +34,11 @@ export const OffersPage = () => {
   const handleAddOfferType = (offerId: string, type: OfferTypeName) => {
     const offer = offers.find((o) => o.id === offerId);
     if (!offer) return;
-    const newEntry = createDefaultOfferType(type);
+    const sourceOffer = OFFERS.find((o) => o.id === offerId);
+    const sourceEntry = sourceOffer?.offerTypes.find((ot) => ot.type === type);
+    const newEntry: OfferTypeData = sourceEntry
+      ? { ...sourceEntry, id: `ot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
+      : createDefaultOfferType(type);
     updateOffer(offerId, { offerTypes: [...offer.offerTypes, newEntry] });
     openOffersPanel('write-pane', offerId, newEntry.id);
   };
