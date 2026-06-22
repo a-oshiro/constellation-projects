@@ -74,8 +74,9 @@ export const OfferCard = ({
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const existingTypes = new Set(offer.offerTypes.map(ot => ot.type));
-  const availableTypes = ALL_OFFER_TYPES.filter(t => !existingTypes.has(t));
+  const visibleOfferTypes = offer.offerTypes.filter(ot => !ot.hidden);
+  const visibleTypeNames = new Set(visibleOfferTypes.map(ot => ot.type));
+  const availableTypes = ALL_OFFER_TYPES.filter(t => !visibleTypeNames.has(t));
 
   const handleAddClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -98,6 +99,7 @@ export const OfferCard = ({
         overflow: 'hidden',
         boxShadow: selected ? '0 0 0 1px #473bab' : 'none',
         transition: 'border-color 0.15s, box-shadow 0.15s',
+        height: 'fit-content',
       }}
     >
       {/* Top: image + content — click opens Vehicle Info */}
@@ -188,7 +190,7 @@ export const OfferCard = ({
 
       {/* Offer type rows */}
       <div style={{ padding: '0 8px 4px' }}>
-        {offer.offerTypes.map((ot, i) => {
+        {visibleOfferTypes.map((ot, i) => {
           const isActive = ot.id === activeOfferTypeId;
           const isHovered = hoveredRowId === ot.id && dragFromIndex === null;
           const isDragOver = dragOverIndex === i && dragFromIndex !== null && dragFromIndex !== i;
@@ -211,10 +213,11 @@ export const OfferCard = ({
               onDrop={(e) => {
                 e.preventDefault();
                 if (dragFromIndex !== null && dragFromIndex !== i) {
-                  const newTypes = [...offer.offerTypes];
+                  const newTypes = [...visibleOfferTypes];
                   const [moved] = newTypes.splice(dragFromIndex, 1);
                   newTypes.splice(i, 0, moved);
-                  onReorderOfferTypes?.(newTypes);
+                  const hidden = offer.offerTypes.filter(ot => ot.hidden);
+                  onReorderOfferTypes?.([...newTypes, ...hidden]);
                 }
                 setDragFromIndex(null);
                 setDragOverIndex(null);
@@ -234,7 +237,7 @@ export const OfferCard = ({
                 flexDirection: 'column',
                 gap: 4,
                 cursor: 'pointer',
-                borderRadius: i === offer.offerTypes.length - 1 && availableTypes.length === 0 ? '0 0 4px 4px' : 0,
+                borderRadius: i === visibleOfferTypes.length - 1 && availableTypes.length === 0 ? '0 0 4px 4px' : 0,
                 background: isDragOver
                   ? 'rgba(99,86,225,0.08)'
                   : isHovered

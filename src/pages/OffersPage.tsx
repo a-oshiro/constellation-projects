@@ -33,9 +33,17 @@ export const OffersPage = () => {
   const handleAddOfferType = (offerId: string, type: OfferTypeName) => {
     const offer = offers.find((o) => o.id === offerId);
     if (!offer) return;
-    const newEntry = createDefaultOfferType(type);
-    updateOffer(offerId, { offerTypes: [...offer.offerTypes, newEntry] });
-    openOffersPanel('write-pane', offerId, newEntry.id);
+    const hiddenEntry = offer.offerTypes.find(ot => ot.type === type && ot.hidden);
+    if (hiddenEntry) {
+      updateOffer(offerId, {
+        offerTypes: offer.offerTypes.map(ot => ot.id === hiddenEntry.id ? { ...ot, hidden: false } : ot),
+      });
+      openOffersPanel('write-pane', offerId, hiddenEntry.id);
+    } else {
+      const newEntry = createDefaultOfferType(type);
+      updateOffer(offerId, { offerTypes: [...offer.offerTypes, newEntry] });
+      openOffersPanel('write-pane', offerId, newEntry.id);
+    }
   };
 
   const handleRemoveOfferType = (offerId: string, offerTypeId: string) => {
@@ -149,7 +157,7 @@ export const OffersPage = () => {
           </div>
 
           {/* Offer cards grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {filteredOffers.map((offer) => (
               <OfferCard
                 key={offer.id}

@@ -7,6 +7,7 @@ export type OfferTypeName = 'Lease' | 'Finance' | 'Purchase' | 'ZD Lease' | 'Cus
 export interface LeaseOfferData {
   id: string;
   type: 'Lease';
+  hidden?: boolean;
   source?: string;
   monthlyPayment?: number;
   term?: number;
@@ -21,6 +22,7 @@ export interface LeaseOfferData {
 export interface FinanceOfferData {
   id: string;
   type: 'Finance';
+  hidden?: boolean;
   source?: string;
   rate?: number;
   term?: number;
@@ -40,6 +42,7 @@ export interface PurchaseRebateEntry {
 export interface PurchaseOfferData {
   id: string;
   type: 'Purchase';
+  hidden?: boolean;
   source?: string;
   finalPrice?: number;
   dealerDiscount?: number;
@@ -58,6 +61,7 @@ export interface PurchaseOfferData {
 export interface ZDLeaseOfferData {
   id: string;
   type: 'ZD Lease';
+  hidden?: boolean;
   source?: string;
   noOfPayments?: number;
   monthlyPayment?: number;
@@ -88,6 +92,7 @@ export interface CustomField {
 export interface CustomOfferData {
   id: string;
   type: 'Custom';
+  hidden?: boolean;
   source?: string;
   customFields?: CustomField[];
 }
