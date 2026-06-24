@@ -438,13 +438,7 @@ export const AssetHorizontalCard = ({
                     warning={!assetUrls[cta.key]}
                   />
                 </div>
-                <div>
-                  <p style={fieldLabelStyle}>CTA Color</p>
-                  <CtaColorField
-                    value={ctaColors[cta.key] ?? DEFAULT_CTA_COLOR}
-                    onChange={(hex) => setCtaColor(cta.key, hex)}
-                  />
-                </div>
+
               </div>
             ))
           ) : (
