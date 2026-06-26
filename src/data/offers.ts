@@ -51,6 +51,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o1-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 4.9,
         term: 60,
@@ -140,6 +141,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o2-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 4.9,
         term: 60,
@@ -229,6 +231,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o3-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 4.9,
         term: 72,
@@ -318,6 +321,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o4-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 4.9,
         term: 72,
@@ -330,7 +334,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o4-purchase',
         type: 'Purchase',
-        hidden: true,
         source: 'National',
         finalPrice: 82900,
         dealerDiscount: 3750,
@@ -388,6 +391,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o5-lease',
         type: 'Lease',
+        hidden: true,
         source: 'National',
         monthlyPayment: 979,
         term: 36,
@@ -497,6 +501,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o6-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 3.9,
         term: 60,
@@ -524,7 +529,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o6-zdlease',
         type: 'ZD Lease',
-        hidden: true,
         source: 'National',
         noOfPayments: 36,
         monthlyPayment: 469,
@@ -567,6 +571,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o7-lease',
         type: 'Lease',
+        hidden: true,
         source: 'National',
         monthlyPayment: 389,
         term: 36,
@@ -585,6 +590,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o7-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 4.9,
         term: 60,
@@ -597,7 +603,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o7-purchase',
         type: 'Purchase',
-        hidden: true,
         source: 'National',
         finalPrice: 38200,
         dealerDiscount: 1700,
@@ -612,7 +617,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o7-zdlease',
         type: 'ZD Lease',
-        hidden: true,
         source: 'National',
         noOfPayments: 36,
         monthlyPayment: 359,
@@ -744,6 +748,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o9-lease',
         type: 'Lease',
+        hidden: true,
         source: 'National',
         monthlyPayment: 849,
         term: 36,
@@ -776,7 +781,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o9-purchase',
         type: 'Purchase',
-        hidden: true,
         source: 'National',
         finalPrice: 83000,
         dealerDiscount: 3820,
@@ -854,6 +858,7 @@ export const OFFERS: Offer[] = [
       {
         id: 'o10-finance',
         type: 'Finance',
+        hidden: true,
         source: 'National',
         rate: 3.9,
         term: 60,
@@ -881,7 +886,6 @@ export const OFFERS: Offer[] = [
       {
         id: 'o10-zdlease',
         type: 'ZD Lease',
-        hidden: true,
         source: 'National',
         noOfPayments: 36,
         monthlyPayment: 639,
