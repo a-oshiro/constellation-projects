@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Checkbox, IconButton, Menu, MenuItem } from '@mui/material';
+import { Checkbox, IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
 import { MoreVert, InfoOutlined, Add, Delete, DragIndicator } from '@mui/icons-material';
 import type { Offer, OfferTypeData, OfferTypeName } from '../../data/types';
 
@@ -15,11 +15,23 @@ interface OfferCardProps {
   onAddOfferType?: (type: OfferTypeName) => void;
   onRemoveOfferType?: (offerTypeId: string) => void;
   onReorderOfferTypes?: (newTypes: OfferTypeData[]) => void;
+  /** Hides the "+ Add Offer Type" footer button */
+  hideAddOfferType?: boolean;
+  /** Disables hover/active background on offer type rows */
+  disableRowHover?: boolean;
+  /** Replaces the MoreVert icon button. Pass null to hide it entirely. */
+  menuButton?: React.ReactNode;
 }
 
 const CheckIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
     <path d="M4.5 10L8.5 14L15.5 7" stroke="#6356e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const OutOfStockIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9.04155 4.37467V3.49967C9.04155 2.37209 8.12747 1.45801 6.99988 1.45801C5.8723 1.45801 4.95822 2.37209 4.95822 3.49967V4.37467M5.54155 12.5413H3.00581C2.65082 12.5413 2.37813 12.2269 2.42834 11.8755L3.42834 4.87551C3.46939 4.58813 3.71551 4.37467 4.00581 4.37467H9.99396C10.2843 4.37467 10.5304 4.58813 10.5714 4.87551L10.7499 6.12467M11.7727 12.3558C12.7978 11.3307 12.7978 9.66865 11.7727 8.64352C10.7476 7.61839 9.08552 7.61839 8.06039 8.64352M11.7727 12.3558C10.7476 13.381 9.08552 13.381 8.06039 12.3558C7.03527 11.3307 7.03527 9.66865 8.06039 8.64352M11.7727 12.3558L8.06039 8.64352" stroke="#BE0E1C" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -67,6 +79,9 @@ export const OfferCard = ({
   onAddOfferType,
   onRemoveOfferType,
   onReorderOfferTypes,
+  hideAddOfferType,
+  disableRowHover,
+  menuButton,
 }: OfferCardProps) => {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
@@ -74,6 +89,7 @@ export const OfferCard = ({
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  const isOutOfStock = (offer.inventory ?? offer.inStock) === 0;
   const visibleOfferTypes = offer.offerTypes.filter(ot => !ot.hidden);
   const visibleTypeNames = new Set(visibleOfferTypes.map(ot => ot.type));
   const availableTypes = ALL_OFFER_TYPES.filter(t => !visibleTypeNames.has(t));
@@ -93,8 +109,8 @@ export const OfferCard = ({
   return (
     <div
       style={{
-        background: 'white',
-        border: `1px solid ${selected ? '#473bab' : 'rgba(0,0,0,0.12)'}`,
+        background: isOutOfStock ? '#FDF7F8' : 'white',
+        border: `1px solid ${selected ? '#473bab' : isOutOfStock ? '#D2323F' : 'rgba(0,0,0,0.12)'}`,
         borderRadius: 12,
         overflow: 'hidden',
         boxShadow: selected ? '0 0 0 1px #473bab' : 'none',
@@ -149,6 +165,46 @@ export const OfferCard = ({
 
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0, padding: 12, position: 'relative' }}>
+          {isOutOfStock && (
+            <Tooltip
+              title="Vehicle is out of stock. Remove offer and assets or adjust vehicle inventory."
+              placement="top"
+              arrow
+            >
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: '#FBEFF0', borderRadius: 8,
+                padding: '3px 8px 3px 6px',
+                marginBottom: 6,
+                cursor: 'default',
+              }}>
+                <OutOfStockIcon />
+                <span style={{
+                  fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
+                  color: '#BE0E1C', letterSpacing: '0.4px', lineHeight: '1.66',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Out of Stock
+                </span>
+              </div>
+            </Tooltip>
+          )}
+          {!isOutOfStock && offer.swapMatchType && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center',
+              background: offer.swapMatchType === 'exact_match' ? 'rgba(71,59,171,0.08)' : 'rgba(56,142,60,0.08)',
+              borderRadius: 8, padding: '3px 8px 3px 6px',
+              marginBottom: 6, width: 'fit-content',
+            }}>
+              <span style={{
+                fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                color: offer.swapMatchType === 'exact_match' ? '#473bab' : '#2e7d32',
+                letterSpacing: '0.4px', lineHeight: '1.66', whiteSpace: 'nowrap',
+              }}>
+                {offer.swapMatchType === 'exact_match' ? 'Exact Match (Different VIN)' : 'Different YMMT'}
+              </span>
+            </div>
+          )}
           <div style={{ paddingRight: 28 }}>
             <p style={{
               margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif',
@@ -177,13 +233,15 @@ export const OfferCard = ({
           )}
 
           <div style={{ position: 'absolute', top: 6, right: 6 }}>
-            <IconButton
-              size="small"
-              onClick={(e) => e.stopPropagation()}
-              sx={{ padding: '5px', borderRadius: '100px', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
-            >
-              <MoreVert style={{ fontSize: 20, color: '#1f1d25' }} />
-            </IconButton>
+            {menuButton !== undefined ? menuButton : (
+              <IconButton
+                size="small"
+                onClick={(e) => e.stopPropagation()}
+                sx={{ padding: '5px', borderRadius: '100px', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
+              >
+                <MoreVert style={{ fontSize: 20, color: '#1f1d25' }} />
+              </IconButton>
+            )}
           </div>
         </div>
       </div>
@@ -236,9 +294,11 @@ export const OfferCard = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
-                cursor: 'pointer',
+                cursor: disableRowHover ? 'default' : 'pointer',
                 borderRadius: i === visibleOfferTypes.length - 1 && availableTypes.length === 0 ? '0 0 4px 4px' : 0,
-                background: isDragOver
+                background: disableRowHover
+                  ? 'transparent'
+                  : isDragOver
                   ? 'rgba(99,86,225,0.08)'
                   : isHovered
                   ? '#F5F5F6'
@@ -250,7 +310,7 @@ export const OfferCard = ({
               }}
             >
               {/* Trash icon — top-right on hover */}
-              {isHovered && (
+              {!disableRowHover && isHovered && (
                 <div
                   style={{ position: 'absolute', top: 4, right: 4 }}
                   onClick={(e) => e.stopPropagation()}
@@ -299,7 +359,7 @@ export const OfferCard = ({
                   </div>
                 )}
                 {/* Drag handle — appears right of source tag on hover */}
-                {isHovered && (
+                {!disableRowHover && isHovered && (
                   <div
                     style={{ display: 'flex', alignItems: 'center', cursor: 'grab' }}
                     onClick={(e) => e.stopPropagation()}
@@ -320,15 +380,17 @@ export const OfferCard = ({
         })}
 
         {/* Add Offer Type button */}
-        {availableTypes.length > 0 && (
+        {!hideAddOfferType && availableTypes.length > 0 && (
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', padding: '6px 4px' }}>
             <button
               ref={addBtnRef}
               onClick={handleAddClick}
+              disabled={isOutOfStock}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 2,
                 border: 'none', background: 'transparent',
-                cursor: 'pointer', color: '#473bab',
+                cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                color: isOutOfStock ? 'rgba(0,0,0,0.26)' : '#473bab',
                 fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
                 padding: '2px 4px', borderRadius: 4,
               }}

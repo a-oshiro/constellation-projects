@@ -9,6 +9,7 @@ import {
   CropFreeOutlined, AutoAwesomeOutlined, DeleteOutlined,
 } from '@mui/icons-material';
 import { getTemplateCtas, autoFillDestinationUrls } from '../data/destinationUrlOptions';
+import { isAssetOutOfStock } from '../components/ui/OutOfStockBadge';
 import { GenerateSplitButton } from '../components/ui/GenerateSplitButton';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Tooltip } from '../components/ui/Tooltip';
@@ -126,6 +127,7 @@ export const ReviewPage = () => {
   const selectedHasUpdated = selectedAssets.some((a) => a.status === 'updated');
   const selectedHasNonDraft = selectedAssets.some((a) => a.status !== 'draft' && a.status !== 'removed');
   const hasSelection = selectedIds.size > 0;
+  const selectedHasOutOfStock = selectedAssets.some((a) => isAssetOutOfStock(a.offer));
 
   // Generate Assets button in multi-select toolbar
   const generateButtonEnabled = hasSelection && selectedAssets.every(a => a.status === 'draft');
@@ -177,25 +179,28 @@ export const ReviewPage = () => {
   const selectedHasRemoved = selectedAssets.some((a) => a.status === 'removed');
   const allAssetsApproved = approvalEnabled && assets.length > 0 && nonApprovedAssets.length === 0;
   const changeStatusDisabled =
+    selectedHasOutOfStock ||
     allAssetsApproved ||
     hasPendingChanges ||
     !hasNonDraftAssets ||
     selectedHasDraft ||
     selectedHasUpdated ||
     selectedHasRemoved;
-  const changeStatusTooltip = allAssetsApproved
-    ? 'All assets approved.'
-    : hasPendingChanges
-      ? 'Apply changes before changing asset statuses.'
-      : !hasNonDraftAssets
-        ? 'No assets generated yet. Generate assets to change status.'
-        : selectedHasUpdated
-          ? 'Please apply asset changes below before updating the statuses of these assets.'
-          : selectedHasRemoved
-            ? "Unable to change status of 'Removed' assets."
-            : selectedHasDraft
-              ? "Unable to change status of 'Draft' assets."
-              : '';
+  const changeStatusTooltip = selectedHasOutOfStock
+    ? "Assets from out of stock offers can't have their status changed."
+    : allAssetsApproved
+      ? 'All assets approved.'
+      : hasPendingChanges
+        ? 'Apply changes before changing asset statuses.'
+        : !hasNonDraftAssets
+          ? 'No assets generated yet. Generate assets to change status.'
+          : selectedHasUpdated
+            ? 'Please apply asset changes below before updating the statuses of these assets.'
+            : selectedHasRemoved
+              ? "Unable to change status of 'Removed' assets."
+              : selectedHasDraft
+                ? "Unable to change status of 'Draft' assets."
+                : '';
 
   // Derive the value to display in the Change Status selector
   const selectedNonDraftAssets = selectedAssets.filter((a) => a.status !== 'draft' && a.status !== 'removed');
@@ -353,14 +358,14 @@ export const ReviewPage = () => {
                 {selectedIds.size} selected
               </span>
 
-              {/* Generate Assets — always present; disabled when any selected asset is not Draft */}
+              {/* Generate Assets — always present; disabled when any selected asset is not Draft or is out of stock */}
               <Tooltip
-                title={!generateButtonEnabled ? 'One or more selected assets were already generated.' : ''}
+                title={selectedHasOutOfStock ? "Assets from out of stock offers can't be generated." : !generateButtonEnabled ? 'One or more selected assets were already generated.' : ''}
                 placement="bottom"
               >
                 <span style={{ display: 'inline-flex', flexShrink: 0 }}>
                   <GenerateSplitButton
-                    disabled={!generateButtonEnabled}
+                    disabled={!generateButtonEnabled || selectedHasOutOfStock}
                     onClick={handleSubmitForApproval}
                     onAdvancedGeneration={() => openAdvancedGeneration(selectedAssets)}
                   />

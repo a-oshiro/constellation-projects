@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Checkbox, FormControlLabel, Autocomplete, TextField, Popover } from '@mui/material';
 import { HexColorPicker } from 'react-colorful';
 import { ExpandMore, ExpandLess, WarningAmber, HourglassEmpty, HighlightOff } from '@mui/icons-material';
+import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
 import type { Asset, AssetStatus } from '../../data/types';
@@ -312,6 +313,8 @@ export const AssetHorizontalCard = ({
   const innerWidthPct  = isWide ? 100 : (asset.width / asset.height) * 100;
   const innerHeightPct = !isWide ? 100 : (asset.height / asset.width) * 100;
 
+  const isOutOfStock = isAssetOutOfStock(asset.offer);
+
   const [expirationDate,    setExpirationDate]    = useState(getPrimaryLeaseData(asset.offer).expirationDate ?? '');
   const [destinationUrl,    setDestinationUrl]    = useState(buildDestinationUrl(asset));
   const [disclaimer,        setDisclaimer]        = useState(buildDisclaimer(asset));
@@ -325,7 +328,7 @@ export const AssetHorizontalCard = ({
     <div
       style={{
         background: '#ffffff',
-        border: selected ? '2px solid #473bab' : '1px solid rgba(0,0,0,0.12)',
+        border: selected ? '2px solid #473bab' : isOutOfStock ? '1px solid #D2323F' : '1px solid rgba(0,0,0,0.12)',
         borderRadius: 12,
         width: '100%',
         boxSizing: 'border-box',
@@ -343,6 +346,8 @@ export const AssetHorizontalCard = ({
             background: '#f0f2f4', position: 'relative',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             overflow: 'hidden',
+            outline: isOutOfStock ? '1px solid #D2323F' : undefined,
+            outlineOffset: '-1px',
           }}
         >
           {template && asset.offer ? (
@@ -374,7 +379,7 @@ export const AssetHorizontalCard = ({
 
         {/* Info */}
         <div style={{ flex: 1, minWidth: 0, padding: 12, display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
-          <AssetStatusChip status={asset.status} />
+          {isOutOfStock ? <OutOfStockBadge /> : <AssetStatusChip status={asset.status} />}
           <p style={{ margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {asset.name}
           </p>

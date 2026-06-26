@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, IconButton, TextField } from '@mui/material';
+import { SwapOffersDialog } from '../components/ui/SwapOffersDialog';
 import { MoreVert, Search, AutoAwesome, TravelExplore, History } from '@mui/icons-material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
@@ -19,16 +20,25 @@ function createDefaultOfferType(type: OfferTypeName): OfferTypeData {
   }
 }
 
+const OutOfStockBannerIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <path d="M9.04155 4.37467V3.49967C9.04155 2.37209 8.12747 1.45801 6.99988 1.45801C5.8723 1.45801 4.95822 2.37209 4.95822 3.49967V4.37467M5.54155 12.5413H3.00581C2.65082 12.5413 2.37813 12.2269 2.42834 11.8755L3.42834 4.87551C3.46939 4.58813 3.71551 4.37467 4.00581 4.37467H9.99396C10.2843 4.37467 10.5304 4.58813 10.5714 4.87551L10.7499 6.12467M11.7727 12.3558C12.7978 11.3307 12.7978 9.66865 11.7727 8.64352C10.7476 7.61839 9.08552 7.61839 8.06039 8.64352M11.7727 12.3558C10.7476 13.381 9.08552 13.381 8.06039 12.3558C7.03527 11.3307 7.03527 9.66865 8.06039 8.64352M11.7727 12.3558L8.06039 8.64352" stroke="#D2323F" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 export const OffersPage = () => {
   const { offers, updateOffer } = useProject();
   const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
 
   useEffect(() => () => closeOffersPanel(), []);
 
   const filteredOffers = offers.filter((o) =>
-    o.vehicleName.toLowerCase().includes(search.toLowerCase())
+    !o.swapOnly && o.vehicleName.toLowerCase().includes(search.toLowerCase())
   );
+
+  const hasOutOfStockOffers = filteredOffers.some(o => (o.inventory ?? o.inStock) === 0);
 
   const handleAddOfferType = (offerId: string, type: OfferTypeName) => {
     const offer = offers.find((o) => o.id === offerId);
@@ -149,12 +159,45 @@ export const OffersPage = () => {
               <Button variant="text" size="small" sx={{ textTransform: 'none', fontSize: 13, color: '#473bab' }}>
                 Select All
               </Button>
-              <span style={{ fontSize: 13, color: '#757575' }}>{offers.length} offers</span>
+              <span style={{ fontSize: 13, color: '#757575' }}>{filteredOffers.length} offers</span>
               <IconButton size="small">
                 <MoreVert style={{ fontSize: 18 }} />
               </IconButton>
             </div>
           </div>
+
+          {/* Out of stock banner */}
+          {hasOutOfStockOffers && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(210, 50, 63, 0.08)',
+              borderRadius: 8,
+              padding: '10px 16px',
+              marginBottom: 12,
+              gap: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <OutOfStockBannerIcon />
+                <span style={{
+                  fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
+                  color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43,
+                }}>
+                  You have below an offer out of stock. Remove offer and assets or adjust vehicle inventory.
+                </span>
+              </div>
+              <button
+                onClick={() => setSwapDialogOpen(true)}
+                style={{
+                  border: 'none', background: 'transparent',
+                  color: '#5F2120', fontFamily: 'Roboto, sans-serif',
+                  fontWeight: 500, fontSize: 13, letterSpacing: '0.46px',
+                  cursor: 'pointer', whiteSpace: 'nowrap', padding: '4px 5px',
+                }}
+              >
+                Swap Offers
+              </button>
+            </div>
+          )}
 
           {/* Offer cards grid */}
           <div className="grid grid-cols-[repeat(auto-fit,_minmax(260px,_1fr))] gap-3">
@@ -184,6 +227,11 @@ export const OffersPage = () => {
 
         <TaskFooter currentTask="offers" />
       </div>
+
+      <SwapOffersDialog
+        open={swapDialogOpen}
+        onClose={() => setSwapDialogOpen(false)}
+      />
     </div>
   );
 };

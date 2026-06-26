@@ -3,6 +3,7 @@ import { Checkbox, IconButton } from '@mui/material';
 import { MoreVert, FolderOutlined, Language, AutoAwesome, Edit } from '@mui/icons-material';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { StatusBadge } from './StatusBadge';
+import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import type { Asset, AssetStatus, Template } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { getTemplateCtas } from '../../data/destinationUrlOptions';
@@ -52,6 +53,8 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit, onOp
   const [hover, setHover] = useState(false);
   const active = hover || isEditing;
   const { assets, template, name, platform, adType, folder } = shell;
+
+  const isOutOfStock = assets.some((a) => isAssetOutOfStock(a.offer));
 
   const { destinationUrls } = useProject();
   const hasMissingUrls = assets.some((asset) => {
@@ -192,8 +195,9 @@ export const AdShellCard = ({ shell, selected, isEditing, onSelect, onEdit, onOp
         })()}
 
         {/* Auto Generated badge — top right */}
-        {/* Top-right badge stack: Auto Generated + optional status badge + optional missing URLs chip */}
+        {/* Top-right badge stack: Out of Stock (if any) + Auto Generated + optional status badge + optional missing URLs chip */}
         <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          {isOutOfStock && <OutOfStockBadge />}
           <div
             style={{
               display: 'flex',
