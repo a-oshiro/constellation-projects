@@ -15,6 +15,7 @@ import { ReviewPage } from './pages/ReviewPage';
 import { ApprovedPage } from './pages/ApprovedPage';
 import { AdsPage } from './pages/AdsPage';
 import { CampaignsPage } from './pages/CampaignsPage';
+import { ClientSettingsPage } from './pages/ClientSettingsPage';
 
 const theme = createTheme({
   typography: {
@@ -65,6 +66,8 @@ function App() {
                   <Route path="/approved" element={<ApprovedPage />} />
                   <Route path="/ads" element={<AdsPage />} />
                   <Route path="/campaigns" element={<CampaignsPage />} />
+                  <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
+                  <Route path="/settings/:tabId" element={<ClientSettingsPage />} />
                 </Routes>
               </MainLayout>
               <ProgressIndicator />

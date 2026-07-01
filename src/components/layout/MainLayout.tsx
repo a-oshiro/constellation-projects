@@ -153,7 +153,8 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname]);
 
-  const showLeftPanel = tasksPanelOpen || filterPanelOpen;
+  const isSettingsRoute = location.pathname.startsWith('/settings');
+  const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen);
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -178,16 +179,16 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}
             </div>
-            <PreviewPanel />
+            {!isSettingsRoute && <PreviewPanel />}
           </div>
-          {offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
+          {!isSettingsRoute && offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
             <VehicleInfo
               offer={offersPanelOffer}
               onClose={closeOffersPanel}
               onSave={handleOffersSave}
             />
           )}
-          {offersPanelOffer && offersPanel?.type === 'write-pane' && offersPanelOfferType && (
+          {!isSettingsRoute && offersPanelOffer && offersPanel?.type === 'write-pane' && offersPanelOfferType && (
             <OfferDetails
               offer={offersPanelOffer}
               offerType={offersPanelOfferType}
@@ -195,8 +196,8 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
               onSave={handleOffersSave}
             />
           )}
-          {hasRightPanel && <ResizeHandle onDrag={handleRightDrag} />}
-          {editingShell && (
+          {!isSettingsRoute && hasRightPanel && <ResizeHandle onDrag={handleRightDrag} />}
+          {!isSettingsRoute && editingShell && (
             <AdShellPanel
               key={editingShell.id}
               shell={editingShell}
@@ -204,7 +205,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
               width={rightWidth}
             />
           )}
-          {advancedGenerationOpen && (
+          {!isSettingsRoute && advancedGenerationOpen && (
             <AdvancedGenerationPanel
               selectedAssets={advancedGenerationAssets}
               onClose={closeAdvancedGeneration}

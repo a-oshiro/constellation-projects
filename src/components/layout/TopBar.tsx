@@ -1,4 +1,7 @@
-import { TextField } from '@mui/material';
+import { forwardRef, useState } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { TextField, Menu, MenuItem } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import constellationLockup from '../../assets/constellation-lockup.svg';
 import { CURRENT_USER } from '../../data/mockData';
@@ -33,10 +36,15 @@ const SettingsIcon = () => (
   </svg>
 );
 
-function IconBtn({ children, title }: { children: React.ReactNode; title: string }) {
+const IconBtn = forwardRef<
+  HTMLButtonElement,
+  { children: ReactNode; title: string; onClick?: (e: MouseEvent<HTMLButtonElement>) => void }
+>(({ children, title, onClick }, ref) => {
   return (
     <button
+      ref={ref}
       title={title}
+      onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 30, height: 30,
@@ -50,9 +58,24 @@ function IconBtn({ children, title }: { children: React.ReactNode; title: string
       {children}
     </button>
   );
-}
+});
+IconBtn.displayName = 'IconBtn';
 
 export const TopBar = () => {
+  const navigate = useNavigate();
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+
+  const closeSettingsMenu = () => setSettingsAnchor(null);
+
+  const handleClientSettings = () => {
+    closeSettingsMenu();
+    navigate('/settings/accounts');
+  };
+
+  const handleAccountSettings = () => {
+    closeSettingsMenu();
+  };
+
   return (
     <div
       style={{
@@ -122,7 +145,24 @@ export const TopBar = () => {
         <IconBtn title="AI Agent"><AIAgentIcon /></IconBtn>
         <IconBtn title="Messages"><MessagesIcon /></IconBtn>
         <IconBtn title="Notifications"><NotificationIcon /></IconBtn>
-        <IconBtn title="Settings"><SettingsIcon /></IconBtn>
+        <IconBtn title="Settings" onClick={(e) => setSettingsAnchor(e.currentTarget)}>
+          <SettingsIcon />
+        </IconBtn>
+        <Menu
+          anchorEl={settingsAnchor}
+          open={!!settingsAnchor}
+          onClose={closeSettingsMenu}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{ paper: { style: { minWidth: 180, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', borderRadius: 8 } } }}
+        >
+          <MenuItem onClick={handleClientSettings} sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+            Client Settings
+          </MenuItem>
+          <MenuItem onClick={handleAccountSettings} sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+            Account Settings
+          </MenuItem>
+        </Menu>
 
         <img
           src={CURRENT_USER.avatarUrl}
