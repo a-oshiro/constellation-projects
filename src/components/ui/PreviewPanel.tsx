@@ -6,6 +6,7 @@ import { IconButton } from '@mui/material';
 import { KeyboardArrowDown, OpenInNew } from '@mui/icons-material';
 import { GenerateSplitButton } from './GenerateSplitButton';
 import { StatusBadge } from './StatusBadge';
+import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { useProject } from '../../context/ProjectContext';
 import { useProgressIndicator } from '../../context/ProgressIndicatorContext';
@@ -256,6 +257,7 @@ export const PreviewPanel = () => {
                 const isWide = asset.width > asset.height;
                 const innerWidthPct = isWide ? 100 : (asset.width / asset.height) * 100;
                 const innerHeightPct = !isWide ? 100 : (asset.height / asset.width) * 100;
+                const isOutOfStock = isAssetOutOfStock(asset.offer);
 
                 return (
                   <div
@@ -267,7 +269,7 @@ export const PreviewPanel = () => {
                       width: 240,
                       height: 240,
                       background: '#ffffff',
-                      border: '1px solid #e7e7e9',
+                      border: isOutOfStock ? '1px solid #D2323F' : '1px solid #e7e7e9',
                       borderRadius: 8,
                       overflow: 'hidden',
                       display: 'flex',
@@ -295,8 +297,11 @@ export const PreviewPanel = () => {
                         />
                       </div>
                     )}
+                    {isOutOfStock && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(210, 50, 63, 0.04)', pointerEvents: 'none' }} />
+                    )}
                     <div style={{ position: 'absolute', top: 8, right: 8 }}>
-                      <StatusBadge status={asset.status} />
+                      {isOutOfStock ? <OutOfStockBadge /> : <StatusBadge status={asset.status} />}
                     </div>
                   </div>
                 );

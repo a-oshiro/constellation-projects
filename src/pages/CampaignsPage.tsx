@@ -5,6 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { FilledTemplatePreview } from '../components/ui/FilledTemplatePreview';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { OutOfStockBadge, isAssetOutOfStock } from '../components/ui/OutOfStockBadge';
 import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 import type { AdShell } from '../components/ui/AdShellCard';
 import type { AssetStatus } from '../data/types';
@@ -245,6 +246,9 @@ export const CampaignsPage = () => {
     if (statuses.some((s) => s === 'updated' || s === 'removed')) return 'updated';
     return null;
   };
+
+  const shellIsOutOfStock = (shell: AdShell): boolean =>
+    shell.assets.some((a) => isAssetOutOfStock(a.offer));
 
   const shellHasMissingUrls = (shell: AdShell): boolean =>
     shell.assets.some((asset) => {
@@ -508,6 +512,7 @@ export const CampaignsPage = () => {
 
                   {/* Status */}
                   <div style={{ width: COL_STATUS, paddingLeft: 16, paddingRight: 12, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+                    {shellIsOutOfStock(shell) && <OutOfStockBadge />}
                     {campaignLoaded
                       ? (status ? <StatusBadge status={status} /> : <ActiveBadge />)
                       : (status && <StatusBadge status={status} />)

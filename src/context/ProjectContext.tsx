@@ -25,6 +25,7 @@ interface ProjectContextValue {
   removedOfferIds: Set<string>;
   updateOffer: (id: string, updated: Partial<Offer>) => void;
   removeOffer: (id: string) => void;
+  swapOffer: (oldOfferId: string, newOfferId: string) => void;
   removeTemplate: (id: string) => void;
   removeBackground: (id: string) => void;
   assets: Asset[];
@@ -146,8 +147,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  // All items (including pending removals) so computeAssets can still generate ghost assets
-  const rawAssets = useMemo(() => computeAssets(offers, templates, backgrounds), [offers, templates, backgrounds]);
+  // All items (including pending removals) so computeAssets can still generate ghost assets.
+  // Swap-only offers are excluded — they have no assets until they replace an out-of-stock offer.
+  const rawAssets = useMemo(() => computeAssets(offers.filter(o => !o.swapOnly), templates, backgrounds), [offers, templates, backgrounds]);
 
   // Refs so callbacks can always read the latest values without stale closures
   const rawAssetsRef = useRef(rawAssets);
@@ -236,6 +238,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     markItemRemoved('offer', id, item, (a) => a.offerId === id);
     setRemovedOfferIds((prev) => new Set([...prev, id]));
   }, [offers, markItemRemoved]);
+
+  const swapOffer = useCallback((oldOfferId: string, newOfferId: string) => {
+    setOffers((prev) => {
+      const newOffer = prev.find((o) => o.id === newOfferId);
+      if (!newOffer) return prev;
+      return prev
+        .map((o) => o.id === oldOfferId
+          ? { ...newOffer, id: oldOfferId, swapOnly: false, replacesOfferId: undefined, swapMatchType: undefined }
+          : o
+        )
+        .filter((o) => o.id !== newOfferId);
+    });
+  }, []);
 
   const removeTemplate = useCallback((id: string) => {
     const item = templates.find((t) => t.id === id);
@@ -400,7 +415,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     <ProjectContext.Provider value={{
       backgrounds, templates, offers,
       removedBgIds, removedTemplateIds, removedOfferIds,
-      updateOffer, removeOffer, removeTemplate, removeBackground,
+      updateOffer, removeOffer, swapOffer, removeTemplate, removeBackground,
       assets, setAssetStatus, bulkSetAssetStatus, everApprovedIds,
       pendingChanges, pendingRemovals,
       applyChanges, revertChanges, revertRemovals,

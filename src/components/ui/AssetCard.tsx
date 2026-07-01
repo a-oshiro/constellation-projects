@@ -6,6 +6,7 @@ import {
   InsertLinkOutlined, FolderOpenOutlined, RefreshOutlined, DeleteOutlined,
 } from '@mui/icons-material';
 import { NeedsEditsIcon } from './NeedsEditsIcon';
+import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import type { Asset, AssetStatus } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
@@ -113,6 +114,7 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
 
   const isDraft = asset.status === 'draft';
   const isUpdated = asset.status === 'updated';
+  const isOutOfStock = isAssetOutOfStock(asset.offer);
 
   // Missing Destination URL badge — only for HTML template assets
   const isHtml = asset.imageType === 'HTML';
@@ -144,7 +146,9 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
           position: 'relative',
           aspectRatio: '1 / 1',
           background: '#f0f2f4',
-          border: isDraft && draftVariant === 'labeled'
+          border: isOutOfStock
+            ? '1px solid #D2323F'
+            : isDraft && draftVariant === 'labeled'
             ? '3px dashed #80C3E8'
             : `${(selected || hover) ? 2 : 1}px solid ${(selected || hover) ? '#473bab' : '#e7e7e9'}`,
           borderRadius: (isDraft && draftVariant === 'badge') || isUpdated ? '8px 8px 0 0' : 8,
@@ -180,6 +184,11 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
             />
           )}
         </div>
+
+        {/* Out of Stock red overlay */}
+        {isOutOfStock && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(210, 50, 63, 0.04)', pointerEvents: 'none', zIndex: 2 }} />
+        )}
 
         {/* Selection tint overlay */}
         {selected && (
@@ -279,32 +288,34 @@ export const AssetCard = ({ asset, selected, disabled, draftVariant = 'default',
         }}
       >
         {/* Status badge */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '3px 8px 3px 6px',
-            borderRadius: 8,
-            background: status.bg,
-            backdropFilter: 'blur(2px)',
-          }}
-        >
-          <StatusIcon style={{ fontSize: 14, color: status.iconColor }} />
-          <span
+        {isOutOfStock ? <OutOfStockBadge /> : (
+          <div
             style={{
-              fontSize: 11,
-              fontFamily: 'Roboto, sans-serif',
-              fontWeight: 500,
-              color: status.textColor,
-              letterSpacing: '0.4px',
-              lineHeight: 1.66,
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '3px 8px 3px 6px',
+              borderRadius: 8,
+              background: status.bg,
+              backdropFilter: 'blur(2px)',
             }}
           >
-            {status.label}
-          </span>
-        </div>
+            <StatusIcon style={{ fontSize: 14, color: status.iconColor }} />
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: 'Roboto, sans-serif',
+                fontWeight: 500,
+                color: status.textColor,
+                letterSpacing: '0.4px',
+                lineHeight: 1.66,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {status.label}
+            </span>
+          </div>
+        )}
         
         {/* Missing Destination URL badge */}
         {hasMissingUrls && (

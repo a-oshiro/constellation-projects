@@ -120,6 +120,9 @@ export interface Offer {
   inventory?: number;
   imageUrl: string;
   status?: AssetStatus;
+  swapOnly?: boolean;
+  replacesOfferId?: string;
+  swapMatchType?: 'exact_match' | 'different_ymmt';
   // Vehicle info fields
   exteriorColor?: string;
   drivetrain?: string;
