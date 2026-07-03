@@ -58,11 +58,50 @@ export const STRATEGY_CATALOG: string[] = [
   'Closest Distance',
 ];
 
-export const FALLBACK_STEP = {
-  title: 'Fallback: Pause Offer and Notify Admin',
-  description: "Ads containing the 'Out of Stock' offer will be paused and all selected admins will be notified.",
-  admins: ['John Doe', 'Michael Stuart', 'Olivia Douglas'],
-};
+export interface FallbackStepConfig {
+  pauseAds: boolean;
+  notifyAdmins: boolean;
+  /** Each entry formatted as "First Last (email@company.com)" */
+  admins: string[];
+}
+
+export const ADMIN_OPTIONS: string[] = [
+  'John Doe (john.doe@company.com)',
+  'Michael Stuart (m.stuart@company.com)',
+  'Olivia Douglas (olivia.d@company.com)',
+  'Sarah Chen (sarah.chen@company.com)',
+  'David Kim (david.kim@company.com)',
+  'Priya Patel (priya.patel@company.com)',
+];
+
+export function createDefaultFallbackStep(): FallbackStepConfig {
+  return {
+    pauseAds: true,
+    notifyAdmins: true,
+    admins: ADMIN_OPTIONS.slice(0, 3),
+  };
+}
+
+export function getFallbackTitle({ pauseAds, notifyAdmins }: FallbackStepConfig): string {
+  if (pauseAds && notifyAdmins) return 'Fallback: Pause Offer and Notify Admin';
+  if (pauseAds) return 'Fallback: Pause Offer';
+  if (notifyAdmins) return 'Fallback: Notify Admin';
+  return 'Fallback: No Action';
+}
+
+export function getFallbackDescription({ pauseAds, notifyAdmins }: FallbackStepConfig): string {
+  const parts: string[] = [];
+  if (pauseAds) parts.push("ads containing the 'Out of Stock' offer will be paused");
+  if (notifyAdmins) parts.push('all selected admins will be notified');
+  if (parts.length === 0) return 'No action will be taken.';
+  const text = parts.join(' and ');
+  return text.charAt(0).toUpperCase() + text.slice(1) + '.';
+}
+
+/** Pulls the email out of an "First Last (email@company.com)" admin entry. */
+export function extractAdminEmail(admin: string): string {
+  return admin.match(/\(([^)]+)\)/)?.[1] ?? admin;
+}
 
 let stepIdCounter = 0;
 export function createDefaultStep(): WorkflowStepConfig {

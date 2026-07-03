@@ -1,14 +1,20 @@
 import { Fragment, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
-  Dialog, IconButton, FormControl, InputLabel, Select, MenuItem, Menu, TextField,
+  Dialog, IconButton, FormControl, InputLabel, Select, MenuItem, Menu, TextField, Switch, Divider, Autocomplete,
 } from '@mui/material';
 import { Add, Close, DragIndicator, DeleteOutlineOutlined } from '@mui/icons-material';
 import { AppTextField } from '../ui/AppTextField';
 import {
-  REPLACEMENT_METHODS, FILTER_CATALOG, STRATEGY_CATALOG, FALLBACK_STEP, createDefaultStep,
+  REPLACEMENT_METHODS, FILTER_CATALOG, STRATEGY_CATALOG, ADMIN_OPTIONS,
+  createDefaultStep, createDefaultFallbackStep, getFallbackTitle, getFallbackDescription, extractAdminEmail,
 } from './workflowTypes';
-import type { WorkflowStepConfig, WorkflowFilter } from './workflowTypes';
+import type { WorkflowStepConfig, WorkflowFilter, FallbackStepConfig } from './workflowTypes';
+
+const switchSx = {
+  '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' },
+  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#473bab' },
+};
 
 interface ManageWorkflowDialogProps {
   workflowName: string;
@@ -151,11 +157,22 @@ function StepConnector({ interactive, onAddStep }: { interactive: boolean; onAdd
   );
 }
 
-// ── Fallback card (static, always last) ────────────────────────────────────────
+// ── Fallback card (always last, editable) ───────────────────────────────────────
 
-function FallbackCard() {
+function FallbackCard({ fallback, selected, onSelect }: {
+  fallback: FallbackStepConfig;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   return (
-    <div style={{ border: '1px solid #dddce0', borderRadius: 12, padding: 16, display: 'flex', gap: 12, background: '#ffffff' }}>
+    <div
+      onClick={onSelect}
+      style={{
+        border: selected ? '1.5px solid #473bab' : '1px solid #dddce0',
+        boxShadow: selected ? '0 0 0 1px #473bab' : 'none',
+        borderRadius: 12, padding: 16, display: 'flex', gap: 12, background: '#ffffff', cursor: 'pointer',
+      }}
+    >
       <div style={{
         width: 32, height: 32, borderRadius: '50%', background: '#d2323f', color: '#ffffff',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 13, flexShrink: 0,
@@ -164,13 +181,17 @@ function FallbackCard() {
       </div>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', marginBottom: 4 }}>
-          {FALLBACK_STEP.title}
+          {getFallbackTitle(fallback)}
         </div>
         <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', marginBottom: 10 }}>
-          {FALLBACK_STEP.description}
+          {getFallbackDescription(fallback)}
         </div>
-        <div style={labelStyle}>Admins</div>
-        <div style={valueStyle}>{FALLBACK_STEP.admins.join(', ')}</div>
+        {fallback.notifyAdmins && fallback.admins.length > 0 && (
+          <>
+            <div style={labelStyle}>Admins</div>
+            <div style={valueStyle}>{fallback.admins.map(extractAdminEmail).join(', ')}</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -300,6 +321,8 @@ function SearchMenu({ anchorEl, onClose, search, onSearchChange, options, onPick
 export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSave }: ManageWorkflowDialogProps) => {
   const [steps, setSteps] = useState<WorkflowStepConfig[]>(initialSteps);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [fallbackSelected, setFallbackSelected] = useState(false);
+  const [fallback, setFallback] = useState<FallbackStepConfig>(createDefaultFallbackStep());
 
   const [dragStepIndex, setDragStepIndex] = useState<number | null>(null);
   const [dragOverStepIndex, setDragOverStepIndex] = useState<number | null>(null);
@@ -326,6 +349,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       return next;
     });
     setSelectedStepId(newStep.id);
+    setFallbackSelected(false);
   };
 
   const removeStep = (id: string) => {
@@ -450,7 +474,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                     selected={selectedStepId === step.id}
                     dragging={dragStepIndex === i}
                     dragOver={dragOverStepIndex === i && dragStepIndex !== i}
-                    onSelect={() => setSelectedStepId(step.id)}
+                    onSelect={() => { setSelectedStepId(step.id); setFallbackSelected(false); }}
                     onRemove={() => removeStep(step.id)}
                     {...stepDragHandlers(i)}
                   />
@@ -458,7 +482,11 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                 </Fragment>
               ))
             )}
-            <FallbackCard />
+            <FallbackCard
+              fallback={fallback}
+              selected={fallbackSelected}
+              onSelect={() => { setFallbackSelected(true); setSelectedStepId(null); }}
+            />
           </div>
         </div>
 
@@ -597,6 +625,77 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                   }}
                 />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Fallback Step panel */}
+        {fallbackSelected && (
+          <div style={{
+            width: 400, flexShrink: 0, borderLeft: '1px solid #f0f0f0',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
+                Edit Fallback Step
+              </span>
+              <IconButton size="small" onClick={() => setFallbackSelected(false)}>
+                <Close style={{ fontSize: 18, color: '#686576' }} />
+              </IconButton>
+            </div>
+
+            <div className="flex-1 overflow-y-auto" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+                  Pause Ads
+                </span>
+                <Switch
+                  checked={fallback.pauseAds}
+                  onChange={(e) => setFallback((f) => ({ ...f, pauseAds: e.target.checked }))}
+                  sx={switchSx}
+                />
+              </div>
+
+              <Divider />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+                  Notify Admins
+                </span>
+                <Switch
+                  checked={fallback.notifyAdmins}
+                  onChange={(e) => setFallback((f) => ({ ...f, notifyAdmins: e.target.checked }))}
+                  sx={switchSx}
+                />
+              </div>
+
+              {fallback.notifyAdmins && (
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={ADMIN_OPTIONS}
+                  value={fallback.admins}
+                  onChange={(_, newValue) => setFallback((f) => ({ ...f, admins: newValue }))}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Admins"
+                      sx={{
+                        '& .MuiInputLabel-root': { fontSize: 13 },
+                        '& .MuiOutlinedInput-input': { fontSize: 12 },
+                        '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
+                        '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                      }}
+                    />
+                  )}
+                  sx={{
+                    '& .MuiChip-root': { fontSize: 11, fontFamily: 'Roboto, sans-serif' },
+                  }}
+                />
+              )}
             </div>
           </div>
         )}

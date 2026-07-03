@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogActions, Button, Checkbox, IconButton, Radio, Collapse } from '@mui/material';
-import { Close, Refresh, East, CloseRounded } from '@mui/icons-material';
+import { Close, Sync, East, CloseRounded } from '@mui/icons-material';
 import { useProject } from '../../context/ProjectContext';
 import { isAssetOutOfStock } from './OutOfStockBadge';
 import { OfferCard } from './OfferCard';
@@ -86,7 +86,7 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
           width: 1000,
           maxWidth: 1000,
           height: 'fit-content',
-          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 768,
           borderRadius: 6,
           display: 'flex',
           flexDirection: 'column',
@@ -188,20 +188,6 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
 
             const isRefreshOpen = openRefreshId === pair.outOfStock.id;
 
-            const refreshButton = (
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRefreshId(prev => prev === pair.outOfStock.id ? null : pair.outOfStock.id);
-                }}
-                style={{ background: '#473bab', borderRadius: '100px', padding: 5, width: 30, height: 30 }}
-                sx={{ '&:hover': { background: '#3730a3' } }}
-              >
-                <Refresh style={{ fontSize: 18, color: '#ffffff' }} />
-              </IconButton>
-            );
-
             return (
               <div
                 key={pair.outOfStock.id}
@@ -210,7 +196,7 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                 {/* Cards row */}
                 <div style={{
                   display: 'flex', alignItems: 'flex-start', gap: 12,
-                  padding: '16px 12px',
+                  padding: '16px 12px 8px',
                 }}>
                   {/* Row checkbox */}
                   <Checkbox
@@ -245,12 +231,30 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                       offer={displayReplacement}
                       hideAddOfferType
                       disableRowHover
-                      menuButton={refreshButton}
+                      menuButton={null}
                     />
                   </div>
                 </div>
 
-                {/* Change Recommended Offer panel */}
+                {/* Change Offer button — hidden while the "Choose Different Offer" panel is open */}
+                {!isRefreshOpen && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 12px 16px' }}>
+                    <button
+                      onClick={() => setOpenRefreshId(pair.outOfStock.id)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                        color: '#473bab', letterSpacing: '0.46px', padding: '4px 6px',
+                      }}
+                    >
+                      <Sync style={{ fontSize: 18 }} />
+                      Change Offer
+                    </button>
+                  </div>
+                )}
+
+                {/* Choose Different Offer panel */}
                 <Collapse in={isRefreshOpen} timeout={220}>
                   <div style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, margin: `0px 12px 16px 52px`}}>
                     {/* Panel title */}
@@ -263,7 +267,7 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                         fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
                         color: '#1f1d25', letterSpacing: '0.17px',
                       }}>
-                        Change Recommended Offer
+                        Choose Different Offer
                       </span>
                       <IconButton
                         size="small"
@@ -285,11 +289,17 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                         fontWeight: 500, color: 'rgba(0,0,0,0.6)', letterSpacing: '0.17px',
                         paddingLeft: 32,
                       }}>
-                        Vehicle
+                        Offer
                       </div>
-                      {(['Aging', 'Sales', 'Inventory'] as const).map(col => (
+                      <div style={{
+                        width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif',
+                        fontWeight: 500, color: 'rgba(0,0,0,0.6)', letterSpacing: '0.17px',
+                      }}>
+                        Offer Type
+                      </div>
+                      {(['PVI', 'Aging', 'Sales', 'Inventory'] as const).map(col => (
                         <div key={col} style={{
-                          width: 100, fontSize: 12, fontFamily: 'Roboto, sans-serif',
+                          width: 80, fontSize: 12, fontFamily: 'Roboto, sans-serif',
                           fontWeight: 500, color: 'rgba(0,0,0,0.6)', letterSpacing: '0.17px',
                         }}>
                           {col}
@@ -300,6 +310,7 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                     {/* Table rows */}
                     {tableOptions.map((opt) => {
                       const isRowSelected = opt.id === selectedReplacementId;
+                      const offerTypeLabel = opt.offerTypes.find(ot => !ot.hidden && (ot.type === 'Lease' || ot.type === 'Finance'))?.type ?? '—';
                       return (
                         <div
                           key={opt.id}
@@ -334,13 +345,22 @@ export function SwapOffersDialog({ open, onClose }: SwapOffersDialogProps) {
                               {opt.vehicleName}
                             </span>
                           </div>
-                          <div style={{ width: 100, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
+                          <div style={{
+                            width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8,
+                          }}>
+                            {offerTypeLabel}
+                          </div>
+                          <div style={{ width: 80, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
+                            {opt.pvi ?? '—'}
+                          </div>
+                          <div style={{ width: 80, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
                             {opt.aging ?? '—'}
                           </div>
-                          <div style={{ width: 100, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
+                          <div style={{ width: 80, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
                             {opt.sales ?? '—'}
                           </div>
-                          <div style={{ width: 100, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
+                          <div style={{ width: 80, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25' }}>
                             {opt.inventory ?? '—'}
                           </div>
                         </div>
