@@ -6,6 +6,8 @@ import {
 import { Add, Close, CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { AppTextField } from '../ui/AppTextField';
+import { ManageWorkflowDialog } from './ManageWorkflowDialog';
+import type { WorkflowStepConfig } from './workflowTypes';
 
 const GitForkIcon = () => (
   <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -20,7 +22,7 @@ type WorkflowStatus = 'active' | 'inactive';
 interface OfferReplacementWorkflow {
   id: string;
   name: string;
-  steps: number;
+  steps: WorkflowStepConfig[];
   accountIds: string[];
   status: WorkflowStatus;
 }
@@ -88,34 +90,110 @@ const accountById = (id: string) => ACCOUNTS.find((a) => a.id === id);
 
 // ── Mock workflows — the three examples from the Figma reference ───────────────
 
+const STANDARD_WORKFLOW_STEPS: WorkflowStepConfig[] = [
+  {
+    id: 'wf-1-step-1',
+    name: 'Same YMMT',
+    replacementMethod: 'same-ymmt',
+    filters: [
+      { id: 'wf-1-step-1-f1', filterKey: 'offer-type', label: 'Offer Type', value: 'Same Offer Type' },
+      { id: 'wf-1-step-1-f2', filterKey: 'total-price-tolerance', label: 'Total Price Tolerance', value: '+- $1,000' },
+    ],
+    strategy: ['Highest PVI', 'Largest Inventory', 'Days in lot', 'Total Price'],
+  },
+  {
+    id: 'wf-1-step-2',
+    name: 'Same Price Point',
+    replacementMethod: 'different-ymmt',
+    filters: [
+      { id: 'wf-1-step-2-f1', filterKey: 'offer-type', label: 'Offer Type', value: 'Same Offer Type' },
+      { id: 'wf-1-step-2-f2', filterKey: 'total-price-tolerance', label: 'Total Price Tolerance', value: '+- $1,000' },
+    ],
+    strategy: ['Closest Total Price', 'Highest PVI', 'Largest Inventory', 'Days in lot'],
+  },
+  {
+    id: 'wf-1-step-3',
+    name: 'Same Monthly Payment',
+    replacementMethod: 'different-ymmt',
+    filters: [
+      { id: 'wf-1-step-3-f1', filterKey: 'offer-type', label: 'Offer Type', value: 'Same Offer Type' },
+      { id: 'wf-1-step-3-f2', filterKey: 'monthly-payment-tolerance', label: 'Monthly Payment Tolerance', value: '+- $100' },
+    ],
+    strategy: ['Closest Monthly Payment', 'Highest PVI', 'Largest Inventory', 'Days in lot'],
+  },
+];
+
+const HIGH_END_BRANDS_STEPS: WorkflowStepConfig[] = [
+  {
+    id: 'wf-2-step-1',
+    name: 'Same Trim Match',
+    replacementMethod: 'same-ymmt',
+    filters: [
+      { id: 'wf-2-step-1-f1', filterKey: 'trim-level', label: 'Trim Level', value: 'Same Trim' },
+    ],
+    strategy: ['Highest PVI', 'Total Price'],
+  },
+  {
+    id: 'wf-2-step-2',
+    name: 'Nearby Inventory Match',
+    replacementMethod: 'different-ymmt',
+    filters: [
+      { id: 'wf-2-step-2-f1', filterKey: 'mileage', label: 'Mileage', value: '+/- 10,000 mi' },
+    ],
+    strategy: ['Largest Inventory', 'Days in lot'],
+  },
+];
+
+const SPECIALS_EVENTS_STEPS: WorkflowStepConfig[] = [
+  {
+    id: 'wf-3-step-1',
+    name: 'Same Offer Window',
+    replacementMethod: 'same-ymmt',
+    filters: [
+      { id: 'wf-3-step-1-f1', filterKey: 'year', label: 'Year', value: 'Same Year' },
+    ],
+    strategy: ['Highest PVI'],
+  },
+  {
+    id: 'wf-3-step-2',
+    name: 'Flexible Match',
+    replacementMethod: 'different-ymmt',
+    filters: [
+      { id: 'wf-3-step-2-f1', filterKey: 'offer-type', label: 'Offer Type', value: 'Different Offer Type' },
+    ],
+    strategy: ['Total Price', 'Days in lot'],
+  },
+];
+
 const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
   {
     id: 'wf-1',
     name: 'Standard Workflow',
-    steps: 3,
+    steps: STANDARD_WORKFLOW_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(0, 42),
     status: 'active',
   },
   {
     id: 'wf-2',
     name: 'High end brands',
-    steps: 2,
+    steps: HIGH_END_BRANDS_STEPS,
     accountIds: BMW_ACCOUNT_IDS.slice(0, 12),
     status: 'active',
   },
   {
     id: 'wf-3',
     name: 'Specials events',
-    steps: 2,
+    steps: SPECIALS_EVENTS_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(3, 45),
     status: 'active',
   },
 ];
 
-const emptyDraft = (): Omit<OfferReplacementWorkflow, 'id' | 'steps'> => ({
+const emptyDraft = (): Omit<OfferReplacementWorkflow, 'id'> => ({
   name: '',
   accountIds: [],
   status: 'active',
+  steps: [],
 });
 
 // ── Small building blocks ────────────────────────────────────────────────────
@@ -180,7 +258,12 @@ export const OfferReplacementWorkflowTab = () => {
   const [workflows, setWorkflows] = useState<OfferReplacementWorkflow[]>(INITIAL_WORKFLOWS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [draft, setDraft] = useState<Omit<OfferReplacementWorkflow, 'id' | 'steps'>>(emptyDraft());
+  const [draft, setDraft] = useState<Omit<OfferReplacementWorkflow, 'id'>>(emptyDraft());
+  const [manageDialog, setManageDialog] = useState<{
+    workflowName: string;
+    steps: WorkflowStepConfig[];
+    onSave: (steps: WorkflowStepConfig[]) => void;
+  } | null>(null);
 
   const selectedWorkflow = selectedId ? workflows.find((w) => w.id === selectedId) ?? null : null;
 
@@ -190,13 +273,14 @@ export const OfferReplacementWorkflowTab = () => {
         name: selectedWorkflow.name,
         accountIds: selectedWorkflow.accountIds,
         status: selectedWorkflow.status,
+        steps: selectedWorkflow.steps,
       });
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openForRow = (workflow: OfferReplacementWorkflow) => {
     setSelectedId(workflow.id);
-    setDraft({ name: workflow.name, accountIds: workflow.accountIds, status: workflow.status });
+    setDraft({ name: workflow.name, accountIds: workflow.accountIds, status: workflow.status, steps: workflow.steps });
     setPanelOpen(true);
   };
 
@@ -218,7 +302,6 @@ export const OfferReplacementWorkflowTab = () => {
     } else {
       const newWorkflow: OfferReplacementWorkflow = {
         id: `wf-${Date.now()}`,
-        steps: 0,
         ...draft,
       };
       setWorkflows((prev) => [...prev, newWorkflow]);
@@ -293,7 +376,7 @@ export const OfferReplacementWorkflowTab = () => {
                         {wf.name}
                       </TableCell>
                       <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {wf.steps}
+                        {wf.steps.length}
                       </TableCell>
                       <TableCell>
                         <AccountsChip count={wf.accountIds.length} />
@@ -302,7 +385,16 @@ export const OfferReplacementWorkflowTab = () => {
                         <StatusChip status={wf.status} />
                       </TableCell>
                       <TableCell align="right">
-                        <ManageWorkflowButton onClick={(e) => e.stopPropagation()} />
+                        <ManageWorkflowButton
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setManageDialog({
+                              workflowName: wf.name,
+                              steps: wf.steps,
+                              onSave: (steps) => setWorkflows((prev) => prev.map((w) => (w.id === wf.id ? { ...w, steps } : w))),
+                            });
+                          }}
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -375,7 +467,16 @@ export const OfferReplacementWorkflowTab = () => {
               )}
             />
 
-            <ManageWorkflowButton fullWidth />
+            <ManageWorkflowButton
+              fullWidth
+              onClick={() => {
+                setManageDialog({
+                  workflowName: draft.name || 'New Workflow',
+                  steps: draft.steps,
+                  onSave: (steps) => setDraft((d) => ({ ...d, steps })),
+                });
+              }}
+            />
           </div>
 
           <div style={{
@@ -407,6 +508,18 @@ export const OfferReplacementWorkflowTab = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {manageDialog && (
+        <ManageWorkflowDialog
+          workflowName={manageDialog.workflowName}
+          initialSteps={manageDialog.steps}
+          onClose={() => setManageDialog(null)}
+          onSave={(steps) => {
+            manageDialog.onSave(steps);
+            setManageDialog(null);
+          }}
+        />
       )}
     </div>
   );
