@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  IconButton, FormControl, InputLabel, Select, MenuItem, Autocomplete, TextField,
 } from '@mui/material';
-import { Add, Close, CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
+import { Add } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
-import { AppTextField } from '../ui/AppTextField';
 import { ManageWorkflowDialog } from './ManageWorkflowDialog';
-import type { WorkflowStepConfig } from './workflowTypes';
+import { CURRENT_USER } from '../../data/mockData';
+import { ACCOUNTS, StatusChip } from './workflowTypes';
+import type { WorkflowStepConfig, OfferReplacementWorkflow, WorkflowStatus } from './workflowTypes';
 
 const GitForkIcon = () => (
   <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -15,78 +15,10 @@ const GitForkIcon = () => (
   </svg>
 );
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type WorkflowStatus = 'active' | 'inactive';
-
-interface OfferReplacementWorkflow {
-  id: string;
-  name: string;
-  steps: WorkflowStepConfig[];
-  accountIds: string[];
-  status: WorkflowStatus;
-}
-
-interface DealerAccount {
-  id: string;
-  name: string;
-  brand: 'BMW' | 'Honda' | 'Toyota';
-}
-
 // ── Mock accounts — dealerships across the US, mixed brands ────────────────────
-
-const ACCOUNTS: DealerAccount[] = [
-  { id: 'acc-1', name: 'Advantage BMW Midtown', brand: 'BMW' },
-  { id: 'acc-2', name: 'BMW of Akron', brand: 'BMW' },
-  { id: 'acc-3', name: 'BMW of Annapolis', brand: 'BMW' },
-  { id: 'acc-4', name: 'BMW of Bloomington', brand: 'BMW' },
-  { id: 'acc-5', name: 'BMW of Columbia', brand: 'BMW' },
-  { id: 'acc-6', name: 'BMW of Devon', brand: 'BMW' },
-  { id: 'acc-7', name: 'BMW of El Cajon', brand: 'BMW' },
-  { id: 'acc-8', name: 'BMW of Fresno', brand: 'BMW' },
-  { id: 'acc-9', name: 'BMW of Georgetown', brand: 'BMW' },
-  { id: 'acc-10', name: 'BMW of Houston North', brand: 'BMW' },
-  { id: 'acc-11', name: 'BMW of Ontario', brand: 'BMW' },
-  { id: 'acc-12', name: 'BMW of Palm Springs', brand: 'BMW' },
-  { id: 'acc-13', name: 'BMW of Rockville', brand: 'BMW' },
-  { id: 'acc-14', name: 'BMW of Sterling', brand: 'BMW' },
-  { id: 'acc-15', name: 'BMW of Tucson', brand: 'BMW' },
-  { id: 'acc-16', name: 'Honda of Austin', brand: 'Honda' },
-  { id: 'acc-17', name: 'Honda of Bellevue', brand: 'Honda' },
-  { id: 'acc-18', name: 'Honda of Charlotte', brand: 'Honda' },
-  { id: 'acc-19', name: 'Honda of Chicago', brand: 'Honda' },
-  { id: 'acc-20', name: 'Honda of Columbus', brand: 'Honda' },
-  { id: 'acc-21', name: 'Honda of Denver', brand: 'Honda' },
-  { id: 'acc-22', name: 'Honda of Downtown LA', brand: 'Honda' },
-  { id: 'acc-23', name: 'Honda of Kirkland', brand: 'Honda' },
-  { id: 'acc-24', name: 'Honda of Miami', brand: 'Honda' },
-  { id: 'acc-25', name: 'Honda of Nashua', brand: 'Honda' },
-  { id: 'acc-26', name: 'Honda of Ocala', brand: 'Honda' },
-  { id: 'acc-27', name: 'Honda of Pasadena', brand: 'Honda' },
-  { id: 'acc-28', name: 'Honda of Seattle', brand: 'Honda' },
-  { id: 'acc-29', name: 'Honda of Slidell', brand: 'Honda' },
-  { id: 'acc-30', name: 'Honda of Superstition Springs', brand: 'Honda' },
-  { id: 'acc-31', name: 'Toyota of Bellevue', brand: 'Toyota' },
-  { id: 'acc-32', name: 'Toyota of Boerne', brand: 'Toyota' },
-  { id: 'acc-33', name: 'Toyota of Cedar Park', brand: 'Toyota' },
-  { id: 'acc-34', name: 'Toyota of Clermont', brand: 'Toyota' },
-  { id: 'acc-35', name: 'Toyota of Dallas', brand: 'Toyota' },
-  { id: 'acc-36', name: 'Toyota of Denton', brand: 'Toyota' },
-  { id: 'acc-37', name: 'Toyota of Greenville', brand: 'Toyota' },
-  { id: 'acc-38', name: 'Toyota of Nashville', brand: 'Toyota' },
-  { id: 'acc-39', name: 'Toyota of Orlando', brand: 'Toyota' },
-  { id: 'acc-40', name: 'Toyota of Portland', brand: 'Toyota' },
-  { id: 'acc-41', name: 'Toyota of Renton', brand: 'Toyota' },
-  { id: 'acc-42', name: 'Toyota of Sacramento', brand: 'Toyota' },
-  { id: 'acc-43', name: 'Toyota of Santa Fe', brand: 'Toyota' },
-  { id: 'acc-44', name: 'Toyota of Tampa Bay', brand: 'Toyota' },
-  { id: 'acc-45', name: 'Toyota of Whittier', brand: 'Toyota' },
-];
 
 const BMW_ACCOUNT_IDS = ACCOUNTS.filter((a) => a.brand === 'BMW').map((a) => a.id);
 const ALL_ACCOUNT_IDS = ACCOUNTS.map((a) => a.id);
-
-const accountById = (id: string) => ACCOUNTS.find((a) => a.id === id);
 
 // ── Mock workflows — the three examples from the Figma reference ───────────────
 
@@ -172,6 +104,10 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: STANDARD_WORKFLOW_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(0, 42),
     status: 'active',
+    createdAt: '2026-07-01T13:35:00',
+    createdBy: 'John Doe',
+    updatedAt: '2026-07-15T16:11:00',
+    updatedBy: 'John Doe',
   },
   {
     id: 'wf-2',
@@ -179,6 +115,10 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: HIGH_END_BRANDS_STEPS,
     accountIds: BMW_ACCOUNT_IDS.slice(0, 12),
     status: 'active',
+    createdAt: '2026-06-18T09:20:00',
+    createdBy: 'Michael Stuart',
+    updatedAt: '2026-06-18T09:20:00',
+    updatedBy: 'Michael Stuart',
   },
   {
     id: 'wf-3',
@@ -186,36 +126,14 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: SPECIALS_EVENTS_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(3, 45),
     status: 'active',
+    createdAt: '2026-05-02T11:05:00',
+    createdBy: 'Olivia Douglas',
+    updatedAt: '2026-06-30T08:47:00',
+    updatedBy: 'John Doe',
   },
 ];
 
-const emptyDraft = (): Omit<OfferReplacementWorkflow, 'id'> => ({
-  name: '',
-  accountIds: [],
-  status: 'active',
-  steps: [],
-});
-
 // ── Small building blocks ────────────────────────────────────────────────────
-
-function StatusChip({ status }: { status: WorkflowStatus }) {
-  const active = status === 'active';
-  return (
-    <span
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: '3px 8px 3px 6px', borderRadius: 8,
-        background: active ? '#e8f5e9' : '#f0f2f4',
-        color: active ? '#1b5e20' : '#686576',
-        fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400, letterSpacing: '0.4px',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {active ? <CheckCircle style={{ fontSize: 14 }} /> : <RadioButtonUnchecked style={{ fontSize: 14 }} />}
-      {active ? 'Active' : 'Inactive'}
-    </span>
-  );
-}
 
 function AccountsChip({ count }: { count: number }) {
   return (
@@ -256,57 +174,31 @@ function ManageWorkflowButton({ onClick, fullWidth }: { onClick?: (e: React.Mous
 
 export const OfferReplacementWorkflowTab = () => {
   const [workflows, setWorkflows] = useState<OfferReplacementWorkflow[]>(INITIAL_WORKFLOWS);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [draft, setDraft] = useState<Omit<OfferReplacementWorkflow, 'id'>>(emptyDraft());
   const [manageDialog, setManageDialog] = useState<{
-    workflowName: string;
-    steps: WorkflowStepConfig[];
-    onSave: (steps: WorkflowStepConfig[]) => void;
+    workflow: OfferReplacementWorkflow | null;
+    initialTab: 'metadata' | 'step';
   } | null>(null);
 
-  const selectedWorkflow = selectedId ? workflows.find((w) => w.id === selectedId) ?? null : null;
+  const closeDialog = () => setManageDialog(null);
 
-  useEffect(() => {
-    if (selectedWorkflow) {
-      setDraft({
-        name: selectedWorkflow.name,
-        accountIds: selectedWorkflow.accountIds,
-        status: selectedWorkflow.status,
-        steps: selectedWorkflow.steps,
-      });
-    }
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const openForRow = (workflow: OfferReplacementWorkflow) => {
-    setSelectedId(workflow.id);
-    setDraft({ name: workflow.name, accountIds: workflow.accountIds, status: workflow.status, steps: workflow.steps });
-    setPanelOpen(true);
-  };
-
-  const openForNew = () => {
-    setSelectedId(null);
-    setDraft(emptyDraft());
-    setPanelOpen(true);
-  };
-
-  const closePanel = () => {
-    setPanelOpen(false);
-    setSelectedId(null);
-    setDraft(emptyDraft());
-  };
-
-  const handleSave = () => {
-    if (selectedId) {
-      setWorkflows((prev) => prev.map((w) => (w.id === selectedId ? { ...w, ...draft } : w)));
-    } else {
+  const handleSave = (patch: { name: string; status: WorkflowStatus; accountIds: string[]; steps: WorkflowStepConfig[] }) => {
+    const now = new Date().toISOString();
+    setWorkflows((prev) => {
+      if (manageDialog?.workflow) {
+        const { id } = manageDialog.workflow;
+        return prev.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: now, updatedBy: CURRENT_USER.name } : w));
+      }
       const newWorkflow: OfferReplacementWorkflow = {
         id: `wf-${Date.now()}`,
-        ...draft,
+        ...patch,
+        createdAt: now,
+        createdBy: CURRENT_USER.name,
+        updatedAt: now,
+        updatedBy: CURRENT_USER.name,
       };
-      setWorkflows((prev) => [...prev, newWorkflow]);
-    }
-    closePanel();
+      return [...prev, newWorkflow];
+    });
+    closeDialog();
   };
 
   return (
@@ -328,7 +220,7 @@ export const OfferReplacementWorkflowTab = () => {
               Offer Replacement Workflow
             </h1>
             <button
-              onClick={openForNew}
+              onClick={() => setManageDialog({ workflow: null, initialTab: 'metadata' })}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '6px 16px 6px 12px', borderRadius: 100,
@@ -359,166 +251,50 @@ export const OfferReplacementWorkflowTab = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {workflows.map((wf) => {
-                  const isSelected = panelOpen && selectedId === wf.id;
-                  return (
-                    <TableRow
-                      key={wf.id}
-                      hover
-                      onClick={() => openForRow(wf)}
-                      sx={{
-                        cursor: 'pointer',
-                        background: isSelected ? 'rgba(99,86,225,0.08)' : 'transparent',
-                        '& td': { borderBottom: '1px solid #f0f0f0' },
-                      }}
-                    >
-                      <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {wf.name}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {wf.steps.length}
-                      </TableCell>
-                      <TableCell>
-                        <AccountsChip count={wf.accountIds.length} />
-                      </TableCell>
-                      <TableCell>
-                        <StatusChip status={wf.status} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <ManageWorkflowButton
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setManageDialog({
-                              workflowName: wf.name,
-                              steps: wf.steps,
-                              onSave: (steps) => setWorkflows((prev) => prev.map((w) => (w.id === wf.id ? { ...w, steps } : w))),
-                            });
-                          }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {workflows.map((wf) => (
+                  <TableRow
+                    key={wf.id}
+                    hover
+                    onClick={() => setManageDialog({ workflow: wf, initialTab: 'metadata' })}
+                    sx={{
+                      cursor: 'pointer',
+                      '& td': { borderBottom: '1px solid #f0f0f0' },
+                    }}
+                  >
+                    <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+                      {wf.name}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+                      {wf.steps.length}
+                    </TableCell>
+                    <TableCell>
+                      <AccountsChip count={wf.accountIds.length} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusChip status={wf.status} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <ManageWorkflowButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setManageDialog({ workflow: wf, initialTab: 'step' });
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
         </div>
       </div>
 
-      {/* ── Right panel — Edit Workflow Configurations ──────────────── */}
-      {panelOpen && (
-        <div
-          className="flex flex-col shrink-0 overflow-hidden"
-          style={{ width: 320, background: '#ffffff', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
-        >
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
-          }}>
-            <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-              Edit Workflow Configurations
-            </span>
-            <IconButton size="small" onClick={closePanel} sx={{ padding: '4px' }}>
-              <Close style={{ fontSize: 18, color: '#686576' }} />
-            </IconButton>
-          </div>
-
-          <div className="flex-1 overflow-y-auto" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <AppTextField
-              label="Workflow Name"
-              value={draft.name}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-            />
-
-            <FormControl size="small" fullWidth>
-              <InputLabel sx={{ fontSize: 13 }}>Status</InputLabel>
-              <Select
-                label="Status"
-                value={draft.status}
-                onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as WorkflowStatus }))}
-                renderValue={(value) => <StatusChip status={value as WorkflowStatus} />}
-                sx={{ fontSize: 14 }}
-              >
-                <MenuItem value="active"><StatusChip status="active" /></MenuItem>
-                <MenuItem value="inactive"><StatusChip status="inactive" /></MenuItem>
-              </Select>
-            </FormControl>
-
-            <Autocomplete
-              multiple
-              size="small"
-              limitTags={3}
-              options={ACCOUNTS}
-              getOptionLabel={(opt) => opt.name}
-              isOptionEqualToValue={(opt, val) => opt.id === val.id}
-              value={draft.accountIds.map(accountById).filter((a): a is DealerAccount => !!a)}
-              onChange={(_, newValue) => setDraft((d) => ({ ...d, accountIds: newValue.map((a) => a.id) }))}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Accounts"
-                  sx={{
-                    '& .MuiInputLabel-root': { fontSize: 13 },
-                    '& .MuiOutlinedInput-input': { fontSize: 14 },
-                    '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
-                    '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
-                  }}
-                />
-              )}
-            />
-
-            <ManageWorkflowButton
-              fullWidth
-              onClick={() => {
-                setManageDialog({
-                  workflowName: draft.name || 'New Workflow',
-                  steps: draft.steps,
-                  onSave: (steps) => setDraft((d) => ({ ...d, steps })),
-                });
-              }}
-            />
-          </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            padding: '12px 16px', borderTop: '1px solid #f0f0f0', flexShrink: 0,
-          }}>
-            <button
-              onClick={closePanel}
-              style={{
-                padding: '6px 20px', borderRadius: 100,
-                border: '1px solid #473bab', background: 'transparent',
-                color: '#473bab', fontSize: 14, fontWeight: 500,
-                fontFamily: 'Roboto, sans-serif', cursor: 'pointer', letterSpacing: '0.4px',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!draft.name.trim()}
-              style={{
-                padding: '6px 20px', borderRadius: 100,
-                border: 'none', background: draft.name.trim() ? '#473bab' : '#cac9cf',
-                color: '#ffffff', fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-                cursor: draft.name.trim() ? 'pointer' : 'default', letterSpacing: '0.4px',
-              }}
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      )}
-
       {manageDialog && (
         <ManageWorkflowDialog
-          workflowName={manageDialog.workflowName}
-          initialSteps={manageDialog.steps}
-          onClose={() => setManageDialog(null)}
-          onSave={(steps) => {
-            manageDialog.onSave(steps);
-            setManageDialog(null);
-          }}
+          workflow={manageDialog.workflow}
+          initialTab={manageDialog.initialTab}
+          onClose={closeDialog}
+          onSave={handleSave}
         />
       )}
     </div>

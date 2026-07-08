@@ -6,14 +6,18 @@ import {
 } from '@mui/material';
 import {
   Add, Close, DragIndicator, DeleteOutlineOutlined, East, ZoomIn, ZoomOut, FitScreen,
-  DirectionsCarFilled, Autorenew,
+  DirectionsCarFilled, Autorenew, Code, AccountTree,
 } from '@mui/icons-material';
 import { AppTextField } from '../ui/AppTextField';
 import {
   REPLACEMENT_METHODS, FILTER_CATALOG, STRATEGY_CATALOG, ADMIN_OPTIONS,
   createDefaultStep, createDefaultFallbackStep, getFallbackTitle, getFallbackDescription, extractAdminEmail,
+  ACCOUNTS, accountById, StatusChip, formatDateTime,
 } from './workflowTypes';
-import type { WorkflowStepConfig, WorkflowFilter, FallbackStepConfig, ReplacementMethod } from './workflowTypes';
+import type {
+  WorkflowStepConfig, WorkflowFilter, FallbackStepConfig, ReplacementMethod,
+  OfferReplacementWorkflow, WorkflowStatus, DealerAccount,
+} from './workflowTypes';
 
 // Replacement Method tag styling — colors/icons per Figma (node 4526:64989 / 4526:64988).
 const REPLACEMENT_METHOD_TAGS: Record<ReplacementMethod, {
@@ -40,10 +44,10 @@ const ZOOM_TRANSITION_MS = 250;
 const ZOOM_TICK_MS = 16;
 
 interface ManageWorkflowDialogProps {
-  workflowName: string;
-  initialSteps: WorkflowStepConfig[];
+  workflow: OfferReplacementWorkflow | null;
+  initialTab: 'metadata' | 'step';
   onClose: () => void;
-  onSave: (steps: WorkflowStepConfig[]) => void;
+  onSave: (patch: { name: string; status: WorkflowStatus; accountIds: string[]; steps: WorkflowStepConfig[] }) => void;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -387,10 +391,57 @@ function SearchMenu({ anchorEl, onClose, search, onSearchChange, options, onPick
   );
 }
 
+// ── Side panel vertical tab (Metadata / Step) ──────────────────────────────────
+
+function VerticalTab({ active, Icon, label, onClick }: {
+  active: boolean;
+  Icon: typeof Code;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: 56, height: 56, borderRadius: 5, border: 'none', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+        background: active ? 'rgba(99,86,225,0.08)' : 'transparent',
+      }}
+    >
+      <Icon style={{ fontSize: 20, color: active ? '#473bab' : '#686576' }} />
+      <span style={{
+        fontSize: 11, fontFamily: 'Roboto, sans-serif', color: active ? '#473bab' : '#686576',
+        letterSpacing: '0.4px', lineHeight: 1.66,
+      }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// ── Read-only metadata row (Created at / Created By / Last Modified / Modified By) ──
+
+function MetadataDetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ width: 90, flexShrink: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 // ── Main dialog ────────────────────────────────────────────────────────────────
 
-export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSave }: ManageWorkflowDialogProps) => {
-  const [steps, setSteps] = useState<WorkflowStepConfig[]>(initialSteps);
+export const ManageWorkflowDialog = ({ workflow, initialTab, onClose, onSave }: ManageWorkflowDialogProps) => {
+  const [steps, setSteps] = useState<WorkflowStepConfig[]>(workflow?.steps ?? []);
+  const [activeTab, setActiveTab] = useState<'metadata' | 'step'>(initialTab);
+  const [draftName, setDraftName] = useState(workflow?.name ?? '');
+  const [draftStatus, setDraftStatus] = useState<WorkflowStatus>(workflow?.status ?? 'active');
+  const [draftAccountIds, setDraftAccountIds] = useState<string[]>(workflow?.accountIds ?? []);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [fallbackSelected, setFallbackSelected] = useState(false);
   const [fallback, setFallback] = useState<FallbackStepConfig>(createDefaultFallbackStep());
@@ -511,6 +562,30 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   useEffect(() => () => {
     if (zoomAnimRef.current !== null) clearInterval(zoomAnimRef.current);
   }, []);
+
+  // Focuses a step (or the fallback) card: selects it, switches the side panel to the
+  // Step tab, and zooms/scrolls the diagram to center it — shared by card clicks, the
+  // Step tab's auto-select-first-step behavior, and the initial-open auto-focus below.
+  const focusCard = (id: string, isFallback: boolean) => {
+    if (isFallback) { setFallbackSelected(true); setSelectedStepId(null); }
+    else { setSelectedStepId(id); setFallbackSelected(false); }
+    setActiveTab('step');
+    setUserZoomed(true);
+    animateZoomTo(ZOOM_MAX, isFallback ? 'fallback' : id, false);
+  };
+
+  // Opening the dialog directly on the Step tab (e.g. via the row's "Manage Workflow"
+  // button) should immediately focus the first step, matching the Step tab's behavior
+  // when clicked with nothing selected.
+  useEffect(() => {
+    if (initialTab === 'step' && steps.length > 0) focusCard(steps[0].id, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleStepTabClick = () => {
+    setActiveTab('step');
+    if (!selectedStepId && !fallbackSelected && steps.length > 0) focusCard(steps[0].id, false);
+  };
 
   const zoomIn = () => {
     setUserZoomed(true);
@@ -651,7 +726,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
         padding: '14px 20px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
       }}>
         <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-          {workflowName || 'New Workflow'}
+          {draftName || 'New Workflow'}
         </span>
         <IconButton size="small" onClick={onClose}>
           <Close style={{ fontSize: 20, color: '#686576' }} />
@@ -700,7 +775,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                         selected={selectedStepId === step.id}
                         dragging={dragStepIndex === i}
                         dragOver={dragOverStepIndex === i && dragStepIndex !== i}
-                        onSelect={() => { setSelectedStepId(step.id); setFallbackSelected(false); setUserZoomed(true); animateZoomTo(ZOOM_MAX, step.id, false); }}
+                        onSelect={() => focusCard(step.id, false)}
                         onRemove={() => removeStep(step.id)}
                         cardRef={(el) => { cardRefs.current[step.id] = el; }}
                         {...stepDragHandlers(i)}
@@ -712,7 +787,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                 <FallbackCard
                   fallback={fallback}
                   selected={fallbackSelected}
-                  onSelect={() => { setFallbackSelected(true); setSelectedStepId(null); setUserZoomed(true); animateZoomTo(ZOOM_MAX, 'fallback', false); }}
+                  onSelect={() => focusCard('fallback', true)}
                   cardRef={(el) => { cardRefs.current.fallback = el; }}
                 />
               </div>
@@ -763,217 +838,266 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
           </div>
         </div>
 
-        {/* Edit Step panel */}
-        {selectedStep && (
+        {/* Side panel — Metadata / Step tabs */}
+        <div style={{ display: 'flex', flexShrink: 0, borderLeft: '1px solid #f0f0f0' }}>
+          {/* Vertical tabs */}
           <div style={{
-            width: 400, flexShrink: 0, borderLeft: '1px solid #f0f0f0',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+            paddingTop: 12, paddingLeft: 8, paddingRight: 8, width: 72, flexShrink: 0,
           }}>
+            <VerticalTab active={activeTab === 'metadata'} Icon={Code} label="Metadata" onClick={() => setActiveTab('metadata')} />
+            <VerticalTab active={activeTab === 'step'} Icon={AccountTree} label="Step" onClick={handleStepTabClick} />
+          </div>
+          <div style={{ width: 1, alignSelf: 'stretch', background: '#f0f0f0', flexShrink: 0 }} />
+
+          {/* Panel */}
+          <div style={{ width: 360, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              display: 'flex', alignItems: 'center',
               padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
             }}>
               <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-                Edit Step
+                {activeTab === 'metadata' ? 'Metadata' : fallbackSelected ? 'Edit Fallback Step' : 'Edit Step'}
               </span>
-              <IconButton size="small" onClick={() => setSelectedStepId(null)}>
-                <Close style={{ fontSize: 18, color: '#686576' }} />
-              </IconButton>
             </div>
 
             <div className="flex-1 overflow-y-auto" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <AppTextField
-                label="Step Name"
-                value={selectedStep.name}
-                onChange={(e) => updateStep(selectedStep.id, { name: e.target.value })}
-              />
-
-              <div>
-                <FormControl size="small" fullWidth>
-                  <InputLabel sx={{ fontSize: 13 }}>Replacement Method</InputLabel>
-                  <Select
-                    label="Replacement Method"
-                    value={selectedStep.replacementMethod}
-                    onChange={(e) => updateStep(selectedStep.id, { replacementMethod: e.target.value as WorkflowStepConfig['replacementMethod'] })}
-                    MenuProps={{ sx: { zIndex: 10001 } }}
-                    sx={{ fontSize: 14 }}
-                  >
-                    {REPLACEMENT_METHODS.map((m) => (
-                      <MenuItem key={m.value} value={m.value} sx={{ fontSize: 14 }}>{m.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {currentMethod && (
-                  <div style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', marginTop: 6 }}>
-                    {currentMethod.helper}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <div style={sectionTitleStyle}>Additional Filters</div>
-                {selectedStep.filters.map((f) => (
-                  <FilterRow
-                    key={f.id}
-                    filter={f}
-                    onChangeValue={(value) => updateStep(selectedStep.id, {
-                      filters: selectedStep.filters.map((sf) => (sf.id === f.id ? { ...sf, value } : sf)),
-                    })}
-                    onRemove={() => updateStep(selectedStep.id, {
-                      filters: selectedStep.filters.filter((sf) => sf.id !== f.id),
-                    })}
+              {activeTab === 'metadata' ? (
+                <>
+                  <AppTextField
+                    label="Workflow Name"
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
                   />
-                ))}
-                <button
-                  onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent',
-                    color: '#473bab', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', padding: 0,
-                  }}
-                >
-                  <Add style={{ fontSize: 16 }} /> Add Filter
-                </button>
-                <SearchMenu
-                  anchorEl={filterMenuAnchor}
-                  onClose={() => { setFilterMenuAnchor(null); setFilterSearch(''); }}
-                  search={filterSearch}
-                  onSearchChange={setFilterSearch}
-                  placeholder="Search filters"
-                  options={availableFilters.map((c) => c.label)}
-                  onPick={(label) => {
-                    const entry = FILTER_CATALOG.find((c) => c.label === label);
-                    if (entry) {
-                      updateStep(selectedStep.id, {
-                        filters: [...selectedStep.filters, {
-                          id: `filter-${Date.now()}-${entry.key}`, filterKey: entry.key, label: entry.label, value: entry.options[0],
-                        }],
-                      });
-                    }
-                    setFilterMenuAnchor(null);
-                    setFilterSearch('');
-                  }}
-                />
-              </div>
 
-              <div>
-                <div style={sectionTitleStyle}>Strategy</div>
-                <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', marginBottom: 8 }}>
-                  If multiple matches are found, define replacement through:
-                </div>
-                <div style={{ border: '1px solid #dddce0', borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
-                  {selectedStep.strategy.map((s, i) => (
-                    <StrategyRow
-                      key={s}
-                      label={s}
-                      index={i + 1}
-                      isLast={i === selectedStep.strategy.length - 1}
-                      dragging={dragStrategyIndex === i}
-                      dragOver={dragOverStrategyIndex === i && dragStrategyIndex !== i}
-                      onRemove={() => updateStep(selectedStep.id, {
-                        strategy: selectedStep.strategy.filter((_, si) => si !== i),
-                      })}
-                      {...strategyDragHandlers(i)}
+                  <FormControl size="small" fullWidth>
+                    <InputLabel sx={{ fontSize: 13 }}>Status</InputLabel>
+                    <Select
+                      label="Status"
+                      value={draftStatus}
+                      onChange={(e) => setDraftStatus(e.target.value as WorkflowStatus)}
+                      renderValue={(value) => <StatusChip status={value as WorkflowStatus} />}
+                      MenuProps={{ sx: { zIndex: 10001 } }}
+                      sx={{ fontSize: 14 }}
+                    >
+                      <MenuItem value="active"><StatusChip status="active" /></MenuItem>
+                      <MenuItem value="inactive"><StatusChip status="inactive" /></MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Autocomplete
+                    multiple
+                    size="small"
+                    limitTags={3}
+                    options={ACCOUNTS}
+                    getOptionLabel={(opt) => opt.name}
+                    isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                    value={draftAccountIds.map(accountById).filter((a): a is DealerAccount => !!a)}
+                    onChange={(_, newValue) => setDraftAccountIds(newValue.map((a) => a.id))}
+                    slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Accounts"
+                        sx={{
+                          '& .MuiInputLabel-root': { fontSize: 13 },
+                          '& .MuiOutlinedInput-input': { fontSize: 14 },
+                          '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
+                          '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                        }}
+                      />
+                    )}
+                  />
+
+                  {workflow && (
+                    <div>
+                      <MetadataDetailRow label="Created at" value={formatDateTime(workflow.createdAt)} />
+                      <MetadataDetailRow label="Created By" value={workflow.createdBy} />
+                      <MetadataDetailRow label="Last Modified" value={formatDateTime(workflow.updatedAt)} />
+                      <MetadataDetailRow label="Modified By" value={workflow.updatedBy} />
+                    </div>
+                  )}
+                </>
+              ) : selectedStep ? (
+                <>
+                  <AppTextField
+                    label="Step Name"
+                    value={selectedStep.name}
+                    onChange={(e) => updateStep(selectedStep.id, { name: e.target.value })}
+                  />
+
+                  <div>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel sx={{ fontSize: 13 }}>Replacement Method</InputLabel>
+                      <Select
+                        label="Replacement Method"
+                        value={selectedStep.replacementMethod}
+                        onChange={(e) => updateStep(selectedStep.id, { replacementMethod: e.target.value as WorkflowStepConfig['replacementMethod'] })}
+                        MenuProps={{ sx: { zIndex: 10001 } }}
+                        sx={{ fontSize: 14 }}
+                      >
+                        {REPLACEMENT_METHODS.map((m) => (
+                          <MenuItem key={m.value} value={m.value} sx={{ fontSize: 14 }}>{m.label}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {currentMethod && (
+                      <div style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', marginTop: 6 }}>
+                        {currentMethod.helper}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={sectionTitleStyle}>Additional Filters</div>
+                    {selectedStep.filters.map((f) => (
+                      <FilterRow
+                        key={f.id}
+                        filter={f}
+                        onChangeValue={(value) => updateStep(selectedStep.id, {
+                          filters: selectedStep.filters.map((sf) => (sf.id === f.id ? { ...sf, value } : sf)),
+                        })}
+                        onRemove={() => updateStep(selectedStep.id, {
+                          filters: selectedStep.filters.filter((sf) => sf.id !== f.id),
+                        })}
+                      />
+                    ))}
+                    <button
+                      onClick={(e) => setFilterMenuAnchor(e.currentTarget)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent',
+                        color: '#473bab', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', padding: 0,
+                      }}
+                    >
+                      <Add style={{ fontSize: 16 }} /> Add Filter
+                    </button>
+                    <SearchMenu
+                      anchorEl={filterMenuAnchor}
+                      onClose={() => { setFilterMenuAnchor(null); setFilterSearch(''); }}
+                      search={filterSearch}
+                      onSearchChange={setFilterSearch}
+                      placeholder="Search filters"
+                      options={availableFilters.map((c) => c.label)}
+                      onPick={(label) => {
+                        const entry = FILTER_CATALOG.find((c) => c.label === label);
+                        if (entry) {
+                          updateStep(selectedStep.id, {
+                            filters: [...selectedStep.filters, {
+                              id: `filter-${Date.now()}-${entry.key}`, filterKey: entry.key, label: entry.label, value: entry.options[0],
+                            }],
+                          });
+                        }
+                        setFilterMenuAnchor(null);
+                        setFilterSearch('');
+                      }}
                     />
-                  ))}
-                </div>
-                <button
-                  onClick={(e) => setStrategyMenuAnchor(e.currentTarget)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent',
-                    color: '#473bab', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', padding: 0,
-                  }}
-                >
-                  <Add style={{ fontSize: 16 }} /> Add
-                </button>
-                <SearchMenu
-                  anchorEl={strategyMenuAnchor}
-                  onClose={() => { setStrategyMenuAnchor(null); setStrategySearch(''); }}
-                  search={strategySearch}
-                  onSearchChange={setStrategySearch}
-                  placeholder="Search strategies"
-                  options={availableStrategies}
-                  onPick={(s) => {
-                    updateStep(selectedStep.id, { strategy: [...selectedStep.strategy, s] });
-                    setStrategyMenuAnchor(null);
-                    setStrategySearch('');
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+                  </div>
 
-        {/* Edit Fallback Step panel */}
-        {fallbackSelected && (
-          <div style={{
-            width: 400, flexShrink: 0, borderLeft: '1px solid #f0f0f0',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
-            }}>
-              <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-                Edit Fallback Step
-              </span>
-              <IconButton size="small" onClick={() => setFallbackSelected(false)}>
-                <Close style={{ fontSize: 18, color: '#686576' }} />
-              </IconButton>
-            </div>
+                  <div>
+                    <div style={sectionTitleStyle}>Strategy</div>
+                    <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', marginBottom: 8 }}>
+                      If multiple matches are found, define replacement through:
+                    </div>
+                    <div style={{ border: '1px solid #dddce0', borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
+                      {selectedStep.strategy.map((s, i) => (
+                        <StrategyRow
+                          key={s}
+                          label={s}
+                          index={i + 1}
+                          isLast={i === selectedStep.strategy.length - 1}
+                          dragging={dragStrategyIndex === i}
+                          dragOver={dragOverStrategyIndex === i && dragStrategyIndex !== i}
+                          onRemove={() => updateStep(selectedStep.id, {
+                            strategy: selectedStep.strategy.filter((_, si) => si !== i),
+                          })}
+                          {...strategyDragHandlers(i)}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={(e) => setStrategyMenuAnchor(e.currentTarget)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent',
+                        color: '#473bab', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', padding: 0,
+                      }}
+                    >
+                      <Add style={{ fontSize: 16 }} /> Add
+                    </button>
+                    <SearchMenu
+                      anchorEl={strategyMenuAnchor}
+                      onClose={() => { setStrategyMenuAnchor(null); setStrategySearch(''); }}
+                      search={strategySearch}
+                      onSearchChange={setStrategySearch}
+                      placeholder="Search strategies"
+                      options={availableStrategies}
+                      onPick={(s) => {
+                        updateStep(selectedStep.id, { strategy: [...selectedStep.strategy, s] });
+                        setStrategyMenuAnchor(null);
+                        setStrategySearch('');
+                      }}
+                    />
+                  </div>
+                </>
+              ) : fallbackSelected ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+                      Pause Ads
+                    </span>
+                    <Switch
+                      checked={fallback.pauseAds}
+                      onChange={(e) => setFallback((f) => ({ ...f, pauseAds: e.target.checked }))}
+                      sx={switchSx}
+                    />
+                  </div>
 
-            <div className="flex-1 overflow-y-auto" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
-                  Pause Ads
-                </span>
-                <Switch
-                  checked={fallback.pauseAds}
-                  onChange={(e) => setFallback((f) => ({ ...f, pauseAds: e.target.checked }))}
-                  sx={switchSx}
-                />
-              </div>
+                  <Divider />
 
-              <Divider />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+                      Notify Admins
+                    </span>
+                    <Switch
+                      checked={fallback.notifyAdmins}
+                      onChange={(e) => setFallback((f) => ({ ...f, notifyAdmins: e.target.checked }))}
+                      sx={switchSx}
+                    />
+                  </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
-                  Notify Admins
-                </span>
-                <Switch
-                  checked={fallback.notifyAdmins}
-                  onChange={(e) => setFallback((f) => ({ ...f, notifyAdmins: e.target.checked }))}
-                  sx={switchSx}
-                />
-              </div>
-
-              {fallback.notifyAdmins && (
-                <Autocomplete
-                  multiple
-                  size="small"
-                  options={ADMIN_OPTIONS}
-                  value={fallback.admins}
-                  onChange={(_, newValue) => setFallback((f) => ({ ...f, admins: newValue }))}
-                  slotProps={{ popper: { sx: { zIndex: 10001 } } }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Admins"
+                  {fallback.notifyAdmins && (
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      options={ADMIN_OPTIONS}
+                      value={fallback.admins}
+                      onChange={(_, newValue) => setFallback((f) => ({ ...f, admins: newValue }))}
+                      slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Admins"
+                          sx={{
+                            '& .MuiInputLabel-root': { fontSize: 13 },
+                            '& .MuiOutlinedInput-input': { fontSize: 12 },
+                            '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
+                            '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                          }}
+                        />
+                      )}
                       sx={{
-                        '& .MuiInputLabel-root': { fontSize: 13 },
-                        '& .MuiOutlinedInput-input': { fontSize: 12 },
-                        '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
-                        '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                        '& .MuiChip-root': { fontSize: 11, fontFamily: 'Roboto, sans-serif' },
                       }}
                     />
                   )}
-                  sx={{
-                    '& .MuiChip-root': { fontSize: 11, fontFamily: 'Roboto, sans-serif' },
-                  }}
-                />
+                </>
+              ) : (
+                <div style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576', textAlign: 'center', marginTop: 24 }}>
+                  Add a step in the diagram to configure it.
+                </div>
               )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Footer */}
@@ -991,10 +1115,13 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
           Cancel
         </button>
         <button
-          onClick={() => onSave(steps)}
+          onClick={() => onSave({ name: draftName, status: draftStatus, accountIds: draftAccountIds, steps })}
+          disabled={!draftName.trim()}
           style={{
-            padding: '6px 20px', borderRadius: 100, border: 'none', background: '#473bab', color: '#ffffff',
-            fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', letterSpacing: '0.4px',
+            padding: '6px 20px', borderRadius: 100, border: 'none',
+            background: draftName.trim() ? '#473bab' : '#cac9cf', color: '#ffffff',
+            fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+            cursor: draftName.trim() ? 'pointer' : 'default', letterSpacing: '0.4px',
           }}
         >
           Save
