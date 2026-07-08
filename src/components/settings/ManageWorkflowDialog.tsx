@@ -5,7 +5,7 @@ import {
   Chip, Tooltip,
 } from '@mui/material';
 import {
-  Add, Close, DragIndicator, DeleteOutlineOutlined, East, ZoomIn, ZoomOut, FitScreen,
+  Add, Close, DragIndicator, DeleteOutlineOutlined, East, South, ZoomIn, ZoomOut, FitScreen,
   DirectionsCarFilled, Autorenew,
 } from '@mui/icons-material';
 import { AppTextField } from '../ui/AppTextField';
@@ -32,6 +32,18 @@ const switchSx = {
 const CARD_WIDTH = 320;
 const CONNECTOR_WIDTH = 120;
 const CANVAS_PADDING = 24;
+
+// Vertical diagram layout: cards stack top to bottom, stretched to fill the available width
+// (capped at 920px, per Figma node 4537:62435), connected by fixed-height arrow connectors.
+const VERTICAL_CARD_MAX_WIDTH = 920;
+const CONNECTOR_HEIGHT = 72;
+
+type DiagramOrientation = 'horizontal' | 'vertical';
+
+const HORIZONTAL_CARD_WIDTH_STYLE: React.CSSProperties = { width: CARD_WIDTH, flexShrink: 0 };
+const VERTICAL_CARD_WIDTH_STYLE: React.CSSProperties = {
+  width: 'calc(100% - 48px)', maxWidth: VERTICAL_CARD_MAX_WIDTH, flexShrink: 0,
+};
 
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 1;
@@ -60,6 +72,7 @@ const sectionTitleStyle: React.CSSProperties = {
 
 function StepCard({
   step, index, selected, dragging, dragOver, onSelect, onRemove, onDragStart, onDragOver, onDrop, onDragEnd, cardRef,
+  widthStyle,
 }: {
   step: WorkflowStepConfig;
   index: number;
@@ -73,6 +86,7 @@ function StepCard({
   onDrop: (e: DragEvent) => void;
   onDragEnd: () => void;
   cardRef?: (el: HTMLDivElement | null) => void;
+  widthStyle: React.CSSProperties;
 }) {
   const [hovered, setHovered] = useState(false);
   const showDelete = hovered || selected;
@@ -92,7 +106,7 @@ function StepCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative', zIndex: 2,
-        width: CARD_WIDTH, minHeight: 180, flexShrink: 0,
+        ...widthStyle, minHeight: 180,
         display: 'flex', alignItems: 'flex-start', gap: 12,
         border: selected ? '1px solid #473bab' : '1px solid #dddce0',
         boxShadow: selected ? 'inset 0 0 0 1px #473bab' : 'none',
@@ -182,23 +196,38 @@ function StepCard({
 
 // ── Connector between steps ("If no matches are found" / hover-to-add) ────────
 
-function StepConnector({ interactive, onAddStep }: { interactive: boolean; onAddStep?: () => void }) {
+function StepConnector({ interactive, onAddStep, orientation, widthStyle }: {
+  interactive: boolean;
+  onAddStep?: () => void;
+  orientation: DiagramOrientation;
+  widthStyle: React.CSSProperties;
+}) {
   const [hovered, setHovered] = useState(false);
   const showAdd = interactive && hovered;
+  const isVertical = orientation === 'vertical';
   return (
     <div
       onMouseEnter={() => interactive && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: CONNECTOR_WIDTH, flexShrink: 0, alignSelf: 'center',
-      }}
+      style={isVertical
+        ? { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: CONNECTOR_HEIGHT, ...widthStyle }
+        : { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: CONNECTOR_WIDTH, flexShrink: 0, alignSelf: 'center' }}
     >
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: '#dddce0' }} />
-      <East style={{
-        position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
-        fontSize: 18, color: '#9c99a9', background: '#ffffff', zIndex: 1,
-      }} />
+      <div style={isVertical
+        ? { position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#dddce0' }
+        : { position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: '#dddce0' }}
+      />
+      {isVertical ? (
+        <South style={{
+          position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+          fontSize: 18, color: '#9c99a9', background: '#ffffff', zIndex: 1,
+        }} />
+      ) : (
+        <East style={{
+          position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+          fontSize: 18, color: '#9c99a9', background: '#ffffff', zIndex: 1,
+        }} />
+      )}
       {showAdd ? (
         <button
           onClick={onAddStep}
@@ -225,11 +254,12 @@ function StepConnector({ interactive, onAddStep }: { interactive: boolean; onAdd
 
 // ── Fallback card (always last, editable) ───────────────────────────────────────
 
-function FallbackCard({ fallback, selected, onSelect, cardRef }: {
+function FallbackCard({ fallback, selected, onSelect, cardRef, widthStyle }: {
   fallback: FallbackStepConfig;
   selected: boolean;
   onSelect: () => void;
   cardRef?: (el: HTMLDivElement | null) => void;
+  widthStyle: React.CSSProperties;
 }) {
   return (
     <div
@@ -237,7 +267,7 @@ function FallbackCard({ fallback, selected, onSelect, cardRef }: {
       onClick={onSelect}
       style={{
         position: 'relative', zIndex: 2,
-        width: CARD_WIDTH, minHeight: 180, flexShrink: 0,
+        ...widthStyle, minHeight: 180,
         border: selected ? '1px solid #473bab' : '1px solid #dddce0',
         boxShadow: selected ? 'inset 0 0 0 1px #473bab' : 'none',
         borderRadius: 12, padding: 16, display: 'flex', gap: 12, background: '#ffffff', cursor: 'pointer',
@@ -420,10 +450,18 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
 
   const activeCardId = selectedStepId ?? (fallbackSelected ? 'fallback' : null);
 
-  // Zoom: defaults to a "fit the whole diagram in the available width" level, computed
-  // purely from the known card/connector widths (no DOM measurement needed). Once the
-  // user takes control (manual zoom, or selecting a card zooms to 100%), auto-fit stops
-  // so it doesn't fight their choice on subsequent container resizes.
+  // Diagram orientation: 'horizontal' is the original left-to-right flow; 'vertical' stacks
+  // cards top to bottom (see the floating layout widget). Switching resets zoom control back
+  // to auto so each orientation starts from its own sensible default.
+  const [orientation, setOrientationState] = useState<DiagramOrientation>('horizontal');
+  const isVertical = orientation === 'vertical';
+  const cardWidthStyle = isVertical ? VERTICAL_CARD_WIDTH_STYLE : HORIZONTAL_CARD_WIDTH_STYLE;
+
+  // Zoom: defaults to a "fit the whole diagram in the available width" level (horizontal only;
+  // vertical cards are already responsive-width, so they start at 100%), computed purely from
+  // the known card/connector widths (no DOM measurement needed). Once the user takes control
+  // (manual zoom, or selecting a card zooms to 100%), auto-fit stops so it doesn't fight their
+  // choice on subsequent container resizes.
   const [zoom, setZoom] = useState(ZOOM_MAX);
   const [userZoomed, setUserZoomed] = useState(false);
   const zoomRef = useRef(zoom);
@@ -431,13 +469,27 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   // Non-null while a JS-driven zoom animation (see animateZoomTo) is in flight, so the
   // resize-triggered recenter effect below knows to stand down instead of fighting it.
   const zoomAnimRef = useRef<number | null>(null);
+  // The zoomed flex container itself — measured directly (rather than analytically) to get the
+  // vertical layout's natural content height, since card heights are content-driven, not fixed.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const setOrientation = (next: DiagramOrientation) => {
+    if (next === orientation) return;
+    if (zoomAnimRef.current !== null) { clearInterval(zoomAnimRef.current); zoomAnimRef.current = null; }
+    setOrientationState(next);
+    setUserZoomed(false);
+    setZoom(ZOOM_MAX);
+    zoomRef.current = ZOOM_MAX;
+    const container = scrollContainerRef.current;
+    if (container) { container.scrollLeft = 0; container.scrollTop = 0; }
+  };
 
   const cardCount = steps.length + 1; // + fallback card
   const connectorCount = Math.max(steps.length, 1); // placeholder row still has one connector
   const naturalContentWidth = cardCount * CARD_WIDTH + connectorCount * CONNECTOR_WIDTH;
 
   useLayoutEffect(() => {
-    if (userZoomed || !scrollContainerEl) return;
+    if (isVertical || userZoomed || !scrollContainerEl) return;
     const container = scrollContainerEl;
 
     const fitToWidth = () => {
@@ -451,15 +503,38 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
     const observer = new ResizeObserver(fitToWidth);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [userZoomed, naturalContentWidth, scrollContainerEl]);
+  }, [isVertical, userZoomed, naturalContentWidth, scrollContainerEl]);
 
   // The natural (zoom = 1) left offset of a card within the row — computed purely from the
-  // fixed layout constants (no DOM measurement) so the eventual scroll target at any given
-  // zoom level can be computed analytically, up front, before the animation even starts.
+  // fixed layout constants (no DOM measurement needed) so the eventual scroll target at any
+  // given zoom level can be computed analytically, up front, before the animation even starts.
   const naturalCardLeft = (cardId: string): number => {
     if (cardId === 'fallback') return steps.length * (CARD_WIDTH + CONNECTOR_WIDTH);
     const index = steps.findIndex((s) => s.id === cardId);
     return index * (CARD_WIDTH + CONNECTOR_WIDTH);
+  };
+
+  // The natural (zoom = 1) top offset of a card within the column. Unlike the horizontal case,
+  // card heights are content-driven (not fixed), so this is measured from the DOM — the current
+  // rendered offset divided by the current zoom factor recovers the natural, unzoomed offset.
+  const naturalCardTop = (cardId: string): number => {
+    const container = scrollContainerRef.current;
+    const card = cardRefs.current[cardId];
+    if (!container || !card) return 0;
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const offsetWithinContainer = (cardRect.top - containerRect.top) + container.scrollTop;
+    return offsetWithinContainer / zoomRef.current;
+  };
+
+  // Natural (zoom = 1) size of the content along the axis that scrolling/fitting cares about:
+  // total width for horizontal (analytic), total height for vertical (DOM-measured, for the
+  // same content-driven-height reason as naturalCardTop).
+  const naturalContentExtent = (): number => {
+    if (!isVertical) return naturalContentWidth;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return 0;
+    return wrapper.getBoundingClientRect().height / zoomRef.current;
   };
 
   // CSS `zoom` isn't an animatable/interpolable property (transitions on it are a no-op in
@@ -473,15 +548,20 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
     const container = scrollContainerRef.current;
     const startZoom = zoomRef.current;
     const targetZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, target));
-    const startScroll = container?.scrollLeft ?? 0;
+    const startScroll = (isVertical ? container?.scrollTop : container?.scrollLeft) ?? 0;
 
     let targetScroll = startScroll;
     if (container) {
       if (focusCardId) {
-        const idealLeft = CANVAS_PADDING + naturalCardLeft(focusCardId) * targetZoom - (container.clientWidth - CARD_WIDTH * targetZoom) / 2;
-        const scrollWidthAtTarget = naturalContentWidth * targetZoom + CANVAS_PADDING * 2;
-        const max = Math.max(0, scrollWidthAtTarget - container.clientWidth);
-        targetScroll = Math.max(0, Math.min(idealLeft, max));
+        const clientExtent = isVertical ? container.clientHeight : container.clientWidth;
+        const naturalCardExtent = isVertical
+          ? (cardRefs.current[focusCardId]?.getBoundingClientRect().height ?? 0) / zoomRef.current
+          : CARD_WIDTH;
+        const naturalOffset = isVertical ? naturalCardTop(focusCardId) : naturalCardLeft(focusCardId);
+        const idealScroll = CANVAS_PADDING + naturalOffset * targetZoom - (clientExtent - naturalCardExtent * targetZoom) / 2;
+        const scrollExtentAtTarget = naturalContentExtent() * targetZoom + CANVAS_PADDING * 2;
+        const max = Math.max(0, scrollExtentAtTarget - clientExtent);
+        targetScroll = Math.max(0, Math.min(idealScroll, max));
       } else if (snapToStartIfUnfocused) {
         targetScroll = 0;
       }
@@ -498,7 +578,11 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       const currentZoom = startZoom + (targetZoom - startZoom) * eased;
       setZoom(currentZoom);
       zoomRef.current = currentZoom;
-      if (container) container.scrollLeft = startScroll + (targetScroll - startScroll) * eased;
+      const currentScroll = startScroll + (targetScroll - startScroll) * eased;
+      if (container) {
+        if (isVertical) container.scrollTop = currentScroll;
+        else container.scrollLeft = currentScroll;
+      }
       if (t >= 1) {
         clearInterval(intervalId);
         zoomAnimRef.current = null;
@@ -526,8 +610,10 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   const focusFit = () => {
     setUserZoomed(false);
     const container = scrollContainerRef.current;
-    const available = (container?.clientWidth ?? 0) - CANVAS_PADDING * 2;
-    const fit = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, available / naturalContentWidth));
+    const clientExtent = (isVertical ? container?.clientHeight : container?.clientWidth) ?? 0;
+    const available = clientExtent - CANVAS_PADDING * 2;
+    const contentExtent = naturalContentExtent();
+    const fit = contentExtent > 0 ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, available / contentExtent)) : ZOOM_MAX;
     animateZoomTo(fit, activeCardId, true);
   };
 
@@ -543,17 +629,24 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       if (!card) return;
       const containerRect = container.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      const cardOffsetWithinContainer = (cardRect.left - containerRect.left) + container.scrollLeft;
-      const target = cardOffsetWithinContainer - (container.clientWidth - cardRect.width) / 2;
-      const max = container.scrollWidth - container.clientWidth;
-      container.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
+      if (isVertical) {
+        const cardOffsetWithinContainer = (cardRect.top - containerRect.top) + container.scrollTop;
+        const target = cardOffsetWithinContainer - (container.clientHeight - cardRect.height) / 2;
+        const max = container.scrollHeight - container.clientHeight;
+        container.scrollTo({ top: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
+      } else {
+        const cardOffsetWithinContainer = (cardRect.left - containerRect.left) + container.scrollLeft;
+        const target = cardOffsetWithinContainer - (container.clientWidth - cardRect.width) / 2;
+        const max = container.scrollWidth - container.clientWidth;
+        container.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
+      }
     };
 
     recenter();
     const observer = new ResizeObserver(recenter);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [activeCardId]);
+  }, [activeCardId, isVertical]);
 
   const selectedStep = selectedStepId ? steps.find((s) => s.id === selectedStepId) ?? null : null;
 
@@ -662,17 +755,26 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Canvas wrapper — provides a positioning context for the floating zoom control */}
         <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-          {/* Canvas — horizontal flow: steps left to right, connected by arrows */}
+          {/* Canvas — steps flow either left to right or top to bottom, connected by arrows */}
           <div
             ref={setScrollContainerRef}
             style={{ height: '100%', overflow: 'auto', padding: CANVAS_PADDING, marginRight: 24, boxSizing: 'border-box' }}
           >
             <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', zoom }}>
+              <div
+                ref={wrapperRef}
+                style={{
+                  display: 'flex',
+                  flexDirection: isVertical ? 'column' : 'row',
+                  alignItems: isVertical ? 'center' : 'flex-start',
+                  width: isVertical ? '100%' : undefined,
+                  zoom,
+                }}
+              >
                 {steps.length === 0 ? (
                   <>
                     <div style={{
-                      width: CARD_WIDTH, flexShrink: 0, minHeight: 180,
+                      ...cardWidthStyle, minHeight: 180,
                       border: '1.5px dashed #cac9cf', borderRadius: 12,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
@@ -689,7 +791,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                         Add Step
                       </button>
                     </div>
-                    <StepConnector interactive={false} />
+                    <StepConnector interactive={false} orientation={orientation} widthStyle={cardWidthStyle} />
                   </>
                 ) : (
                   steps.map((step, i) => (
@@ -703,9 +805,15 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                         onSelect={() => { setSelectedStepId(step.id); setFallbackSelected(false); setUserZoomed(true); animateZoomTo(ZOOM_MAX, step.id, false); }}
                         onRemove={() => removeStep(step.id)}
                         cardRef={(el) => { cardRefs.current[step.id] = el; }}
+                        widthStyle={cardWidthStyle}
                         {...stepDragHandlers(i)}
                       />
-                      <StepConnector interactive onAddStep={() => insertStepAt(i + 1)} />
+                      <StepConnector
+                        interactive
+                        onAddStep={() => insertStepAt(i + 1)}
+                        orientation={orientation}
+                        widthStyle={cardWidthStyle}
+                      />
                     </Fragment>
                   ))
                 )}
@@ -714,9 +822,34 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                   selected={fallbackSelected}
                   onSelect={() => { setFallbackSelected(true); setSelectedStepId(null); setUserZoomed(true); animateZoomTo(ZOOM_MAX, 'fallback', false); }}
                   cardRef={(el) => { cardRefs.current.fallback = el; }}
+                  widthStyle={cardWidthStyle}
                 />
               </div>
             </div>
+          </div>
+
+          {/* Layout widget — switches between horizontal and vertical diagram visualizations */}
+          <div style={{
+            position: 'absolute', bottom: 16, right: 16, zIndex: 3,
+            display: 'flex', alignItems: 'center', gap: 2,
+            background: '#ffffff', border: '1px solid #dddce0', borderRadius: 100,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.12)', padding: 4,
+          }}>
+            {(['horizontal', 'vertical'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => setOrientation(option)}
+                style={{
+                  border: 'none', borderRadius: 100, cursor: 'pointer',
+                  padding: '6px 14px', fontSize: 12, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+                  letterSpacing: '0.4px', textTransform: 'capitalize',
+                  background: orientation === option ? '#473bab' : 'transparent',
+                  color: orientation === option ? '#ffffff' : '#686576',
+                }}
+              >
+                {option}
+              </button>
+            ))}
           </div>
 
           {/* Zoom control */}
