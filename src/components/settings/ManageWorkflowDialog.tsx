@@ -9,11 +9,14 @@ import {
   DirectionsCarFilled, Autorenew,
 } from '@mui/icons-material';
 import { AppTextField } from '../ui/AppTextField';
+import { StatusChip } from './WorkflowChips';
 import {
-  REPLACEMENT_METHODS, FILTER_CATALOG, STRATEGY_CATALOG, ADMIN_OPTIONS,
+  REPLACEMENT_METHODS, FILTER_CATALOG, STRATEGY_CATALOG, ADMIN_OPTIONS, ACCOUNTS, accountById,
   createDefaultStep, createDefaultFallbackStep, getFallbackTitle, getFallbackDescription, extractAdminEmail,
 } from './workflowTypes';
-import type { WorkflowStepConfig, WorkflowFilter, FallbackStepConfig, ReplacementMethod } from './workflowTypes';
+import type {
+  WorkflowStepConfig, WorkflowFilter, FallbackStepConfig, ReplacementMethod, OfferReplacementWorkflow, WorkflowStatus, DealerAccount,
+} from './workflowTypes';
 
 // Replacement Method tag styling — colors/icons per Figma (node 4526:64989 / 4526:64988).
 const REPLACEMENT_METHOD_TAGS: Record<ReplacementMethod, {
@@ -40,10 +43,9 @@ const ZOOM_TRANSITION_MS = 250;
 const ZOOM_TICK_MS = 16;
 
 interface ManageWorkflowDialogProps {
-  workflowName: string;
-  initialSteps: WorkflowStepConfig[];
+  workflow: Omit<OfferReplacementWorkflow, 'id'>;
   onClose: () => void;
-  onSave: (steps: WorkflowStepConfig[]) => void;
+  onSave: (workflow: Omit<OfferReplacementWorkflow, 'id'>) => void;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -389,8 +391,11 @@ function SearchMenu({ anchorEl, onClose, search, onSearchChange, options, onPick
 
 // ── Main dialog ────────────────────────────────────────────────────────────────
 
-export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSave }: ManageWorkflowDialogProps) => {
-  const [steps, setSteps] = useState<WorkflowStepConfig[]>(initialSteps);
+export const ManageWorkflowDialog = ({ workflow, onClose, onSave }: ManageWorkflowDialogProps) => {
+  const [name, setName] = useState(workflow.name);
+  const [status, setStatus] = useState<WorkflowStatus>(workflow.status);
+  const [accountIds, setAccountIds] = useState<string[]>(workflow.accountIds);
+  const [steps, setSteps] = useState<WorkflowStepConfig[]>(workflow.steps);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [fallbackSelected, setFallbackSelected] = useState(false);
   const [fallback, setFallback] = useState<FallbackStepConfig>(createDefaultFallbackStep());
@@ -651,7 +656,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
         padding: '14px 20px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
       }}>
         <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-          {workflowName || 'New Workflow'}
+          Manage Workflow
         </span>
         <IconButton size="small" onClick={onClose}>
           <Close style={{ fontSize: 20, color: '#686576' }} />
@@ -661,11 +666,79 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       {/* Body */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Canvas wrapper — provides a positioning context for the floating zoom control */}
-        <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Workflow configuration banner — Name / Status / Accounts, wraps as the panel narrows */}
+          <div style={{
+              position: 'absolute', top: 16, left: 16, right: 16, zIndex: 1,
+              display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'flex-start',
+              padding: '20px 16px 16px 16px', background: '#f0f2f4', flexShrink: 0, borderRadius: 12
+            }}>
+            {/* <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
+              Configurations
+            </span> */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start', justifyContent: 'center', width: '100%',
+            }}>
+              <div style={{ flex: '1 1 200px', minWidth: 160,}}>
+                <AppTextField
+                  label="Workflow Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  sx={{ '& .MuiOutlinedInput-root': { background: '#ffffff' } }}
+                />
+              </div>
+
+              <div style={{ flex: '0 1 160px', minWidth: 140 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel sx={{ fontSize: 13 }}>Status</InputLabel>
+                  <Select
+                    label="Status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as WorkflowStatus)}
+                    renderValue={(value) => <StatusChip status={value as WorkflowStatus} />}
+                    MenuProps={{ sx: { zIndex: 10001 } }}
+                    sx={{ fontSize: 14, background: '#ffffff' }}
+                    style={{ height: 40 }}
+                  >
+                    <MenuItem value="active"><StatusChip status="active" /></MenuItem>
+                    <MenuItem value="inactive"><StatusChip status="inactive" /></MenuItem>
+                  </Select>
+                </FormControl>
+              </div>
+
+              <div style={{ flex: '2 1 260px', minWidth: 220 }}>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  limitTags={3}
+                  options={ACCOUNTS}
+                  getOptionLabel={(opt) => opt.name}
+                  isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                  value={accountIds.map(accountById).filter((a): a is DealerAccount => !!a)}
+                  onChange={(_, newValue) => setAccountIds(newValue.map((a) => a.id))}
+                  slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Accounts"
+                      sx={{
+                        '& .MuiInputLabel-root': { fontSize: 13 },
+                        '& .MuiOutlinedInput-root': { background: '#ffffff' },
+                        '& .MuiOutlinedInput-input': { fontSize: 14 },
+                        '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
+                        '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                      }}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Canvas — horizontal flow: steps left to right, connected by arrows */}
           <div
             ref={setScrollContainerRef}
-            style={{ height: '100%', overflow: 'auto', padding: CANVAS_PADDING, marginRight: 24, boxSizing: 'border-box' }}
+            style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: CANVAS_PADDING, marginRight: 24, boxSizing: 'border-box' }}
           >
             <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', zoom }}>
@@ -991,10 +1064,13 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
           Cancel
         </button>
         <button
-          onClick={() => onSave(steps)}
+          onClick={() => onSave({ name, status, accountIds, steps })}
+          disabled={!name.trim()}
           style={{
-            padding: '6px 20px', borderRadius: 100, border: 'none', background: '#473bab', color: '#ffffff',
-            fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', letterSpacing: '0.4px',
+            padding: '6px 20px', borderRadius: 100, border: 'none',
+            background: name.trim() ? '#473bab' : '#cac9cf', color: '#ffffff',
+            fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+            cursor: name.trim() ? 'pointer' : 'default', letterSpacing: '0.4px',
           }}
         >
           Save
