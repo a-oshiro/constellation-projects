@@ -174,10 +174,7 @@ function ManageWorkflowButton({ onClick, fullWidth }: { onClick?: (e: React.Mous
 
 export const OfferReplacementWorkflowTab = () => {
   const [workflows, setWorkflows] = useState<OfferReplacementWorkflow[]>(INITIAL_WORKFLOWS);
-  const [manageDialog, setManageDialog] = useState<{
-    workflow: OfferReplacementWorkflow | null;
-    initialTab: 'metadata' | 'step';
-  } | null>(null);
+  const [manageDialog, setManageDialog] = useState<{ workflow: OfferReplacementWorkflow | null } | null>(null);
 
   const closeDialog = () => setManageDialog(null);
 
@@ -220,7 +217,7 @@ export const OfferReplacementWorkflowTab = () => {
               Offer Replacement Workflow
             </h1>
             <button
-              onClick={() => setManageDialog({ workflow: null, initialTab: 'metadata' })}
+              onClick={() => setManageDialog({ workflow: null })}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '6px 16px 6px 12px', borderRadius: 100,
@@ -255,7 +252,7 @@ export const OfferReplacementWorkflowTab = () => {
                   <TableRow
                     key={wf.id}
                     hover
-                    onClick={() => setManageDialog({ workflow: wf, initialTab: 'metadata' })}
+                    onClick={() => setManageDialog({ workflow: wf })}
                     sx={{
                       cursor: 'pointer',
                       '& td': { borderBottom: '1px solid #f0f0f0' },
@@ -277,7 +274,7 @@ export const OfferReplacementWorkflowTab = () => {
                       <ManageWorkflowButton
                         onClick={(e) => {
                           e.stopPropagation();
-                          setManageDialog({ workflow: wf, initialTab: 'step' });
+                          setManageDialog({ workflow: wf });
                         }}
                       />
                     </TableCell>
@@ -292,7 +289,6 @@ export const OfferReplacementWorkflowTab = () => {
       {manageDialog && (
         <ManageWorkflowDialog
           workflow={manageDialog.workflow}
-          initialTab={manageDialog.initialTab}
           onClose={closeDialog}
           onSave={handleSave}
         />

@@ -45,7 +45,6 @@ const ZOOM_TICK_MS = 16;
 
 interface ManageWorkflowDialogProps {
   workflow: OfferReplacementWorkflow | null;
-  initialTab: 'metadata' | 'step';
   onClose: () => void;
   onSave: (patch: { name: string; status: WorkflowStatus; accountIds: string[]; steps: WorkflowStepConfig[] }) => void;
 }
@@ -436,9 +435,9 @@ function MetadataDetailRow({ label, value }: { label: string; value: string }) {
 
 // ── Main dialog ────────────────────────────────────────────────────────────────
 
-export const ManageWorkflowDialog = ({ workflow, initialTab, onClose, onSave }: ManageWorkflowDialogProps) => {
+export const ManageWorkflowDialog = ({ workflow, onClose, onSave }: ManageWorkflowDialogProps) => {
   const [steps, setSteps] = useState<WorkflowStepConfig[]>(workflow?.steps ?? []);
-  const [activeTab, setActiveTab] = useState<'metadata' | 'step'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'metadata' | 'step'>('metadata');
   const [draftName, setDraftName] = useState(workflow?.name ?? '');
   const [draftStatus, setDraftStatus] = useState<WorkflowStatus>(workflow?.status ?? 'active');
   const [draftAccountIds, setDraftAccountIds] = useState<string[]>(workflow?.accountIds ?? []);
@@ -574,14 +573,6 @@ export const ManageWorkflowDialog = ({ workflow, initialTab, onClose, onSave }: 
     animateZoomTo(ZOOM_MAX, isFallback ? 'fallback' : id, false);
   };
 
-  // Opening the dialog directly on the Step tab (e.g. via the row's "Manage Workflow"
-  // button) should immediately focus the first step, matching the Step tab's behavior
-  // when clicked with nothing selected.
-  useEffect(() => {
-    if (initialTab === 'step' && steps.length > 0) focusCard(steps[0].id, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleStepTabClick = () => {
     setActiveTab('step');
     if (!selectedStepId && !fallbackSelected && steps.length > 0) focusCard(steps[0].id, false);
@@ -597,13 +588,24 @@ export const ManageWorkflowDialog = ({ workflow, initialTab, onClose, onSave }: 
   };
   // Hands control back to the auto-fit effect above's computed value, animating there. When
   // no card is focused, also glides back to the start of the diagram instead of leaving the
-  // scroll position wherever the user last panned to.
-  const focusFit = () => {
+  // scroll position wherever the user last panned to. `overrideCardId` lets a caller force
+  // "nothing focused" behavior even before a state update (e.g. deselecting) has re-rendered.
+  const focusFit = (overrideCardId) => {
+    const cardId = overrideCardId !== undefined ? overrideCardId : activeCardId;
     setUserZoomed(false);
     const container = scrollContainerRef.current;
     const available = (container?.clientWidth ?? 0) - CANVAS_PADDING * 2;
     const fit = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, available / naturalContentWidth));
-    animateZoomTo(fit, activeCardId, true);
+    animateZoomTo(fit, cardId, true);
+  };
+
+  // Switching back to Metadata should clear any focused step/fallback and zoom the
+  // diagram back out to show it in full, rather than leaving a card selected off-tab.
+  const handleMetadataTabClick = () => {
+    setActiveTab('metadata');
+    setSelectedStepId(null);
+    setFallbackSelected(false);
+    focusFit(null);
   };
 
   // Keeps the focused card centered if the container resizes for reasons outside an
@@ -845,7 +847,7 @@ export const ManageWorkflowDialog = ({ workflow, initialTab, onClose, onSave }: 
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
             paddingTop: 12, paddingLeft: 8, paddingRight: 8, width: 72, flexShrink: 0,
           }}>
-            <VerticalTab active={activeTab === 'metadata'} Icon={Code} label="Metadata" onClick={() => setActiveTab('metadata')} />
+            <VerticalTab active={activeTab === 'metadata'} Icon={Code} label="Metadata" onClick={handleMetadataTabClick} />
             <VerticalTab active={activeTab === 'step'} Icon={AccountTree} label="Step" onClick={handleStepTabClick} />
           </div>
           <div style={{ width: 1, alignSelf: 'stretch', background: '#f0f0f0', flexShrink: 0 }} />
