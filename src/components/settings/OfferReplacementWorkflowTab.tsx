@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   IconButton, FormControl, InputLabel, Select, MenuItem, Autocomplete, TextField,
+  RadioGroup, FormControlLabel, Radio,
 } from '@mui/material';
 import { Add, Close, CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
@@ -20,6 +21,8 @@ const GitForkIcon = () => (
 
 type WorkflowStatus = 'active' | 'inactive';
 
+type ConfigMethod = 'prompt-based' | 'rules-workflow';
+
 interface OfferReplacementWorkflow {
   id: string;
   name: string;
@@ -27,7 +30,13 @@ interface OfferReplacementWorkflow {
   accountIds: string[];
   status: WorkflowStatus;
   approvalRequirement: ApprovalRequirement;
+  configMethod: ConfigMethod;
 }
+
+const CONFIG_METHOD_LABELS: Record<ConfigMethod, string> = {
+  'prompt-based': 'Prompt-Based',
+  'rules-workflow': 'Rules-Based',
+};
 
 interface DealerAccount {
   id: string;
@@ -175,6 +184,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     accountIds: ALL_ACCOUNT_IDS.slice(0, 42),
     status: 'active',
     approvalRequirement: 'request-approval',
+    configMethod: 'rules-workflow',
   },
   {
     id: 'wf-2',
@@ -182,7 +192,8 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: HIGH_END_BRANDS_STEPS,
     accountIds: BMW_ACCOUNT_IDS.slice(0, 12),
     status: 'active',
-    approvalRequirement: 'auto-swap',
+    approvalRequirement: 'request-approval',
+    configMethod: 'rules-workflow',
   },
   {
     id: 'wf-3',
@@ -191,6 +202,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     accountIds: ALL_ACCOUNT_IDS.slice(3, 45),
     status: 'active',
     approvalRequirement: 'request-approval',
+    configMethod: 'rules-workflow',
   },
 ];
 
@@ -199,8 +211,17 @@ const emptyDraft = (): Omit<OfferReplacementWorkflow, 'id'> => ({
   accountIds: [],
   status: 'active',
   approvalRequirement: 'request-approval',
+  configMethod: 'rules-workflow',
   steps: [],
 });
+
+const DEFAULT_PROMPT_TEXT = `Scan the account's inventory for all offers marked "Out of Stock" and replace each with an active, in-stock offer from the same account, following this priority order:
+1) Match the same YMMT (Year, Make, Model, Trim) as the out-of-stock vehicle
+2) Require the same offer type (Lease, Finance, Purchase, etc.) as the original
+3) Among qualifying candidates, prioritize the highest PVI (Price Vehicle Indicator) score while keeping MSRP within ±$500 of the original offer's MSRP
+4) As a final tiebreaker, prefer the vehicle with the longest time on lot
+
+If no candidate meets all criteria, apply fallbacks in order: first relax the MSRP tolerance, then broaden the search to a different trim within the same Make/Model. If still no eligible replacement exists after exhausting all fallbacks, pause the affected offer and send an email notification to the owners of the Project and the Offers Task associated with that out-of-stock offer.`;
 
 // ── Small building blocks ────────────────────────────────────────────────────
 
@@ -239,6 +260,12 @@ function AccountsChip({ count }: { count: number }) {
   );
 }
 
+const radioSx = {
+  color: '#9c99a9',
+  padding: '4px',
+  '&.Mui-checked': { color: '#473bab' },
+};
+
 function ManageWorkflowButton({ onClick, fullWidth }: { onClick?: (e: React.MouseEvent) => void; fullWidth?: boolean }) {
   return (
     <button
@@ -265,6 +292,7 @@ export const OfferReplacementWorkflowTab = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [draft, setDraft] = useState<Omit<OfferReplacementWorkflow, 'id'>>(emptyDraft());
+  const [promptText, setPromptText] = useState(DEFAULT_PROMPT_TEXT);
   const [manageDialog, setManageDialog] = useState<{
     workflowName: string;
     steps: WorkflowStepConfig[];
@@ -282,6 +310,7 @@ export const OfferReplacementWorkflowTab = () => {
         accountIds: selectedWorkflow.accountIds,
         status: selectedWorkflow.status,
         approvalRequirement: selectedWorkflow.approvalRequirement,
+        configMethod: selectedWorkflow.configMethod,
         steps: selectedWorkflow.steps,
       });
     }
@@ -291,14 +320,16 @@ export const OfferReplacementWorkflowTab = () => {
     setSelectedId(workflow.id);
     setDraft({
       name: workflow.name, accountIds: workflow.accountIds, status: workflow.status,
-      approvalRequirement: workflow.approvalRequirement, steps: workflow.steps,
+      approvalRequirement: workflow.approvalRequirement, configMethod: workflow.configMethod, steps: workflow.steps,
     });
+    setPromptText(DEFAULT_PROMPT_TEXT);
     setPanelOpen(true);
   };
 
   const openForNew = () => {
     setSelectedId(null);
     setDraft(emptyDraft());
+    setPromptText(DEFAULT_PROMPT_TEXT);
     setPanelOpen(true);
   };
 
@@ -306,6 +337,7 @@ export const OfferReplacementWorkflowTab = () => {
     setPanelOpen(false);
     setSelectedId(null);
     setDraft(emptyDraft());
+    setPromptText(DEFAULT_PROMPT_TEXT);
   };
 
   const handleSave = () => {
@@ -360,9 +392,9 @@ export const OfferReplacementWorkflowTab = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['Name', 'Approval Requirement', 'Accounts', 'Status', ''].map((col) => (
+                  {['Name', 'Replacement Method', 'Approval Requirement', 'Accounts', 'Status'].map((col) => (
                     <TableCell
-                      key={col || 'actions'}
+                      key={col}
                       sx={{ fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', borderBottom: '1px solid #f0f0f0' }}
                     >
                       {col}
@@ -388,6 +420,9 @@ export const OfferReplacementWorkflowTab = () => {
                         {wf.name}
                       </TableCell>
                       <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+                        {CONFIG_METHOD_LABELS[wf.configMethod]}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
                         {APPROVAL_REQUIREMENTS.find((a) => a.value === wf.approvalRequirement)?.label ?? wf.approvalRequirement}
                       </TableCell>
                       <TableCell>
@@ -395,18 +430,6 @@ export const OfferReplacementWorkflowTab = () => {
                       </TableCell>
                       <TableCell>
                         <StatusChip status={wf.status} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <ManageWorkflowButton
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setManageDialog({
-                              workflowName: wf.name,
-                              steps: wf.steps,
-                              onSave: (steps) => setWorkflows((prev) => prev.map((w) => (w.id === wf.id ? { ...w, steps } : w))),
-                            });
-                          }}
-                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -500,16 +523,55 @@ export const OfferReplacementWorkflowTab = () => {
               )}
             />
 
-            <ManageWorkflowButton
-              fullWidth
-              onClick={() => {
-                setManageDialog({
-                  workflowName: draft.name || 'New Workflow',
-                  steps: draft.steps,
-                  onSave: (steps) => setDraft((d) => ({ ...d, steps })),
-                });
-              }}
-            />
+            <div>
+              <RadioGroup
+                row
+                value={draft.configMethod}
+                onChange={(e) => setDraft((d) => ({ ...d, configMethod: e.target.value as ConfigMethod }))}
+                style={{ marginBottom: 12 }}
+              >
+                <FormControlLabel
+                  value="prompt-based"
+                  control={<Radio size="small" sx={radioSx} />}
+                  label="Prompt-Based"
+                  sx={{ '& .MuiFormControlLabel-label': { fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' } }}
+                />
+                <FormControlLabel
+                  value="rules-workflow"
+                  control={<Radio size="small" sx={radioSx} />}
+                  label="Rules-Based"
+                  sx={{ '& .MuiFormControlLabel-label': { fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' } }}
+                />
+              </RadioGroup>
+
+              {draft.configMethod === 'prompt-based' ? (
+                <TextField
+                  label="Prompt"
+                  multiline
+                  minRows={4}
+                  fullWidth
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  sx={{
+                    '& .MuiInputLabel-root': { fontSize: 13 },
+                    '& .MuiOutlinedInput-input': { fontSize: 14 },
+                    '& .MuiOutlinedInput-root.Mui-focused fieldset': { borderColor: '#473bab' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: '#473bab' },
+                  }}
+                />
+              ) : (
+                <ManageWorkflowButton
+                  fullWidth
+                  onClick={() => {
+                    setManageDialog({
+                      workflowName: draft.name || 'New Workflow',
+                      steps: draft.steps,
+                      onSave: (steps) => setDraft((d) => ({ ...d, steps })),
+                    });
+                  }}
+                />
+              )}
+            </div>
           </div>
 
           <div style={{

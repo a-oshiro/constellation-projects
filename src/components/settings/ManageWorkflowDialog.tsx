@@ -904,9 +904,9 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
 
               <div>
                 <FormControl size="small" fullWidth>
-                  <InputLabel sx={{ fontSize: 13 }}>Replacement Method</InputLabel>
+                  <InputLabel sx={{ fontSize: 13 }}>Vehicle Type</InputLabel>
                   <Select
-                    label="Replacement Method"
+                    label="Vehicle Type"
                     value={selectedStep.replacementMethod}
                     onChange={(e) => updateStep(selectedStep.id, { replacementMethod: e.target.value as WorkflowStepConfig['replacementMethod'] })}
                     MenuProps={{ sx: { zIndex: 10001 } }}
