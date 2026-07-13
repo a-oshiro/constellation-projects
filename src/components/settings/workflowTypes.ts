@@ -36,6 +36,23 @@ export const REPLACEMENT_METHODS: { value: ReplacementMethod; label: string; sho
   },
 ];
 
+// ── Approval requirement ─────────────────────────────────────────────────────
+
+export type ApprovalRequirement = 'auto-swap' | 'request-approval';
+
+export const APPROVAL_REQUIREMENTS: { value: ApprovalRequirement; label: string; helper: string }[] = [
+  {
+    value: 'auto-swap',
+    label: 'Auto-Swap Offers',
+    helper: 'Offers will be automatically replaced with the best recommendation. A confirmation email will be sent to the Project and Offers task owners.',
+  },
+  {
+    value: 'request-approval',
+    label: 'Request Approval',
+    helper: 'An email will be sent to Project and Offers task owners to approve the replacement.',
+  },
+];
+
 export const FILTER_CATALOG: WorkflowFilterCatalogEntry[] = [
   { key: 'offer-type', label: 'Offer Type', options: ['Same Offer Type', 'Different Offer Type'] },
   { key: 'total-price-tolerance', label: 'Total Price Tolerance', options: ['+- $500', '+- $1,000', '+- $2,000'] },

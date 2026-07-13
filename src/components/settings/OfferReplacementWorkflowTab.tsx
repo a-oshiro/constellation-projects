@@ -7,7 +7,8 @@ import { Add, Close, CheckCircle, RadioButtonUnchecked } from '@mui/icons-materi
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { AppTextField } from '../ui/AppTextField';
 import { ManageWorkflowDialog } from './ManageWorkflowDialog';
-import type { WorkflowStepConfig } from './workflowTypes';
+import { APPROVAL_REQUIREMENTS } from './workflowTypes';
+import type { WorkflowStepConfig, ApprovalRequirement } from './workflowTypes';
 
 const GitForkIcon = () => (
   <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -25,6 +26,7 @@ interface OfferReplacementWorkflow {
   steps: WorkflowStepConfig[];
   accountIds: string[];
   status: WorkflowStatus;
+  approvalRequirement: ApprovalRequirement;
 }
 
 interface DealerAccount {
@@ -172,6 +174,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: STANDARD_WORKFLOW_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(0, 42),
     status: 'active',
+    approvalRequirement: 'request-approval',
   },
   {
     id: 'wf-2',
@@ -179,6 +182,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: HIGH_END_BRANDS_STEPS,
     accountIds: BMW_ACCOUNT_IDS.slice(0, 12),
     status: 'active',
+    approvalRequirement: 'auto-swap',
   },
   {
     id: 'wf-3',
@@ -186,6 +190,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: SPECIALS_EVENTS_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(3, 45),
     status: 'active',
+    approvalRequirement: 'request-approval',
   },
 ];
 
@@ -193,6 +198,7 @@ const emptyDraft = (): Omit<OfferReplacementWorkflow, 'id'> => ({
   name: '',
   accountIds: [],
   status: 'active',
+  approvalRequirement: 'request-approval',
   steps: [],
 });
 
@@ -267,12 +273,15 @@ export const OfferReplacementWorkflowTab = () => {
 
   const selectedWorkflow = selectedId ? workflows.find((w) => w.id === selectedId) ?? null : null;
 
+  const currentApprovalRequirement = APPROVAL_REQUIREMENTS.find((a) => a.value === draft.approvalRequirement);
+
   useEffect(() => {
     if (selectedWorkflow) {
       setDraft({
         name: selectedWorkflow.name,
         accountIds: selectedWorkflow.accountIds,
         status: selectedWorkflow.status,
+        approvalRequirement: selectedWorkflow.approvalRequirement,
         steps: selectedWorkflow.steps,
       });
     }
@@ -280,7 +289,10 @@ export const OfferReplacementWorkflowTab = () => {
 
   const openForRow = (workflow: OfferReplacementWorkflow) => {
     setSelectedId(workflow.id);
-    setDraft({ name: workflow.name, accountIds: workflow.accountIds, status: workflow.status, steps: workflow.steps });
+    setDraft({
+      name: workflow.name, accountIds: workflow.accountIds, status: workflow.status,
+      approvalRequirement: workflow.approvalRequirement, steps: workflow.steps,
+    });
     setPanelOpen(true);
   };
 
@@ -348,7 +360,7 @@ export const OfferReplacementWorkflowTab = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  {['Name', 'Steps', 'Accounts', 'Status', ''].map((col) => (
+                  {['Name', 'Approval Requirement', 'Accounts', 'Status', ''].map((col) => (
                     <TableCell
                       key={col || 'actions'}
                       sx={{ fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', borderBottom: '1px solid #f0f0f0' }}
@@ -376,7 +388,7 @@ export const OfferReplacementWorkflowTab = () => {
                         {wf.name}
                       </TableCell>
                       <TableCell sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {wf.steps.length}
+                        {APPROVAL_REQUIREMENTS.find((a) => a.value === wf.approvalRequirement)?.label ?? wf.approvalRequirement}
                       </TableCell>
                       <TableCell>
                         <AccountsChip count={wf.accountIds.length} />
@@ -443,6 +455,27 @@ export const OfferReplacementWorkflowTab = () => {
                 <MenuItem value="inactive"><StatusChip status="inactive" /></MenuItem>
               </Select>
             </FormControl>
+
+            <div>
+              <FormControl size="small" fullWidth>
+                <InputLabel sx={{ fontSize: 13 }}>Approval Requirement</InputLabel>
+                <Select
+                  label="Approval Requirement"
+                  value={draft.approvalRequirement}
+                  onChange={(e) => setDraft((d) => ({ ...d, approvalRequirement: e.target.value as ApprovalRequirement }))}
+                  sx={{ fontSize: 14 }}
+                >
+                  {APPROVAL_REQUIREMENTS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: 14 }}>{opt.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {currentApprovalRequirement && (
+                <div style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', marginTop: 6 }}>
+                  {currentApprovalRequirement.helper}
+                </div>
+              )}
+            </div>
 
             <Autocomplete
               multiple

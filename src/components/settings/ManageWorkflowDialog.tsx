@@ -5,7 +5,7 @@ import {
   Chip, Tooltip,
 } from '@mui/material';
 import {
-  Add, Close, DragIndicator, DeleteOutlineOutlined, East, ZoomIn, ZoomOut, FitScreen,
+  Add, Close, DragIndicator, DeleteOutlineOutlined, South, ZoomIn, ZoomOut, FitScreen,
   DirectionsCarFilled, Autorenew,
 } from '@mui/icons-material';
 import { AppTextField } from '../ui/AppTextField';
@@ -28,9 +28,10 @@ const switchSx = {
   '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#473bab' },
 };
 
-// Horizontal diagram layout: cards are narrow + tall, connected by fixed-width arrow connectors.
-const CARD_WIDTH = 320;
-const CONNECTOR_WIDTH = 120;
+// Vertical diagram layout: cards stack top to bottom, stretching to fill the column up to a
+// max width, connected by fixed-height arrow connectors.
+const CARD_MAX_WIDTH = 920;
+const CONNECTOR_HEIGHT = 72;
 const CANVAS_PADDING = 24;
 
 const ZOOM_MIN = 0.4;
@@ -77,8 +78,6 @@ function StepCard({
   const [hovered, setHovered] = useState(false);
   const showDelete = hovered || selected;
   const tag = REPLACEMENT_METHOD_TAGS[step.replacementMethod];
-  const visibleStrategy = step.strategy.slice(0, 2);
-  const remainingStrategy = step.strategy.length - visibleStrategy.length;
   return (
     <div
       ref={cardRef}
@@ -92,7 +91,7 @@ function StepCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative', zIndex: 2,
-        width: CARD_WIDTH, minHeight: 180, flexShrink: 0,
+        width: '100%', maxWidth: CARD_MAX_WIDTH, minHeight: 180, flexShrink: 0,
         display: 'flex', alignItems: 'flex-start', gap: 12,
         border: selected ? '1px solid #473bab' : '1px solid #dddce0',
         boxShadow: selected ? 'inset 0 0 0 1px #473bab' : 'none',
@@ -161,20 +160,92 @@ function StepCard({
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={labelStyle}>Strategy</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span style={{ ...valueStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {visibleStrategy.length ? visibleStrategy.join(' → ') : '—'}
-            </span>
-            {remainingStrategy > 0 && (
-              <Tooltip title={step.strategy.join(' → ')} slotProps={{ popper: { sx: { zIndex: 10001 } } }}>
-                <span style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, cursor: 'default' }}>
-                  +{remainingStrategy} more
-                </span>
-              </Tooltip>
-            )}
-          </div>
+          <div style={labelStyle}>Best-Match Strategy</div>
+          <StrategySummary strategy={step.strategy} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Strategy summary (Step card) — shows as many items as fit the card's current width,
+// falling back to a "+N more" tooltip only for the items that don't fit. Measured against
+// hidden DOM clones (not canvas text measurement) so the comparison stays valid even when
+// the diagram is zoomed — CSS `zoom` scales every rendered dimension in this subtree
+// uniformly, including the hidden clones, so no separate zoom normalization is needed. ────
+
+function StrategySummary({ strategy }: { strategy: string[] }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const arrowRef = useRef<HTMLSpanElement | null>(null);
+  const moreRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const [visibleCount, setVisibleCount] = useState(strategy.length);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || strategy.length === 0) { setVisibleCount(0); return; }
+
+    const recompute = () => {
+      const available = container.clientWidth;
+      const arrowWidth = arrowRef.current?.offsetWidth ?? 0;
+      const itemWidths = itemRefs.current.slice(0, strategy.length).map((el) => el?.offsetWidth ?? 0);
+
+      // prefixWidths[k] = rendered width of the first k items joined by arrows.
+      const prefixWidths = [0];
+      itemWidths.forEach((w, i) => {
+        prefixWidths.push(prefixWidths[i] + w + (i > 0 ? arrowWidth : 0));
+      });
+
+      if (prefixWidths[strategy.length] <= available) {
+        setVisibleCount(strategy.length);
+        return;
+      }
+
+      for (let k = strategy.length - 1; k >= 0; k--) {
+        const remaining = strategy.length - k;
+        const badgeWidth = moreRefs.current[remaining - 1]?.offsetWidth ?? 0;
+        const gap = k > 0 ? 8 : 0;
+        if (prefixWidths[k] + gap + badgeWidth <= available || k === 0) {
+          setVisibleCount(k);
+          return;
+        }
+      }
+    };
+
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [strategy]);
+
+  const visibleStrategy = strategy.slice(0, visibleCount);
+  const remaining = strategy.length - visibleStrategy.length;
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, width: '100%', overflow: 'hidden' }}>
+      <span style={{ ...valueStyle, whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {visibleStrategy.length ? visibleStrategy.join(' → ') : '—'}
+      </span>
+      {remaining > 0 && (
+        <Tooltip title={strategy.join(' → ')} slotProps={{ popper: { sx: { zIndex: 10001 } } }}>
+          <span style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, cursor: 'default' }}>
+            +{remaining} more
+          </span>
+        </Tooltip>
+      )}
+
+      {/* Hidden measurement clones — same font as the visible spans above, used only to
+          compute how many items fit before committing to a visibleCount. */}
+      <div aria-hidden style={{ position: 'absolute', visibility: 'hidden', height: 0, overflow: 'hidden', pointerEvents: 'none', top: 0, left: 0 }}>
+        {strategy.map((s, i) => (
+          <span key={i} ref={(el) => { itemRefs.current[i] = el; }} style={{ ...valueStyle, whiteSpace: 'nowrap' }}>{s}</span>
+        ))}
+        <span ref={arrowRef} style={{ ...valueStyle, whiteSpace: 'nowrap' }}> → </span>
+        {strategy.map((_, i) => (
+          <span key={i} ref={(el) => { moreRefs.current[i] = el; }} style={{ ...labelStyle, marginBottom: 0 }}>
+            +{i + 1} more
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -191,13 +262,13 @@ function StepConnector({ interactive, onAddStep }: { interactive: boolean; onAdd
       onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: CONNECTOR_WIDTH, flexShrink: 0, alignSelf: 'center',
+        height: CONNECTOR_HEIGHT, width: '100%', flexShrink: 0, alignSelf: 'center',
       }}
     >
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: '#dddce0' }} />
-      <East style={{
-        position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
-        fontSize: 18, color: '#9c99a9', background: '#ffffff', zIndex: 1,
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#dddce0' }} />
+      <South style={{
+        position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+        fontSize: 18, color: '#9c99a9', background: '#f4f5f6', zIndex: 1,
       }} />
       {showAdd ? (
         <button
@@ -237,7 +308,7 @@ function FallbackCard({ fallback, selected, onSelect, cardRef }: {
       onClick={onSelect}
       style={{
         position: 'relative', zIndex: 2,
-        width: CARD_WIDTH, minHeight: 180, flexShrink: 0,
+        width: '100%', maxWidth: CARD_MAX_WIDTH, minHeight: 180, flexShrink: 0,
         border: selected ? '1px solid #473bab' : '1px solid #dddce0',
         boxShadow: selected ? 'inset 0 0 0 1px #473bab' : 'none',
         borderRadius: 12, padding: 16, display: 'flex', gap: 12, background: '#ffffff', cursor: 'pointer',
@@ -417,13 +488,22 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
     setScrollContainerEl(el);
   };
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // The column div that has `zoom` applied directly — used to measure natural (zoom = 1)
+  // sizes by reading its live rendered size and dividing out the current zoom.
+  const columnRef = useRef<HTMLDivElement | null>(null);
+  // Set by insertStepAt to the id of a just-inserted step; consumed by the layout effect
+  // below once that step's card has actually rendered and its ref is attached, since
+  // focusCard's zoom animation needs a real cardRefs entry to compute a scroll target.
+  const pendingFocusStepId = useRef<string | null>(null);
 
   const activeCardId = selectedStepId ?? (fallbackSelected ? 'fallback' : null);
 
-  // Zoom: defaults to a "fit the whole diagram in the available width" level, computed
-  // purely from the known card/connector widths (no DOM measurement needed). Once the
-  // user takes control (manual zoom, or selecting a card zooms to 100%), auto-fit stops
-  // so it doesn't fight their choice on subsequent container resizes.
+  // Zoom: defaults to a "fit the whole diagram in the available height" level. Unlike the
+  // old horizontal layout (fixed card width, computable purely from constants), card height
+  // here is content-driven, so the natural content height has to be measured live from the
+  // DOM rather than derived analytically. Once the user takes control (manual zoom, or
+  // selecting a card zooms to 100%), auto-fit stops so it doesn't fight their choice on
+  // subsequent container resizes.
   const [zoom, setZoom] = useState(ZOOM_MAX);
   const [userZoomed, setUserZoomed] = useState(false);
   const zoomRef = useRef(zoom);
@@ -432,34 +512,44 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   // resize-triggered recenter effect below knows to stand down instead of fighting it.
   const zoomAnimRef = useRef<number | null>(null);
 
-  const cardCount = steps.length + 1; // + fallback card
-  const connectorCount = Math.max(steps.length, 1); // placeholder row still has one connector
-  const naturalContentWidth = cardCount * CARD_WIDTH + connectorCount * CONNECTOR_WIDTH;
+  // CSS `zoom` scales all descendant layout metrics uniformly, so a live-measured size
+  // divided by the zoom that's currently applied gives the exact natural (zoom = 1) size,
+  // regardless of what the current zoom level actually is.
+  const naturalContentHeight = (): number => {
+    const column = columnRef.current;
+    if (!column) return 0;
+    return column.getBoundingClientRect().height / (zoomRef.current || 1);
+  };
 
   useLayoutEffect(() => {
     if (userZoomed || !scrollContainerEl) return;
     const container = scrollContainerEl;
 
-    const fitToWidth = () => {
+    const fitToHeight = () => {
       if (zoomAnimRef.current !== null) return; // an explicit zoom animation is already driving zoom
-      const available = container.clientWidth - CANVAS_PADDING * 2;
-      const fit = Math.min(ZOOM_MAX, available / naturalContentWidth);
+      const height = naturalContentHeight();
+      if (!height) return;
+      const available = container.clientHeight - CANVAS_PADDING * 2;
+      const fit = Math.min(ZOOM_MAX, available / height);
       setZoom(Math.max(ZOOM_MIN, fit));
     };
 
-    fitToWidth();
-    const observer = new ResizeObserver(fitToWidth);
+    fitToHeight();
+    const observer = new ResizeObserver(fitToHeight);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [userZoomed, naturalContentWidth, scrollContainerEl]);
+  }, [userZoomed, steps.length, scrollContainerEl]);
 
-  // The natural (zoom = 1) left offset of a card within the row — computed purely from the
-  // fixed layout constants (no DOM measurement) so the eventual scroll target at any given
-  // zoom level can be computed analytically, up front, before the animation even starts.
-  const naturalCardLeft = (cardId: string): number => {
-    if (cardId === 'fallback') return steps.length * (CARD_WIDTH + CONNECTOR_WIDTH);
-    const index = steps.findIndex((s) => s.id === cardId);
-    return index * (CARD_WIDTH + CONNECTOR_WIDTH);
+  // The natural (zoom = 1) top offset of a card within the column — read live from the DOM
+  // (card height is content-driven, so it can't be predicted from constants) so the eventual
+  // scroll target at any given zoom level can be computed up front, before the animation starts.
+  const naturalCardTop = (cardId: string): number => {
+    const el = cardRefs.current[cardId];
+    const column = columnRef.current;
+    if (!el || !column) return 0;
+    const elRect = el.getBoundingClientRect();
+    const columnRect = column.getBoundingClientRect();
+    return (elRect.top - columnRect.top) / (zoomRef.current || 1);
   };
 
   // CSS `zoom` isn't an animatable/interpolable property (transitions on it are a no-op in
@@ -473,15 +563,17 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
     const container = scrollContainerRef.current;
     const startZoom = zoomRef.current;
     const targetZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, target));
-    const startScroll = container?.scrollLeft ?? 0;
+    const startScroll = container?.scrollTop ?? 0;
 
     let targetScroll = startScroll;
     if (container) {
       if (focusCardId) {
-        const idealLeft = CANVAS_PADDING + naturalCardLeft(focusCardId) * targetZoom - (container.clientWidth - CARD_WIDTH * targetZoom) / 2;
-        const scrollWidthAtTarget = naturalContentWidth * targetZoom + CANVAS_PADDING * 2;
-        const max = Math.max(0, scrollWidthAtTarget - container.clientWidth);
-        targetScroll = Math.max(0, Math.min(idealLeft, max));
+        const cardEl = cardRefs.current[focusCardId];
+        const cardHeight = cardEl ? cardEl.getBoundingClientRect().height / (zoomRef.current || 1) : 0;
+        const idealTop = CANVAS_PADDING + naturalCardTop(focusCardId) * targetZoom - (container.clientHeight - cardHeight * targetZoom) / 2;
+        const scrollHeightAtTarget = naturalContentHeight() * targetZoom + CANVAS_PADDING * 2;
+        const max = Math.max(0, scrollHeightAtTarget - container.clientHeight);
+        targetScroll = Math.max(0, Math.min(idealTop, max));
       } else if (snapToStartIfUnfocused) {
         targetScroll = 0;
       }
@@ -498,7 +590,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       const currentZoom = startZoom + (targetZoom - startZoom) * eased;
       setZoom(currentZoom);
       zoomRef.current = currentZoom;
-      if (container) container.scrollLeft = startScroll + (targetScroll - startScroll) * eased;
+      if (container) container.scrollTop = startScroll + (targetScroll - startScroll) * eased;
       if (t >= 1) {
         clearInterval(intervalId);
         zoomAnimRef.current = null;
@@ -511,6 +603,15 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   useEffect(() => () => {
     if (zoomAnimRef.current !== null) clearInterval(zoomAnimRef.current);
   }, []);
+
+  // Focuses a step (or the fallback) card: selects it and zooms/scrolls the diagram to
+  // center it — shared by card clicks and the pending-focus effect for newly inserted steps.
+  const focusCard = (id: string, isFallback: boolean) => {
+    if (isFallback) { setFallbackSelected(true); setSelectedStepId(null); }
+    else { setSelectedStepId(id); setFallbackSelected(false); }
+    setUserZoomed(true);
+    animateZoomTo(ZOOM_MAX, isFallback ? 'fallback' : id, false);
+  };
 
   const zoomIn = () => {
     setUserZoomed(true);
@@ -526,8 +627,9 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
   const focusFit = () => {
     setUserZoomed(false);
     const container = scrollContainerRef.current;
-    const available = (container?.clientWidth ?? 0) - CANVAS_PADDING * 2;
-    const fit = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, available / naturalContentWidth));
+    const height = naturalContentHeight();
+    const available = (container?.clientHeight ?? 0) - CANVAS_PADDING * 2;
+    const fit = height ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, available / height)) : ZOOM_MAX;
     animateZoomTo(fit, activeCardId, true);
   };
 
@@ -543,10 +645,10 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       if (!card) return;
       const containerRect = container.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      const cardOffsetWithinContainer = (cardRect.left - containerRect.left) + container.scrollLeft;
-      const target = cardOffsetWithinContainer - (container.clientWidth - cardRect.width) / 2;
-      const max = container.scrollWidth - container.clientWidth;
-      container.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
+      const cardOffsetWithinContainer = (cardRect.top - containerRect.top) + container.scrollTop;
+      const target = cardOffsetWithinContainer - (container.clientHeight - cardRect.height) / 2;
+      const max = container.scrollHeight - container.clientHeight;
+      container.scrollTo({ top: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
     };
 
     recenter();
@@ -554,6 +656,16 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
     observer.observe(container);
     return () => observer.disconnect();
   }, [activeCardId]);
+
+  // Picks up a just-inserted step once its card has actually rendered and attached to
+  // cardRefs (insertStepAt can't call focusCard synchronously — the new card doesn't
+  // exist in the DOM yet at that point, so its zoom target can't be computed).
+  useLayoutEffect(() => {
+    const pendingId = pendingFocusStepId.current;
+    if (!pendingId || !cardRefs.current[pendingId]) return;
+    pendingFocusStepId.current = null;
+    focusCard(pendingId, false);
+  }, [steps]);
 
   const selectedStep = selectedStepId ? steps.find((s) => s.id === selectedStepId) ?? null : null;
 
@@ -567,8 +679,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       next.splice(index, 0, newStep);
       return next;
     });
-    setSelectedStepId(newStep.id);
-    setFallbackSelected(false);
+    pendingFocusStepId.current = newStep.id;
   };
 
   const removeStep = (id: string) => {
@@ -662,17 +773,20 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Canvas wrapper — provides a positioning context for the floating zoom control */}
         <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-          {/* Canvas — horizontal flow: steps left to right, connected by arrows */}
+          {/* Canvas — vertical flow: steps top to bottom, connected by arrows, capped at 920px wide */}
           <div
             ref={setScrollContainerRef}
-            style={{ height: '100%', overflow: 'auto', padding: CANVAS_PADDING, marginRight: 24, boxSizing: 'border-box' }}
+            style={{ height: '100%', overflow: 'auto', padding: CANVAS_PADDING, marginRight: 24, boxSizing: 'border-box', background: '#f4f5f6' }}
           >
-            <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', zoom }}>
+            <div style={{ minWidth: '100%', display: 'flex', justifyContent: 'center' }}>
+              <div
+                ref={(el) => { columnRef.current = el; }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: CARD_MAX_WIDTH, zoom }}
+              >
                 {steps.length === 0 ? (
                   <>
                     <div style={{
-                      width: CARD_WIDTH, flexShrink: 0, minHeight: 180,
+                      width: '100%', flexShrink: 0, minHeight: 180,
                       border: '1.5px dashed #cac9cf', borderRadius: 12,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
@@ -700,7 +814,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                         selected={selectedStepId === step.id}
                         dragging={dragStepIndex === i}
                         dragOver={dragOverStepIndex === i && dragStepIndex !== i}
-                        onSelect={() => { setSelectedStepId(step.id); setFallbackSelected(false); setUserZoomed(true); animateZoomTo(ZOOM_MAX, step.id, false); }}
+                        onSelect={() => focusCard(step.id, false)}
                         onRemove={() => removeStep(step.id)}
                         cardRef={(el) => { cardRefs.current[step.id] = el; }}
                         {...stepDragHandlers(i)}
@@ -712,7 +826,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                 <FallbackCard
                   fallback={fallback}
                   selected={fallbackSelected}
-                  onSelect={() => { setFallbackSelected(true); setSelectedStepId(null); setUserZoomed(true); animateZoomTo(ZOOM_MAX, 'fallback', false); }}
+                  onSelect={() => focusCard('fallback', true)}
                   cardRef={(el) => { cardRefs.current.fallback = el; }}
                 />
               </div>
@@ -856,7 +970,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
               </div>
 
               <div>
-                <div style={sectionTitleStyle}>Strategy</div>
+                <div style={sectionTitleStyle}>Best-Match Strategy</div>
                 <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', marginBottom: 8 }}>
                   If multiple matches are found, define replacement through:
                 </div>
@@ -883,7 +997,7 @@ export const ManageWorkflowDialog = ({ workflowName, initialSteps, onClose, onSa
                     color: '#473bab', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', padding: 0,
                   }}
                 >
-                  <Add style={{ fontSize: 16 }} /> Add
+                  <Add style={{ fontSize: 16 }} /> Add Strategy
                 </button>
                 <SearchMenu
                   anchorEl={strategyMenuAnchor}
