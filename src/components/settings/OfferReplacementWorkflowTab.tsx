@@ -7,7 +7,7 @@ import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { ManageWorkflowDialog } from './ManageWorkflowDialog';
 import { CURRENT_USER } from '../../data/mockData';
 import { ACCOUNTS, StatusChip } from './workflowTypes';
-import type { WorkflowStepConfig, OfferReplacementWorkflow, WorkflowStatus } from './workflowTypes';
+import type { WorkflowStepConfig, OfferReplacementWorkflow, WorkflowStatus, ApprovalRequirement } from './workflowTypes';
 
 const GitForkIcon = () => (
   <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -104,6 +104,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: STANDARD_WORKFLOW_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(0, 42),
     status: 'active',
+    approvalRequirement: 'request-approval',
     createdAt: '2026-07-01T13:35:00',
     createdBy: 'John Doe',
     updatedAt: '2026-07-15T16:11:00',
@@ -115,6 +116,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: HIGH_END_BRANDS_STEPS,
     accountIds: BMW_ACCOUNT_IDS.slice(0, 12),
     status: 'active',
+    approvalRequirement: 'request-approval',
     createdAt: '2026-06-18T09:20:00',
     createdBy: 'Michael Stuart',
     updatedAt: '2026-06-18T09:20:00',
@@ -126,6 +128,7 @@ const INITIAL_WORKFLOWS: OfferReplacementWorkflow[] = [
     steps: SPECIALS_EVENTS_STEPS,
     accountIds: ALL_ACCOUNT_IDS.slice(3, 45),
     status: 'active',
+    approvalRequirement: 'request-approval',
     createdAt: '2026-05-02T11:05:00',
     createdBy: 'Olivia Douglas',
     updatedAt: '2026-06-30T08:47:00',
@@ -178,7 +181,10 @@ export const OfferReplacementWorkflowTab = () => {
 
   const closeDialog = () => setManageDialog(null);
 
-  const handleSave = (patch: { name: string; status: WorkflowStatus; accountIds: string[]; steps: WorkflowStepConfig[] }) => {
+  const handleSave = (patch: {
+    name: string; status: WorkflowStatus; approvalRequirement: ApprovalRequirement;
+    accountIds: string[]; steps: WorkflowStepConfig[];
+  }) => {
     const now = new Date().toISOString();
     setWorkflows((prev) => {
       if (manageDialog?.workflow) {

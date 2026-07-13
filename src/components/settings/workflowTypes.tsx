@@ -112,6 +112,7 @@ export interface OfferReplacementWorkflow {
   steps: WorkflowStepConfig[];
   accountIds: string[];
   status: WorkflowStatus;
+  approvalRequirement: ApprovalRequirement;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
@@ -140,6 +141,23 @@ export const REPLACEMENT_METHODS: { value: ReplacementMethod; label: string; sho
     label: 'Different YMMT',
     shortLabel: 'Different YMMT',
     helper: 'Finds offers with a different YMMT that still matches your criteria',
+  },
+];
+
+// ── Approval requirement ─────────────────────────────────────────────────────
+
+export type ApprovalRequirement = 'auto-swap' | 'request-approval';
+
+export const APPROVAL_REQUIREMENTS: { value: ApprovalRequirement; label: string; helper: string }[] = [
+  {
+    value: 'auto-swap',
+    label: 'Auto-Swap Offers',
+    helper: 'Offers will be automatically replaced with the best recommendation. A confirmation email will be sent to the Project and Offers task owners.',
+  },
+  {
+    value: 'request-approval',
+    label: 'Request Approval',
+    helper: 'An email will be sent to Project and Offers task owners to approve the replacement.',
   },
 ];
 
@@ -215,7 +233,7 @@ export function createDefaultStep(): WorkflowStepConfig {
   stepIdCounter += 1;
   return {
     id: `step-${Date.now()}-${stepIdCounter}`,
-    name: '',
+    name: 'New Step',
     replacementMethod: 'same-ymmt',
     filters: [],
     strategy: ['Highest PVI'],
