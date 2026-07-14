@@ -16,6 +16,7 @@ import { ApprovedPage } from './pages/ApprovedPage';
 import { AdsPage } from './pages/AdsPage';
 import { CampaignsPage } from './pages/CampaignsPage';
 import { ClientSettingsPage } from './pages/ClientSettingsPage';
+import { AccountSettingsPage } from './pages/AccountSettingsPage';
 
 const theme = createTheme({
   typography: {
@@ -67,6 +68,8 @@ function App() {
                   <Route path="/ads" element={<AdsPage />} />
                   <Route path="/campaigns" element={<CampaignsPage />} />
                   <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
+                  <Route path="/settings/accounts/:accountId" element={<AccountSettingsPage />} />
+                  <Route path="/settings/accounts/:accountId/:tabId" element={<AccountSettingsPage />} />
                   <Route path="/settings/:tabId" element={<ClientSettingsPage />} />
                 </Routes>
               </MainLayout>
