@@ -1,7 +1,7 @@
 import { CTA_OPTIONS } from '../components/settings/DestinationURLs';
 import type { DestinationUrl, DestinationUrlType } from '../components/settings/DestinationURLs';
 
-const OPENAI_MODEL = 'gpt-4o-mini';
+const OPENAI_MODEL = 'gpt-4o';
 
 // 2026 BMW lineup — shared between the "Fetch URLs with AI" dialog and the
 // auto-suggest flow triggered after the first manually-added Inventory URL.
@@ -28,7 +28,8 @@ const CTA_GUIDANCE: Record<DestinationUrlType, string[]> = {
 };
 
 const SYSTEM_PROMPT = `You generate destination-URL data for an automotive dealer website integration tool.
-You have live web browsing access — use it to actually visit and inspect the target website; never guess or fabricate a URL.
+You have live web browsing access — use it to actually visit and inspect the target website; never guess, fabricate, or "clean up" a URL.
+When you copy a URL into your output, copy its exact path character-for-character as it appears when you open the page — do not add words (like the brand or make name into a slug), do not shorten or rename segments, and do not apply a naming convention of your own that isn't literally what you observed. Always output the full absolute URL including the "https://" scheme and domain — never a bare path like "/new-vehicles/x1/".
 Always respond with ONLY raw CSV text — no markdown code fences, no commentary before or after.
 The first line must be exactly this header: Label,URL,Type,Vehicle,Associated CTAs
 Wrap every field in double quotes and escape internal quotes by doubling them (""").
@@ -40,11 +41,20 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
 
   lines.push(`Website to inspect: ${website}`);
   lines.push('');
+  lines.push('Step 1 — Browse and find the real pages. Do this before worrying about output formatting.');
   lines.push(
     'Actually browse this live website with your web browsing tool — do not guess, fabricate, or ' +
     'construct URLs from path conventions. Navigate the site (its navigation menus, footer links, ' +
     'sitemap, and internal pages) to find the real destination pages for each requested category below. ' +
     'Every URL you output must be a page you actually found by browsing the site.',
+  );
+  lines.push(
+    'When you find a page, copy its URL exactly as it appears in the address bar or the link you ' +
+    'followed — character for character. Do not "clean up," shorten, or embellish the path, and do not ' +
+    'insert the brand or make name into a URL segment unless it is literally part of the real path you ' +
+    'observed. For example, if the real inventory page for the X1 is at "/new-vehicles/x1/", output ' +
+    'exactly "/new-vehicles/x1/" — do not change it to "/new-vehicles/bmw-x1/" or any other variant ' +
+    'that merely looks plausible.',
   );
   lines.push('');
   lines.push(
@@ -72,6 +82,42 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
         'for; do not add any other models and do not omit any of them.',
       );
       lines.push(
+        'A single web search for a model name is often not enough to reach the exact model subpage — ' +
+        'it frequently only surfaces the general "new vehicles" or "inventory" landing page instead. ' +
+        'When that happens, treat that landing page as a starting point, not a result: open it, find ' +
+        'its navigation menu or on-page list of models (dealer sites almost always list each model as ' +
+        'its own distinct link — e.g. X1, X3, M8, i5, ... — right there in that menu), then follow the ' +
+        'specific link for the model you are looking for and use THAT page\'s URL, not the landing ' +
+        'page\'s URL. The general landing page for the whole inventory section is never an acceptable ' +
+        'substitute for a specific model\'s row.',
+      );
+      lines.push(
+        'Look up each model separately and one at a time — do not rely on a single pass to fill in ' +
+        'multiple rows at once. Before you finalize a row, re-check that the page\'s own title, ' +
+        'heading, or URL explicitly names that exact model — if the page you landed on is for a ' +
+        'different model than the one you were looking for, or is a general landing/category page ' +
+        'rather than that model\'s own page, that is not a match: keep looking using the navigation ' +
+        'menu, or omit the row if you truly cannot find it.',
+      );
+      lines.push(
+        'The page you pick must be the model LINE page (the marketing/browsing page for that model as ' +
+        'a whole, listing its trims/features and the current in-stock units) — not a single specific ' +
+        'vehicle\'s detail page. A single-vehicle page is tied to one VIN or stock number and will stop ' +
+        'working the moment that particular unit is sold, which makes it unsuitable as a standing ' +
+        'destination URL. If a URL you are considering shows one specific vehicle\'s VIN, stock number, ' +
+        'or exact price/options rather than the model as a whole, go back and use the model line page ' +
+        'instead (usually one level up in the site\'s navigation from that vehicle listing).',
+      );
+      lines.push(
+        'A concrete tell for a single-vehicle page: its URL path contains a long VIN-like string (17 ' +
+        'characters mixing letters and digits) or a numeric stock number, and/or the path has many ' +
+        'hyphen-joined words describing one exact vehicle (color, trim, drivetrain, body style all ' +
+        'strung together, e.g. ".../new-2026-bmw-x1-all-wheel-drive-suv-<vin>/"). The model line page\'s ' +
+        'URL is almost always much shorter and simpler — typically just the model name or a short slug ' +
+        '(e.g. ".../new-vehicles/x1/" or similar). If the URL you found matches the single-vehicle ' +
+        'pattern, navigate up or back to find the shorter model line URL and use that instead.',
+      );
+      lines.push(
         allModelsSelected
           ? `Every one of the following models is selected — find a page for each (${models.length} rows total):`
           : `The following models are selected — find a page for each (${models.length} rows total):`,
@@ -79,10 +125,11 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
       lines.push(models.join(', '));
       lines.push(
         'For each model\'s row: invent a distinct label such as "New Vehicle Inventory - <Model>" ' +
-        '(the label may be worded however reads best, but the URL itself must be the real page you ' +
-        'found), use the real URL you found for that model\'s inventory page, set Type to "Inventory", ' +
-        'and set Vehicle to "2026 BMW <Model>". If you cannot find a working page for a given model ' +
-        'after checking the site, omit that model\'s row entirely rather than guessing.',
+        '(the label may be worded however reads best), use the exact real URL you found for that ' +
+        'model\'s inventory page copied verbatim (see the URL-fidelity rule above — do not embellish ' +
+        'it or add the make name into the slug), set Type to "Inventory", and set Vehicle to ' +
+        '"2026 BMW <Model>". If you cannot find a working page for a given model after checking the ' +
+        'site, omit that model\'s row entirely rather than guessing or substituting a different model\'s page.',
       );
     } else {
       lines.push(`Category "${type}": find the real page(s) for this category by browsing the site.`);
@@ -90,6 +137,7 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
     lines.push('');
   }
 
+  lines.push('Step 2 — Format your findings as CSV, without altering any URL from Step 1.');
   lines.push(`For every row, choose Associated CTAs only from this fixed list: ${CTA_OPTIONS.join(', ')}.`);
   lines.push('Pick every CTA from that list that reasonably applies to the row\'s category — a row can have more than one. Typical fit:');
   for (const type of Object.keys(CTA_GUIDANCE) as DestinationUrlType[]) {
@@ -149,7 +197,18 @@ function normalizeType(raw: string | undefined): DestinationUrlType {
   return VALID_TYPES.find((t) => t.toLowerCase() === trimmed.toLowerCase()) ?? 'Contact';
 }
 
-function rowsToDestinationUrls(rows: string[][]): DestinationUrl[] {
+// Safety net for when the model returns a path instead of a fully-qualified URL (e.g.
+// "/new-vehicles/x1/" instead of "https://www.example.com/new-vehicles/x1/") — resolving
+// against the site's own origin is deterministic and doesn't depend on prompt compliance.
+function resolveUrl(url: string, website: string): string {
+  try {
+    return new URL(url, website).toString();
+  } catch {
+    return url;
+  }
+}
+
+function rowsToDestinationUrls(rows: string[][], website: string): DestinationUrl[] {
   const [, ...dataRows] = rows;
   return dataRows
     .filter((row) => row.length >= 5 && row[0]?.trim())
@@ -158,7 +217,7 @@ function rowsToDestinationUrls(rows: string[][]): DestinationUrl[] {
       return {
         id: `url-${Math.random().toString(36).slice(2)}`,
         label: label.trim(),
-        url: url.trim(),
+        url: resolveUrl(url.trim(), website),
         type: normalizeType(type),
         ymmt: vehicle?.trim() ? vehicle.trim() : undefined,
         ctas: ctasRaw ? ctasRaw.split(';').map((s) => s.trim()).filter(Boolean) : [],
@@ -199,7 +258,7 @@ export async function fetchUrlsFromWebsite(params: FetchUrlsParams): Promise<Des
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      temperature: 0.2,
+      temperature: 0.0,
       tools: [{ type: 'web_search' }],
       input: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -224,5 +283,5 @@ export async function fetchUrlsFromWebsite(params: FetchUrlsParams): Promise<Des
     throw new Error('No verified URLs were found on this website for the selected categories.');
   }
 
-  return rowsToDestinationUrls(rows);
+  return rowsToDestinationUrls(rows, params.website);
 }
