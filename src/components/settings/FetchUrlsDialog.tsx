@@ -4,18 +4,10 @@ import {
   CircularProgress, Alert,
 } from '@mui/material';
 import { Close, CheckBoxOutlineBlank, CheckBox as CheckBoxIcon } from '@mui/icons-material';
-import { fetchUrlsFromWebsite } from '../../utils/fetchUrlsWithAI';
+import { fetchUrlsFromWebsite, BMW_2026_MODELS } from '../../utils/fetchUrlsWithAI';
 import type { DestinationUrl, DestinationUrlType } from './DestinationURLs';
 
 const URL_TYPE_OPTIONS: DestinationUrlType[] = ['Contact', 'Inventory', 'Specials', 'Trade-In'];
-
-// 2026 BMW lineup — used as the Vehicle Models options when "Inventory" is a selected URL type.
-const BMW_2026_MODELS = [
-  'X1', 'X2', 'X3', 'X5', 'X6', 'X7', 'X5 M', 'X6 M', 'XM', 'iX', 'iX3',
-  '2 Series Gran Coupe', '2 Series Coupe', '3 Series', '4 Series Coupe', '4 Series Gran Coupe',
-  '4 Series Convertible', '5 Series', '7 Series', 'M2', 'M3', 'M4 Coupe', 'M4 Convertible',
-  'M5 (Sedan)', 'M5 Touring', 'Z4', 'i4', 'i5', 'i7',
-];
 
 const labelSx = { fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.15px' };
 

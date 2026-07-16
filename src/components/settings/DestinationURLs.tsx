@@ -2,16 +2,18 @@ import { useState } from 'react';
 import {
   Button, ButtonGroup, TextField, InputAdornment, IconButton,
   Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Checkbox, Chip, Menu, MenuItem, ListItemIcon,
+  Checkbox, Chip, Menu, MenuItem, ListItemIcon, CircularProgress,
 } from '@mui/material';
 import {
   Add, ArrowDropDown, Search, ViewSidebarOutlined,
   AutoAwesomeOutlined, UploadOutlined, DescriptionOutlined,
+  AutoAwesome, Check, Close,
 } from '@mui/icons-material';
 import type { SvgIconComponent } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { NewUrlPanel } from './NewUrlPanel';
 import { FetchUrlsDialog } from './FetchUrlsDialog';
+import { fetchUrlsFromWebsite, BMW_2026_MODELS } from '../../utils/fetchUrlsWithAI';
 import emptyFolderSrc from '../../assets/empty-folder.png';
 
 const DEFAULT_ACCOUNT_WEBSITE = 'https://www.bmwnyc.com/';
@@ -181,6 +183,60 @@ function CtaChip({ label }: { label: string }) {
   );
 }
 
+function SmartUrlFetchBubble({ onAccept, onIgnore }: { onAccept: () => void; onIgnore: () => void }) {
+  return (
+    <div
+      style={{
+        position: 'absolute', top: 16, right: 16, zIndex: 5, width: 280,
+        background: '#473bab', borderRadius: '16px 16px 0 16px',
+        boxShadow: '0px 2px 4px -1px rgba(0,0,0,0.2), 0px 4px 5px rgba(0,0,0,0.14), 0px 1px 10px rgba(0,0,0,0.12)',
+        padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: '50%', background: '#fafaff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <AutoAwesome style={{ fontSize: 15, color: '#473bab' }} />
+        </div>
+        <span style={{ flex: 1, fontSize: 16, fontWeight: 700, fontFamily: 'Roboto, sans-serif', color: '#ffffff', letterSpacing: '0.15px', lineHeight: 1.75 }}>
+          Smart URL Fetch
+        </span>
+      </div>
+      <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#ffffff', letterSpacing: '0.17px', lineHeight: 1.43 }}>
+        We think these URLs might fit your website.
+      </span>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Button
+          onClick={onIgnore}
+          startIcon={<Close style={{ fontSize: 16 }} />}
+          sx={{
+            border: '1px solid rgba(99,86,225,0.5)', borderRadius: 100, padding: '4px 10px',
+            textTransform: 'capitalize', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px',
+            color: '#ffffff', minWidth: 0,
+            '&:hover': { border: '1px solid rgba(99,86,225,0.7)', background: 'rgba(255,255,255,0.08)' },
+          }}
+        >
+          Ignore
+        </Button>
+        <Button
+          onClick={onAccept}
+          startIcon={<Check style={{ fontSize: 16 }} />}
+          sx={{
+            background: '#f0f2f4', borderRadius: 100, padding: '4px 10px',
+            textTransform: 'capitalize', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px',
+            color: '#473bab', minWidth: 0,
+            '&:hover': { background: '#e2e4e8' },
+          }}
+        >
+          Accept
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 interface DestinationURLsProps {
@@ -194,6 +250,10 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
 
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<DestinationUrl[]>([]);
+
   const filtered = urls.filter((u) => {
     const tab = TABS.find((t) => t.id === activeTab);
     const matchesTab = !tab || tab.id === 'all' || u.type === tab.type;
@@ -201,9 +261,44 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
     return matchesTab && matchesSearch;
   });
 
+  const hasTableContent = filtered.length > 0 || suggestLoading || suggestError !== null || suggestions.length > 0;
+
+  // Suggests the remaining model-specific Inventory URLs once the user manually adds their
+  // first one — reuses the same OpenAI pipeline as the "Fetch URLs with AI" dialog, scoped to
+  // Inventory only and excluding models the account already has a URL for.
+  const triggerModelSuggestions = async (currentUrls: DestinationUrl[]) => {
+    setSuggestLoading(true);
+    setSuggestError(null);
+    try {
+      const existingModels = currentUrls
+        .filter((u) => u.type === 'Inventory' && u.ymmt)
+        .map((u) => u.ymmt!.toLowerCase());
+      const modelsToFetch = BMW_2026_MODELS.filter(
+        (model) => !existingModels.some((existing) => existing.includes(model.toLowerCase())),
+      );
+      if (modelsToFetch.length === 0) return;
+      const results = await fetchUrlsFromWebsite({
+        website: DEFAULT_ACCOUNT_WEBSITE,
+        types: ['Inventory'],
+        models: modelsToFetch,
+        allModelsSelected: modelsToFetch.length === BMW_2026_MODELS.length,
+      });
+      setSuggestions(results);
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : 'Something went wrong fetching suggested URLs.');
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
   const handleSave = (newUrl: DestinationUrl) => {
+    const hadInventoryBefore = urls.some((u) => u.type === 'Inventory');
     setUrls((prev) => [...prev, newUrl]);
     setPanelOpen(false);
+
+    if (newUrl.type === 'Inventory' && !hadInventoryBefore) {
+      void triggerModelSuggestions([...urls, newUrl]);
+    }
   };
 
   const handleFetchedUrls = (newUrls: DestinationUrl[]) => {
@@ -211,8 +306,18 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
     setFetchDialogOpen(false);
   };
 
+  const handleAcceptSuggestions = () => {
+    setUrls((prev) => [...prev, ...suggestions]);
+    setSuggestions([]);
+  };
+
+  const handleIgnoreSuggestions = () => {
+    setSuggestions([]);
+  };
+
   return (
     <>
+      <div className="flex flex-col flex-1 min-h-0" style={{ position: 'relative', minWidth: 0 }}>
       <div
         className="flex flex-col flex-1 min-h-0"
         style={{
@@ -311,7 +416,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
                   ))}
                 </TableRow>
               </TableHead>
-              {filtered.length > 0 && (
+              {hasTableContent && (
                 <TableBody>
                   {filtered.map((row) => (
                     <TableRow key={row.id} hover sx={{ '& td': { borderBottom: '1px solid rgba(0,0,0,0.12)' } }}>
@@ -337,13 +442,79 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
                       </TableCell>
                     </TableRow>
                   ))}
+
+                  {suggestLoading && (
+                    <TableRow>
+                      <TableCell colSpan={COLUMNS.length + 1} sx={{ borderBottom: '1px solid rgba(0,0,0,0.12)', padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <CircularProgress size={16} sx={{ color: '#473bab' }} />
+                          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
+                            Fetching model-specific inventory URLs with AI…
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {suggestError && (
+                    <TableRow>
+                      <TableCell colSpan={COLUMNS.length + 1} sx={{ borderBottom: '1px solid rgba(0,0,0,0.12)', padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#b3261e', letterSpacing: '0.17px' }}>
+                            {suggestError}
+                          </span>
+                          <IconButton size="small" onClick={() => setSuggestError(null)} sx={{ padding: '2px' }}>
+                            <Close style={{ fontSize: 16, color: '#686576' }} />
+                          </IconButton>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {suggestions.map((row, index) => (
+                    <TableRow
+                      key={row.id}
+                      sx={{
+                        background: 'rgba(99,86,225,0.06)',
+                        '& td': {
+                          borderTop: index === 0 ? '1px solid rgba(99,86,225,0.4)' : 'none',
+                          borderBottom: index === suggestions.length - 1
+                            ? '1px solid rgba(99,86,225,0.4)'
+                            : '1px solid rgba(99,86,225,0.2)',
+                        },
+                        '& td:first-of-type': { borderLeft: '1px solid rgba(99,86,225,0.4)' },
+                        '& td:last-of-type': { borderRight: '1px solid rgba(99,86,225,0.4)' },
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox size="small" disabled sx={{ color: '#c9c3ee' }} />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}>
+                        {row.label}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}>
+                        {row.url}
+                      </TableCell>
+                      <TableCell>
+                        <TypeChip type={row.type} />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}>
+                        {row.ymmt ?? ''}
+                      </TableCell>
+                      <TableCell>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {row.ctas.map((cta) => <CtaChip key={cta} label={cta} />)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               )}
             </Table>
           </TableContainer>
 
           {/* ── Empty state ────────────────────────────────────────────── */}
-          {filtered.length === 0 && (
+          {!hasTableContent && (
             <div className="flex-1" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, paddingBottom: 100 }}>
               <img src={emptyFolderSrc} alt="" style={{ width: 200, height: 200, objectFit: 'contain', flexShrink: 0 }} />
               <p style={{ margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.43, textAlign: 'center' }}>
@@ -353,6 +524,11 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
             </div>
           )}
         </div>
+      </div>
+
+      {suggestions.length > 0 && (
+        <SmartUrlFetchBubble onAccept={handleAcceptSuggestions} onIgnore={handleIgnoreSuggestions} />
+      )}
       </div>
 
       {panelOpen && (

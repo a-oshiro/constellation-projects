@@ -3,6 +3,14 @@ import type { DestinationUrl, DestinationUrlType } from '../components/settings/
 
 const OPENAI_MODEL = 'gpt-4o-mini';
 
+// 2026 BMW lineup — shared between the "Fetch URLs with AI" dialog and the
+// auto-suggest flow triggered after the first manually-added Inventory URL.
+export const BMW_2026_MODELS = [
+  'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'XM',
+  '2 Series', '3 Series', '4 Series', '5 Series', '7 Series', '8 Series', 'M2', 'M3', 'M4',
+  'M5', 'iX', 'Z4', 'i4', 'i5', 'i7'
+];
+
 export interface FetchUrlsParams {
   website: string;
   types: DestinationUrlType[];
@@ -20,6 +28,7 @@ const CTA_GUIDANCE: Record<DestinationUrlType, string[]> = {
 };
 
 const SYSTEM_PROMPT = `You generate destination-URL data for an automotive dealer website integration tool.
+You have live web browsing access — use it to actually visit and inspect the target website; never guess or fabricate a URL.
 Always respond with ONLY raw CSV text — no markdown code fences, no commentary before or after.
 The first line must be exactly this header: Label,URL,Type,Vehicle,Associated CTAs
 Wrap every field in double quotes and escape internal quotes by doubling them (""").
@@ -32,9 +41,23 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
   lines.push(`Website to inspect: ${website}`);
   lines.push('');
   lines.push(
-    'You do not have live browsing access to this site. Fabricate realistic, plausible page URLs ' +
-    'under this exact domain, following common automotive dealership website conventions ' +
-    '(e.g. /new-inventory/<model>, /specials, /contact-us, /trade-in-your-vehicle).',
+    'Actually browse this live website with your web browsing tool — do not guess, fabricate, or ' +
+    'construct URLs from path conventions. Navigate the site (its navigation menus, footer links, ' +
+    'sitemap, and internal pages) to find the real destination pages for each requested category below. ' +
+    'Every URL you output must be a page you actually found by browsing the site.',
+  );
+  lines.push('');
+  lines.push(
+    'Before including any URL in your output, open it and confirm it loads successfully. If a URL ' +
+    'returns a 404, redirects to an error page, or otherwise does not exist, discard it — do not ' +
+    'include it in the CSV and do not substitute a guessed URL in its place. Only output URLs you ' +
+    'have verified are live.',
+  );
+  lines.push('');
+  lines.push(
+    'If the website itself cannot be reached at all (the domain does not resolve, or every page you ' +
+    'try 404s), respond with only the header row and no data rows — do not invent a plausible-looking ' +
+    'result for a site you could not actually browse.',
   );
   lines.push('');
   lines.push(`Only produce rows for these URL categories: ${types.join(', ')}.`);
@@ -43,22 +66,26 @@ function buildUserPrompt({ website, types, models, allModelsSelected }: FetchUrl
   for (const type of types) {
     if (type === 'Inventory') {
       lines.push(
-        'Category "Inventory": create exactly one CSV row per vehicle model listed below — ' +
-        'never combine multiple models into a single row, and never skip a listed model.',
+        'Category "Inventory": find the real, model-specific inventory page for each vehicle model ' +
+        'listed below by browsing the site\'s inventory/new-vehicles section — never combine multiple ' +
+        'models into a single row, and never skip a listed model. These are the only models to look ' +
+        'for; do not add any other models and do not omit any of them.',
       );
       lines.push(
         allModelsSelected
-          ? `Every one of the following models is selected — produce a row for each (${models.length} rows total):`
-          : `The following models are selected — produce a row for each (${models.length} rows total):`,
+          ? `Every one of the following models is selected — find a page for each (${models.length} rows total):`
+          : `The following models are selected — find a page for each (${models.length} rows total):`,
       );
       lines.push(models.join(', '));
       lines.push(
-        'For each model\'s row: invent a distinct label such as "New Vehicle Inventory - <Model>", ' +
-        'invent a URL under the domain specific to that model, set Type to "Inventory", ' +
-        'and set Vehicle to "2026 BMW <Model>".',
+        'For each model\'s row: invent a distinct label such as "New Vehicle Inventory - <Model>" ' +
+        '(the label may be worded however reads best, but the URL itself must be the real page you ' +
+        'found), use the real URL you found for that model\'s inventory page, set Type to "Inventory", ' +
+        'and set Vehicle to "2026 BMW <Model>". If you cannot find a working page for a given model ' +
+        'after checking the site, omit that model\'s row entirely rather than guessing.',
       );
     } else {
-      lines.push(`Category "${type}": invent 1-2 plausible page(s) for this category on the site.`);
+      lines.push(`Category "${type}": find the real page(s) for this category by browsing the site.`);
     }
     lines.push('');
   }
@@ -139,13 +166,32 @@ function rowsToDestinationUrls(rows: string[][]): DestinationUrl[] {
     });
 }
 
+// Extracts the assistant's plain-text output from a Responses API payload — its shape differs
+// from Chat Completions (an `output` array of items rather than a single `choices[0].message`).
+function extractResponseText(data: unknown): string | undefined {
+  const payload = data as { output_text?: string; output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> };
+  if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
+    return payload.output_text;
+  }
+  const textParts: string[] = [];
+  for (const item of payload.output ?? []) {
+    if (item.type !== 'message') continue;
+    for (const part of item.content ?? []) {
+      if (part.type === 'output_text' && typeof part.text === 'string') textParts.push(part.text);
+    }
+  }
+  return textParts.length ? textParts.join('\n') : undefined;
+}
+
 export async function fetchUrlsFromWebsite(params: FetchUrlsParams): Promise<DestinationUrl[]> {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
   if (!apiKey) {
     throw new Error('Missing OpenAI API key. Set VITE_OPENAI_API_KEY in your .env.local file.');
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Responses API (not Chat Completions) — required to grant the model live web browsing via
+  // the built-in `web_search` tool, so it can actually inspect the site instead of guessing URLs.
+  const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -153,8 +199,9 @@ export async function fetchUrlsFromWebsite(params: FetchUrlsParams): Promise<Des
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      temperature: 0.7,
-      messages: [
+      temperature: 0.2,
+      tools: [{ type: 'web_search' }],
+      input: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildUserPrompt(params) },
       ],
@@ -167,14 +214,14 @@ export async function fetchUrlsFromWebsite(params: FetchUrlsParams): Promise<Des
   }
 
   const data = await response.json();
-  const content: string | undefined = data?.choices?.[0]?.message?.content;
+  const content = extractResponseText(data);
   if (!content) {
     throw new Error('OpenAI response did not include any content.');
   }
 
   const rows = parseCsv(stripCodeFences(content));
   if (rows.length < 2) {
-    throw new Error('OpenAI did not return any URL rows.');
+    throw new Error('No verified URLs were found on this website for the selected categories.');
   }
 
   return rowsToDestinationUrls(rows);
