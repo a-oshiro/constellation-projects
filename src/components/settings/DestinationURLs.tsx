@@ -2,12 +2,19 @@ import { useState } from 'react';
 import {
   Button, ButtonGroup, TextField, InputAdornment, IconButton,
   Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Checkbox, Chip,
+  Checkbox, Chip, Menu, MenuItem, ListItemIcon,
 } from '@mui/material';
-import { Add, ArrowDropDown, Search, ViewSidebarOutlined } from '@mui/icons-material';
+import {
+  Add, ArrowDropDown, Search, ViewSidebarOutlined,
+  AutoAwesomeOutlined, UploadOutlined, DescriptionOutlined,
+} from '@mui/icons-material';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { NewUrlPanel } from './NewUrlPanel';
+import { FetchUrlsDialog } from './FetchUrlsDialog';
 import emptyFolderSrc from '../../assets/empty-folder.png';
+
+const DEFAULT_ACCOUNT_WEBSITE = 'https://www.bmwnyc.com/';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,25 +79,77 @@ function HeaderDivider() {
   return <span style={{ width: 1, height: 24, background: 'rgba(0,0,0,0.12)', flexShrink: 0 }} />;
 }
 
-function NewUrlButton({ onClick }: { onClick: () => void }) {
+interface NewUrlMenuOption {
+  label: string;
+  icon: SvgIconComponent;
+}
+
+const NEW_URL_MENU_OPTIONS: NewUrlMenuOption[] = [
+  { label: 'New URL', icon: Add },
+  { label: 'Fetch URLs with AI', icon: AutoAwesomeOutlined },
+  { label: 'Upload CSV', icon: UploadOutlined },
+  { label: 'Download CSV Template', icon: DescriptionOutlined },
+];
+
+function NewUrlButton({ onClick, onFetchWithAI }: { onClick: () => void; onFetchWithAI: () => void }) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  const handleOptionClick = (label: string) => {
+    setAnchorEl(null);
+    if (label === 'New URL') onClick();
+    else if (label === 'Fetch URLs with AI') onFetchWithAI();
+  };
+
   return (
-    <ButtonGroup variant="contained" color="primary" disableElevation sx={{ borderRadius: 100 }}>
-      <Button
-        size="small"
-        onClick={onClick}
-        startIcon={<Add style={{ fontSize: 18 }} />}
-        sx={{ borderRadius: '100px 0 0 100px', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px', paddingLeft: '14px' }}
+    <>
+      <ButtonGroup variant="contained" color="primary" disableElevation sx={{ borderRadius: 100 }}>
+        <Button
+          size="small"
+          onClick={onClick}
+          startIcon={<Add style={{ fontSize: 18 }} />}
+          sx={{ borderRadius: '100px 0 0 100px', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px', paddingLeft: '14px' }}
+        >
+          New URL
+        </Button>
+        <Button
+          size="small"
+          aria-label="More URL options"
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          sx={{ borderRadius: '0 100px 100px 0', minWidth: 32, paddingLeft: '6px', paddingRight: '6px' }}
+        >
+          <ArrowDropDown style={{ fontSize: 18 }} />
+        </Button>
+      </ButtonGroup>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 220,
+              borderRadius: '4px',
+              boxShadow: '0px 5px 5px -3px rgba(0,0,0,0.2), 0px 8px 10px 1px rgba(0,0,0,0.14), 0px 3px 14px 2px rgba(0,0,0,0.12)',
+            },
+          },
+        }}
       >
-        New URL
-      </Button>
-      <Button
-        size="small"
-        aria-label="More URL options"
-        sx={{ borderRadius: '0 100px 100px 0', minWidth: 32, paddingLeft: '6px', paddingRight: '6px' }}
-      >
-        <ArrowDropDown style={{ fontSize: 18 }} />
-      </Button>
-    </ButtonGroup>
+        {NEW_URL_MENU_OPTIONS.map(({ label, icon: Icon }) => (
+          <MenuItem
+            key={label}
+            onClick={() => handleOptionClick(label)}
+            sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.15px', lineHeight: 1.5, px: 2, py: '8px' }}
+          >
+            <ListItemIcon sx={{ minWidth: 32 }}>
+              <Icon style={{ fontSize: 20, color: 'rgba(17,16,20,0.56)' }} />
+            </ListItemIcon>
+            {label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }
 
@@ -133,6 +192,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['id']>('all');
   const [urls, setUrls] = useState<DestinationUrl[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
 
   const filtered = urls.filter((u) => {
     const tab = TABS.find((t) => t.id === activeTab);
@@ -144,6 +204,11 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
   const handleSave = (newUrl: DestinationUrl) => {
     setUrls((prev) => [...prev, newUrl]);
     setPanelOpen(false);
+  };
+
+  const handleFetchedUrls = (newUrls: DestinationUrl[]) => {
+    setUrls((prev) => [...prev, ...newUrls]);
+    setFetchDialogOpen(false);
   };
 
   return (
@@ -167,7 +232,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
             Destination URLs
           </h1>
-          <NewUrlButton onClick={() => setPanelOpen(true)} />
+          <NewUrlButton onClick={() => setPanelOpen(true)} onFetchWithAI={() => setFetchDialogOpen(true)} />
 
           <div style={{ flex: 1 }} />
 
@@ -284,7 +349,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
               <p style={{ margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.43, textAlign: 'center' }}>
                 No URLs added yet
               </p>
-              <NewUrlButton onClick={() => setPanelOpen(true)} />
+              <NewUrlButton onClick={() => setPanelOpen(true)} onFetchWithAI={() => setFetchDialogOpen(true)} />
             </div>
           )}
         </div>
@@ -293,6 +358,13 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
       {panelOpen && (
         <NewUrlPanel onClose={() => setPanelOpen(false)} onSave={handleSave} />
       )}
+
+      <FetchUrlsDialog
+        open={fetchDialogOpen}
+        onClose={() => setFetchDialogOpen(false)}
+        defaultWebsite={DEFAULT_ACCOUNT_WEBSITE}
+        onFetched={handleFetchedUrls}
+      />
     </>
   );
 };
