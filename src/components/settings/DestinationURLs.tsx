@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import {
   Button, ButtonGroup, TextField, InputAdornment, IconButton,
   Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Checkbox, Chip, Menu, MenuItem, ListItemIcon, CircularProgress,
+  Checkbox, Chip, Menu, MenuItem, ListItemIcon, CircularProgress, Alert, Snackbar,
 } from '@mui/material';
 import {
   Add, ArrowDropDown, Search, ViewSidebarOutlined,
@@ -13,7 +14,12 @@ import type { SvgIconComponent } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { NewUrlPanel } from './NewUrlPanel';
 import { FetchUrlsDialog } from './FetchUrlsDialog';
-import { fetchUrlsFromWebsite, BMW_2026_MODELS } from '../../utils/fetchUrlsWithAI';
+import { CsvDuplicatesDialog } from './CsvDuplicatesDialog';
+import type { CsvDuplicateEntry } from './CsvDuplicatesDialog';
+import {
+  fetchUrlsFromWebsite, dedupeAgainstExisting, BMW_2026_MODELS,
+  parseDestinationUrlsCsv, downloadCsvTemplate,
+} from '../../utils/fetchUrlsWithAI';
 import emptyFolderSrc from '../../assets/empty-folder.png';
 
 const DEFAULT_ACCOUNT_WEBSITE = 'https://www.bmwnyc.com/';
@@ -93,13 +99,22 @@ const NEW_URL_MENU_OPTIONS: NewUrlMenuOption[] = [
   { label: 'Download CSV Template', icon: DescriptionOutlined },
 ];
 
-function NewUrlButton({ onClick, onFetchWithAI }: { onClick: () => void; onFetchWithAI: () => void }) {
+interface NewUrlButtonProps {
+  onClick: () => void;
+  onFetchWithAI: () => void;
+  onUploadCsv: () => void;
+  onDownloadCsvTemplate: () => void;
+}
+
+function NewUrlButton({ onClick, onFetchWithAI, onUploadCsv, onDownloadCsvTemplate }: NewUrlButtonProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const handleOptionClick = (label: string) => {
     setAnchorEl(null);
     if (label === 'New URL') onClick();
     else if (label === 'Fetch URLs with AI') onFetchWithAI();
+    else if (label === 'Upload CSV') onUploadCsv();
+    else if (label === 'Download CSV Template') onDownloadCsvTemplate();
   };
 
   return (
@@ -248,11 +263,18 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['id']>('all');
   const [urls, setUrls] = useState<DestinationUrl[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [editingUrl, setEditingUrl] = useState<DestinationUrl | null>(null);
   const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
 
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DestinationUrl[]>([]);
+
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
+  const [csvInvalidRows, setCsvInvalidRows] = useState<number[]>([]);
+  const [csvDuplicates, setCsvDuplicates] = useState<CsvDuplicateEntry[]>([]);
+  const [csvPendingUnique, setCsvPendingUnique] = useState<DestinationUrl[]>([]);
+  const [csvSnackbarOpen, setCsvSnackbarOpen] = useState(false);
 
   const filtered = urls.filter((u) => {
     const tab = TABS.find((t) => t.id === activeTab);
@@ -283,7 +305,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
         models: modelsToFetch,
         allModelsSelected: modelsToFetch.length === BMW_2026_MODELS.length,
       });
-      setSuggestions(results);
+      setSuggestions(dedupeAgainstExisting(results, currentUrls));
     } catch (err) {
       setSuggestError(err instanceof Error ? err.message : 'Something went wrong fetching suggested URLs.');
     } finally {
@@ -301,18 +323,74 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
     }
   };
 
+  const handleUpdateUrl = (updatedUrl: DestinationUrl) => {
+    setUrls((prev) => prev.map((u) => (u.id === updatedUrl.id ? updatedUrl : u)));
+    setEditingUrl(null);
+  };
+
   const handleFetchedUrls = (newUrls: DestinationUrl[]) => {
-    setUrls((prev) => [...prev, ...newUrls]);
+    setUrls((prev) => [...prev, ...dedupeAgainstExisting(newUrls, prev)]);
     setFetchDialogOpen(false);
   };
 
   const handleAcceptSuggestions = () => {
-    setUrls((prev) => [...prev, ...suggestions]);
+    setUrls((prev) => [...prev, ...dedupeAgainstExisting(suggestions, prev)]);
     setSuggestions([]);
   };
 
   const handleIgnoreSuggestions = () => {
     setSuggestions([]);
+  };
+
+  const handleUploadCsvClick = () => {
+    csvFileInputRef.current?.click();
+  };
+
+  const handleCsvFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const text = await file.text();
+    const { valid, invalidRows } = parseDestinationUrlsCsv(text);
+    setCsvInvalidRows(invalidRows);
+
+    const existingByLabel = new Map(urls.map((u) => [u.label.trim().toLowerCase(), u]));
+    const duplicates: CsvDuplicateEntry[] = [];
+    const unique: DestinationUrl[] = [];
+
+    for (const row of valid) {
+      const match = existingByLabel.get(row.label.trim().toLowerCase());
+      if (match) duplicates.push({ existing: match, incoming: row });
+      else unique.push(row);
+    }
+
+    if (duplicates.length > 0) {
+      setCsvDuplicates(duplicates);
+      setCsvPendingUnique(unique);
+    } else {
+      setUrls((prev) => [...prev, ...unique]);
+      setCsvSnackbarOpen(true);
+    }
+  };
+
+  const handleCsvReplace = () => {
+    const replacedIds = new Set(csvDuplicates.map((d) => d.existing.id));
+    setUrls((prev) => [
+      ...prev.filter((u) => !replacedIds.has(u.id)),
+      ...csvDuplicates.map((d) => d.incoming),
+      ...csvPendingUnique,
+    ]);
+    setCsvDuplicates([]);
+    setCsvPendingUnique([]);
+    setCsvSnackbarOpen(true);
+  };
+
+  const handleCsvDoNotReplace = () => {
+    setUrls((prev) => [...prev, ...csvPendingUnique]);
+    setCsvDuplicates([]);
+    setCsvPendingUnique([]);
+    setCsvSnackbarOpen(true);
   };
 
   return (
@@ -329,6 +407,23 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
           <Breadcrumbs items={['Settings', 'Accounts', accountName, 'Destination URLs']} />
         </div>
 
+        <input
+          ref={csvFileInputRef}
+          type="file"
+          accept=".csv"
+          style={{ display: 'none' }}
+          onChange={handleCsvFileSelected}
+        />
+
+        {csvInvalidRows.length > 0 && (
+          <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
+            <Alert severity="error" onClose={() => setCsvInvalidRows([])} sx={{ fontSize: 13 }}>
+              {csvInvalidRows.length} URL{csvInvalidRows.length === 1 ? '' : 's'} could not be loaded due to missing or
+              invalid fields. Row{csvInvalidRows.length === 1 ? '' : 's'} {csvInvalidRows.join(', ')}.
+            </Alert>
+          </div>
+        )}
+
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 12px', flexShrink: 0 }}>
           <IconButton size="small" sx={{ padding: '4px' }}>
@@ -337,7 +432,12 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
             Destination URLs
           </h1>
-          <NewUrlButton onClick={() => setPanelOpen(true)} onFetchWithAI={() => setFetchDialogOpen(true)} />
+          <NewUrlButton
+            onClick={() => { setEditingUrl(null); setPanelOpen(true); }}
+            onFetchWithAI={() => setFetchDialogOpen(true)}
+            onUploadCsv={handleUploadCsvClick}
+            onDownloadCsvTemplate={() => downloadCsvTemplate()}
+          />
 
           <div style={{ flex: 1 }} />
 
@@ -419,8 +519,13 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
               {hasTableContent && (
                 <TableBody>
                   {filtered.map((row) => (
-                    <TableRow key={row.id} hover sx={{ '& td': { borderBottom: '1px solid rgba(0,0,0,0.12)' } }}>
-                      <TableCell padding="checkbox">
+                    <TableRow
+                      key={row.id}
+                      hover
+                      onClick={() => { setPanelOpen(false); setEditingUrl(row); }}
+                      sx={{ cursor: 'pointer', '& td': { borderBottom: '1px solid rgba(0,0,0,0.12)' } }}
+                    >
+                      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                         <Checkbox size="small" sx={{ color: '#9c99a9', '&.Mui-checked': { color: '#473bab' } }} />
                       </TableCell>
                       <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}>
@@ -520,7 +625,12 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
               <p style={{ margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.43, textAlign: 'center' }}>
                 No URLs added yet
               </p>
-              <NewUrlButton onClick={() => setPanelOpen(true)} onFetchWithAI={() => setFetchDialogOpen(true)} />
+              <NewUrlButton
+                onClick={() => { setEditingUrl(null); setPanelOpen(true); }}
+                onFetchWithAI={() => setFetchDialogOpen(true)}
+                onUploadCsv={handleUploadCsvClick}
+                onDownloadCsvTemplate={() => downloadCsvTemplate()}
+              />
             </div>
           )}
         </div>
@@ -532,7 +642,17 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
       </div>
 
       {panelOpen && (
-        <NewUrlPanel onClose={() => setPanelOpen(false)} onSave={handleSave} />
+        <NewUrlPanel onClose={() => setPanelOpen(false)} onSave={handleSave} existingUrls={urls} />
+      )}
+
+      {editingUrl && (
+        <NewUrlPanel
+          key={editingUrl.id}
+          initialValue={editingUrl}
+          onClose={() => setEditingUrl(null)}
+          onSave={handleUpdateUrl}
+          existingUrls={urls}
+        />
       )}
 
       <FetchUrlsDialog
@@ -540,6 +660,21 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
         onClose={() => setFetchDialogOpen(false)}
         defaultWebsite={DEFAULT_ACCOUNT_WEBSITE}
         onFetched={handleFetchedUrls}
+      />
+
+      <CsvDuplicatesDialog
+        open={csvDuplicates.length > 0}
+        duplicates={csvDuplicates}
+        onReplace={handleCsvReplace}
+        onDoNotReplace={handleCsvDoNotReplace}
+      />
+
+      <Snackbar
+        open={csvSnackbarOpen}
+        onClose={() => setCsvSnackbarOpen(false)}
+        autoHideDuration={4000}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        message="Destination URLs creation complete"
       />
     </>
   );

@@ -225,6 +225,83 @@ function rowsToDestinationUrls(rows: string[][], website: string): DestinationUr
     });
 }
 
+export interface CsvUploadResult {
+  valid: DestinationUrl[];
+  invalidRows: number[];
+}
+
+// Parses a user-authored CSV (same Label,URL,Type,Vehicle,Associated CTAs shape produced by the
+// AI-fetch flow) for the Upload CSV feature. Unlike rowsToDestinationUrls (lenient, for trusted AI
+// output), this enforces that Label, URL, and Type are present and Type is one of the four valid
+// values, reporting the 1-indexed file row (header = row 1) of anything that fails those checks.
+export function parseDestinationUrlsCsv(text: string): CsvUploadResult {
+  const [, ...dataRows] = parseCsv(text);
+  const valid: DestinationUrl[] = [];
+  const invalidRows: number[] = [];
+
+  dataRows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const [label, url, type, vehicle, ctasRaw] = row;
+    const matchedType = VALID_TYPES.find((t) => t.toLowerCase() === (type ?? '').trim().toLowerCase());
+
+    if (!label?.trim() || !url?.trim() || !matchedType) {
+      invalidRows.push(rowNumber);
+      return;
+    }
+
+    valid.push({
+      id: `url-${Math.random().toString(36).slice(2)}`,
+      label: label.trim(),
+      url: url.trim(),
+      type: matchedType,
+      ymmt: vehicle?.trim() ? vehicle.trim() : undefined,
+      ctas: ctasRaw ? ctasRaw.split(';').map((s) => s.trim()).filter(Boolean) : [],
+    });
+  });
+
+  return { valid, invalidRows };
+}
+
+// Generates the downloadable CSV template, matching the column headers used by both the AI-fetch
+// flow and the manual Upload CSV flow, so users can fill it out on their own device and re-upload it.
+export function downloadCsvTemplate(filename = 'Destination URLs Template.csv') {
+  const blob = new Blob(['Label,URL,Type,Vehicle,Associated CTAs'], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function normalizeUrlString(url: string): string {
+  return url.trim().toLowerCase().replace(/\/+$/, '');
+}
+
+function normalizeYmmtString(ymmt: string | undefined): string {
+  return (ymmt ?? '').trim().toLowerCase();
+}
+
+// Filters AI-fetched (or any incoming) URLs against what's already on the table, so the
+// caller never re-adds: (1) another Inventory URL for a model that already has one, or
+// (2) a URL that's an exact duplicate of one already present, regardless of type.
+export function dedupeAgainstExisting(newUrls: DestinationUrl[], existingUrls: DestinationUrl[]): DestinationUrl[] {
+  const existingModels = new Set(
+    existingUrls
+      .filter((u) => u.type === 'Inventory' && u.ymmt)
+      .map((u) => normalizeYmmtString(u.ymmt)),
+  );
+  const existingUrlStrings = new Set(existingUrls.map((u) => normalizeUrlString(u.url)));
+
+  return newUrls.filter((u) => {
+    if (u.type === 'Inventory' && u.ymmt && existingModels.has(normalizeYmmtString(u.ymmt))) return false;
+    if (existingUrlStrings.has(normalizeUrlString(u.url))) return false;
+    return true;
+  });
+}
+
 // Extracts the assistant's plain-text output from a Responses API payload — its shape differs
 // from Chat Completions (an `output` array of items rather than a single `choices[0].message`).
 function extractResponseText(data: unknown): string | undefined {

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Autocomplete, TextField, Chip, IconButton,
   FormControl, InputLabel, Select, MenuItem, Button,
+  Checkbox, FormControlLabel, Alert,
 } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { CTA_OPTIONS, EXISTING_LABEL_SUGGESTIONS } from './DestinationURLs';
@@ -41,6 +42,42 @@ const MAKES = Object.keys(VEHICLE_CATALOG);
 
 const TYPE_OPTIONS: DestinationUrlType[] = ['Contact', 'Inventory', 'Specials', 'Trade-In'];
 
+// Best-effort reverse parse of a stored "ymmt" string (e.g. "2026 BMW X1") back into the
+// Year/Make/Model/Trim fields, so the Edit panel can pre-fill them. Falls back to blank
+// fields for any segment it can't confidently match against the vehicle catalog.
+function parseYmmt(ymmt: string): { year: string; make: string; model: string; trim: string } {
+  let remaining = ymmt.trim();
+  let year = '';
+  let make = '';
+  let model = '';
+  let trim = '';
+
+  const yearMatch = YEARS.find((y) => remaining.startsWith(y));
+  if (yearMatch) {
+    year = yearMatch;
+    remaining = remaining.slice(yearMatch.length).trim();
+  }
+
+  const makeMatch = [...MAKES].sort((a, b) => b.length - a.length).find((m) => remaining.startsWith(m));
+  if (makeMatch) {
+    make = makeMatch;
+    remaining = remaining.slice(makeMatch.length).trim();
+
+    const modelsForMake = Object.keys(VEHICLE_CATALOG[make]);
+    const modelMatch = [...modelsForMake].sort((a, b) => b.length - a.length).find((m) => remaining.startsWith(m));
+    if (modelMatch) {
+      model = modelMatch;
+      remaining = remaining.slice(modelMatch.length).trim();
+
+      if (VEHICLE_CATALOG[make][model].includes(remaining)) {
+        trim = remaining;
+      }
+    }
+  }
+
+  return { year, make, model, trim };
+}
+
 const fieldSx = {
   '& .MuiInputLabel-root': { fontSize: 12 },
   '& .MuiOutlinedInput-input': { fontSize: 12 },
@@ -51,25 +88,39 @@ const fieldSx = {
 interface NewUrlPanelProps {
   onClose: () => void;
   onSave: (url: DestinationUrl) => void;
+  initialValue?: DestinationUrl;
+  existingUrls: DestinationUrl[];
 }
 
-export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
-  const [label, setLabel] = useState('');
-  const [url, setUrl] = useState('');
-  const [type, setType] = useState<DestinationUrlType | ''>('');
-  const [ctas, setCtas] = useState<string[]>([]);
+export const NewUrlPanel = ({ onClose, onSave, initialValue, existingUrls }: NewUrlPanelProps) => {
+  const parsedVehicle = initialValue?.ymmt ? parseYmmt(initialValue.ymmt) : null;
 
-  const [year, setYear] = useState('');
-  const [make, setMake] = useState('');
-  const [model, setModel] = useState('');
-  const [trim, setTrim] = useState('');
+  const [label, setLabel] = useState(initialValue?.label ?? '');
+  const [url, setUrl] = useState(initialValue?.url ?? '');
+  const [type, setType] = useState<DestinationUrlType | ''>(initialValue?.type ?? '');
+  const [ctas, setCtas] = useState<string[]>(initialValue?.ctas ?? []);
+
+  const [associateModel, setAssociateModel] = useState(
+    initialValue?.type === 'Inventory' && Boolean(initialValue?.ymmt),
+  );
+  const [year, setYear] = useState(parsedVehicle?.year ?? '');
+  const [make, setMake] = useState(parsedVehicle?.make ?? '');
+  const [model, setModel] = useState(parsedVehicle?.model ?? '');
+  const [trim, setTrim] = useState(parsedVehicle?.trim ?? '');
+  const [error, setError] = useState<string | null>(null);
 
   const isInventory = type === 'Inventory';
+  const showVehicleModel = isInventory && associateModel;
   const models = make ? Object.keys(VEHICLE_CATALOG[make]) : [];
   const trims = make && model ? VEHICLE_CATALOG[make][model] : [];
 
-  const vehicleValid = !isInventory || (year !== '' && make !== '' && model !== '');
+  const vehicleValid = !showVehicleModel || (year !== '' && make !== '' && model !== '');
   const canSave = label.trim() !== '' && url.trim() !== '' && type !== '' && vehicleValid;
+
+  // Clear a stale duplicate-model error as soon as the user changes anything that could resolve it.
+  useEffect(() => {
+    setError(null);
+  }, [type, associateModel, year, make, model]);
 
   const handleMakeChange = (newMake: string) => {
     setMake(newMake);
@@ -83,13 +134,25 @@ export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
   };
 
   const handleSave = () => {
-    if (!canSave || type === '') return;
+    if (!canSave) return;
+
+    if (showVehicleModel) {
+      const newYmmt = `${year} ${make} ${model}`.trim().toLowerCase();
+      const isDuplicateModel = existingUrls.some(
+        (u) => u.id !== initialValue?.id && u.type === 'Inventory' && (u.ymmt ?? '').trim().toLowerCase() === newYmmt,
+      );
+      if (isDuplicateModel) {
+        setError('Unable to add duplicate URLs for the same model.');
+        return;
+      }
+    }
+
     onSave({
-      id: `url-${Math.random().toString(36).slice(2)}`,
+      id: initialValue?.id ?? `url-${Math.random().toString(36).slice(2)}`,
       label: label.trim(),
       url: url.trim(),
       type,
-      ymmt: isInventory ? `${year} ${make} ${model}` : undefined,
+      ymmt: showVehicleModel ? `${year} ${make} ${model}` : undefined,
       ctas,
     });
   };
@@ -105,7 +168,7 @@ export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
         padding: '12px 16px', flexShrink: 0,
       }}>
         <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-          New URL
+          {initialValue ? 'Edit URL' : 'New URL'}
         </span>
         <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>
           <Close style={{ fontSize: 18, color: '#686576' }} />
@@ -136,55 +199,77 @@ export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
           sx={fieldSx}
         />
 
-        <FormControl size="small" fullWidth required>
-          <InputLabel sx={{ fontSize: 12 }}>Type</InputLabel>
-          <Select
-            label="Type"
-            value={type}
-            onChange={(e) => setType(e.target.value as DestinationUrlType)}
-            sx={{ fontSize: 12 }}
-          >
-            {TYPE_OPTIONS.map((opt) => (
-              <MenuItem key={opt} value={opt} sx={{ fontSize: 12 }}>{opt}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <FormControl size="small" fullWidth required>
+            <InputLabel sx={{ fontSize: 12 }}>Type</InputLabel>
+            <Select
+              label="Type"
+              value={type}
+              onChange={(e) => setType(e.target.value as DestinationUrlType)}
+              sx={{ fontSize: 12 }}
+            >
+              {TYPE_OPTIONS.map((opt) => (
+                <MenuItem key={opt} value={opt} sx={{ fontSize: 12 }}>{opt}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-        {isInventory && (
-          <div style={{ background: '#f4f5f6', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
-              Vehicle Model
-            </span>
+          {isInventory && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={associateModel}
+                  onChange={(e) => setAssociateModel(e.target.checked)}
+                  sx={{ padding: '9px', color: 'rgba(0,0,0,0.38)', '&.Mui-checked': { color: '#473bab' } }}
+                />
+              }
+              label="Associate to a model"
+              sx={{
+                margin: 0, gap: '0px',
+                '& .MuiFormControlLabel-label': {
+                  fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43,
+                },
+              }}
+            />
+          )}
 
-            <FormControl size="small" fullWidth required>
-              <InputLabel sx={{ fontSize: 12 }}>Year</InputLabel>
-              <Select label="Year" value={year} onChange={(e) => setYear(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
-                {YEARS.map((y) => <MenuItem key={y} value={y} sx={{ fontSize: 12 }}>{y}</MenuItem>)}
-              </Select>
-            </FormControl>
+          {showVehicleModel && (
+            <div style={{ background: '#f4f5f6', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+                Vehicle Model
+              </span>
 
-            <FormControl size="small" fullWidth required>
-              <InputLabel sx={{ fontSize: 12 }}>Make</InputLabel>
-              <Select label="Make" value={make} onChange={(e) => handleMakeChange(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
-                {MAKES.map((m) => <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>{m}</MenuItem>)}
-              </Select>
-            </FormControl>
+              <FormControl size="small" fullWidth required>
+                <InputLabel sx={{ fontSize: 12 }}>Year</InputLabel>
+                <Select label="Year" value={year} onChange={(e) => setYear(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
+                  {YEARS.map((y) => <MenuItem key={y} value={y} sx={{ fontSize: 12 }}>{y}</MenuItem>)}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" fullWidth required disabled={!make}>
-              <InputLabel sx={{ fontSize: 12 }}>Model</InputLabel>
-              <Select label="Model" value={model} onChange={(e) => handleModelChange(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
-                {models.map((m) => <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>{m}</MenuItem>)}
-              </Select>
-            </FormControl>
+              <FormControl size="small" fullWidth required>
+                <InputLabel sx={{ fontSize: 12 }}>Make</InputLabel>
+                <Select label="Make" value={make} onChange={(e) => handleMakeChange(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
+                  {MAKES.map((m) => <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>{m}</MenuItem>)}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" fullWidth disabled={!model}>
-              <InputLabel sx={{ fontSize: 12 }}>Trim</InputLabel>
-              <Select label="Trim" value={trim} onChange={(e) => setTrim(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
-                {trims.map((t) => <MenuItem key={t} value={t} sx={{ fontSize: 12 }}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </div>
-        )}
+              <FormControl size="small" fullWidth required disabled={!make}>
+                <InputLabel sx={{ fontSize: 12 }}>Model</InputLabel>
+                <Select label="Model" value={model} onChange={(e) => handleModelChange(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
+                  {models.map((m) => <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>{m}</MenuItem>)}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth disabled={!model}>
+                <InputLabel sx={{ fontSize: 12 }}>Trim</InputLabel>
+                <Select label="Trim" value={trim} onChange={(e) => setTrim(e.target.value)} sx={{ fontSize: 12, background: '#f9fafa' }}>
+                  {trims.map((t) => <MenuItem key={t} value={t} sx={{ fontSize: 12 }}>{t}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </div>
+          )}
+        </div>
 
         <Autocomplete
           multiple
@@ -192,15 +277,15 @@ export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
           options={CTA_OPTIONS}
           value={ctas}
           onChange={(_, newValue) => setCtas(newValue)}
-          renderTags={(value, getTagProps) =>
+          renderValue={(value, getItemProps) =>
             value.map((option, index) => {
-              const { key, ...tagProps } = getTagProps({ index });
+              const { key, ...itemProps } = getItemProps({ index });
               return (
                 <Chip
                   key={key}
                   label={option}
                   size="small"
-                  {...tagProps}
+                  {...itemProps}
                   sx={{ height: 24, borderRadius: '8px', background: '#f0f2f4', color: '#1f1d25', fontSize: 11, fontFamily: 'Roboto, sans-serif' }}
                 />
               );
@@ -213,6 +298,11 @@ export const NewUrlPanel = ({ onClose, onSave }: NewUrlPanelProps) => {
       </div>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}
+      {error && (
+        <div style={{ padding: '0 16px', flexShrink: 0 }}>
+          <Alert severity="error" sx={{ fontSize: 12 }}>{error}</Alert>
+        </div>
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
         padding: '12px 16px', flexShrink: 0,
