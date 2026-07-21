@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import {
-  Button, ButtonGroup, TextField, InputAdornment, IconButton,
+  Button, ButtonGroup, TextField, InputAdornment, IconButton, Link,
   Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Checkbox, Chip, Menu, MenuItem, ListItemIcon, CircularProgress, Alert, Snackbar,
 } from '@mui/material';
@@ -10,7 +10,6 @@ import {
   AutoAwesomeOutlined, UploadOutlined, DescriptionOutlined,
   AutoAwesome, Check, Close,
 } from '@mui/icons-material';
-import type { SvgIconComponent } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { NewUrlPanel } from './NewUrlPanel';
 import { FetchUrlsDialog } from './FetchUrlsDialog';
@@ -87,52 +86,82 @@ function HeaderDivider() {
   return <span style={{ width: 1, height: 24, background: 'rgba(0,0,0,0.12)', flexShrink: 0 }} />;
 }
 
-interface NewUrlMenuOption {
-  label: string;
-  icon: SvgIconComponent;
+const ACTION_BUTTON_SX = {
+  borderRadius: 100, fontSize: 13, fontWeight: 500, letterSpacing: '0.46px',
+  paddingLeft: '14px', paddingRight: '14px',
+} as const;
+
+const OUTLINED_ACTION_BUTTON_SX = {
+  ...ACTION_BUTTON_SX,
+  borderColor: 'rgba(99,86,225,0.5)', color: '#473bab',
+  '&:hover': { borderColor: 'rgba(99,86,225,0.7)', background: 'rgba(99,86,225,0.04)' },
+} as const;
+
+interface ActionButtonProps {
+  onClick: () => void;
 }
 
-const NEW_URL_MENU_OPTIONS: NewUrlMenuOption[] = [
-  { label: 'New URL', icon: Add },
-  { label: 'Fetch URLs with AI', icon: AutoAwesomeOutlined },
-  { label: 'Upload CSV', icon: UploadOutlined },
-  { label: 'Download CSV Template', icon: DescriptionOutlined },
-];
+function NewUrlButton({ onClick }: ActionButtonProps) {
+  return (
+    <Button
+      variant="contained"
+      color="primary"
+      disableElevation
+      size="small"
+      onClick={onClick}
+      startIcon={<Add style={{ fontSize: 18 }} />}
+      sx={ACTION_BUTTON_SX}
+    >
+      New URL
+    </Button>
+  );
+}
 
-interface NewUrlButtonProps {
-  onClick: () => void;
-  onFetchWithAI: () => void;
+function FetchUrlsWithAiButton({ onClick }: ActionButtonProps) {
+  return (
+    <Button
+      variant="outlined"
+      size="small"
+      onClick={onClick}
+      startIcon={<AutoAwesomeOutlined style={{ fontSize: 18 }} />}
+      sx={OUTLINED_ACTION_BUTTON_SX}
+    >
+      Fetch URLs with AI
+    </Button>
+  );
+}
+
+interface UploadCsvButtonProps {
   onUploadCsv: () => void;
   onDownloadCsvTemplate: () => void;
 }
 
-function NewUrlButton({ onClick, onFetchWithAI, onUploadCsv, onDownloadCsvTemplate }: NewUrlButtonProps) {
+function UploadCsvButton({ onUploadCsv, onDownloadCsvTemplate }: UploadCsvButtonProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-
-  const handleOptionClick = (label: string) => {
-    setAnchorEl(null);
-    if (label === 'New URL') onClick();
-    else if (label === 'Fetch URLs with AI') onFetchWithAI();
-    else if (label === 'Upload CSV') onUploadCsv();
-    else if (label === 'Download CSV Template') onDownloadCsvTemplate();
-  };
 
   return (
     <>
-      <ButtonGroup variant="contained" color="primary" disableElevation sx={{ borderRadius: 100 }}>
+      <ButtonGroup variant="outlined" disableElevation sx={{ borderRadius: 100 }}>
         <Button
           size="small"
-          onClick={onClick}
-          startIcon={<Add style={{ fontSize: 18 }} />}
-          sx={{ borderRadius: '100px 0 0 100px', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px', paddingLeft: '14px' }}
+          onClick={onUploadCsv}
+          startIcon={<UploadOutlined style={{ fontSize: 18 }} />}
+          sx={{
+            ...OUTLINED_ACTION_BUTTON_SX,
+            borderRadius: '100px 0 0 100px', paddingRight: '10px',
+          }}
         >
-          New URL
+          Upload CSV
         </Button>
         <Button
           size="small"
-          aria-label="More URL options"
+          aria-label="More upload options"
           onClick={(e) => setAnchorEl(e.currentTarget)}
-          sx={{ borderRadius: '0 100px 100px 0', minWidth: 32, paddingLeft: '6px', paddingRight: '6px' }}
+          sx={{
+            borderRadius: '0 100px 100px 0', minWidth: 32, paddingLeft: '6px', paddingRight: '6px',
+            borderColor: 'rgba(99,86,225,0.5)', color: '#473bab',
+            '&:hover': { borderColor: 'rgba(99,86,225,0.7)', background: 'rgba(99,86,225,0.04)' },
+          }}
         >
           <ArrowDropDown style={{ fontSize: 18 }} />
         </Button>
@@ -153,18 +182,15 @@ function NewUrlButton({ onClick, onFetchWithAI, onUploadCsv, onDownloadCsvTempla
           },
         }}
       >
-        {NEW_URL_MENU_OPTIONS.map(({ label, icon: Icon }) => (
-          <MenuItem
-            key={label}
-            onClick={() => handleOptionClick(label)}
-            sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.15px', lineHeight: 1.5, px: 2, py: '8px' }}
-          >
-            <ListItemIcon sx={{ minWidth: 32 }}>
-              <Icon style={{ fontSize: 20, color: 'rgba(17,16,20,0.56)' }} />
-            </ListItemIcon>
-            {label}
-          </MenuItem>
-        ))}
+        <MenuItem
+          onClick={() => { setAnchorEl(null); onDownloadCsvTemplate(); }}
+          sx={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.15px', lineHeight: 1.5, px: 2, py: '8px' }}
+        >
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <DescriptionOutlined style={{ fontSize: 20, color: 'rgba(17,16,20,0.56)' }} />
+          </ListItemIcon>
+          Download CSV Template
+        </MenuItem>
       </Menu>
     </>
   );
@@ -432,12 +458,14 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
             Destination URLs
           </h1>
-          <NewUrlButton
-            onClick={() => { setEditingUrl(null); setPanelOpen(true); }}
-            onFetchWithAI={() => setFetchDialogOpen(true)}
-            onUploadCsv={handleUploadCsvClick}
-            onDownloadCsvTemplate={() => downloadCsvTemplate()}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <NewUrlButton onClick={() => { setEditingUrl(null); setPanelOpen(true); }} />
+            <FetchUrlsWithAiButton onClick={() => setFetchDialogOpen(true)} />
+            <UploadCsvButton
+              onUploadCsv={handleUploadCsvClick}
+              onDownloadCsvTemplate={() => downloadCsvTemplate()}
+            />
+          </div>
 
           <div style={{ flex: 1 }} />
 
@@ -531,8 +559,16 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
                       <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}>
                         {row.label}
                       </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px' }}>
-                        {row.url}
+                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px' }}>
+                        <Link
+                          href={row.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.17px' }}
+                        >
+                          {row.url}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <TypeChip type={row.type} />
@@ -597,8 +633,16 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
                       <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}>
                         {row.label}
                       </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}>
-                        {row.url}
+                      <TableCell sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', letterSpacing: '0.17px' }}>
+                        <Link
+                          href={row.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontStyle: 'italic', color: '#686576', letterSpacing: '0.17px' }}
+                        >
+                          {row.url}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <TypeChip type={row.type} />
@@ -625,12 +669,14 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
               <p style={{ margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.43, textAlign: 'center' }}>
                 No URLs added yet
               </p>
-              <NewUrlButton
-                onClick={() => { setEditingUrl(null); setPanelOpen(true); }}
-                onFetchWithAI={() => setFetchDialogOpen(true)}
-                onUploadCsv={handleUploadCsvClick}
-                onDownloadCsvTemplate={() => downloadCsvTemplate()}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <NewUrlButton onClick={() => { setEditingUrl(null); setPanelOpen(true); }} />
+                <FetchUrlsWithAiButton onClick={() => setFetchDialogOpen(true)} />
+                <UploadCsvButton
+                  onUploadCsv={handleUploadCsvClick}
+                  onDownloadCsvTemplate={() => downloadCsvTemplate()}
+                />
+              </div>
             </div>
           )}
         </div>
