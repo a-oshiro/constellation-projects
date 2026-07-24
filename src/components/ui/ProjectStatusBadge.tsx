@@ -8,7 +8,9 @@ export type ProjectWorkflowStatus =
   | 'assets_generated'
   | 'assets_generated_no_approval'
   | 'pending_changes'
-  | 'campaign_loaded';
+  | 'campaign_loaded'
+  | 'done'
+  | 'draft';
 
 interface Config {
   label: string;
@@ -63,6 +65,18 @@ const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     color: '#c45500',
     opacity: 0.75,
     Icon: WarningAmber,
+  },
+  done: {
+    label: 'Done',
+    background: '#e8f5e9',
+    color: '#1b5e20',
+    Icon: CheckCircle,
+  },
+  draft: {
+    label: 'Draft',
+    background: '#f0f2f4',
+    color: '#686576',
+    Icon: PendingOutlined,
   },
 };
 

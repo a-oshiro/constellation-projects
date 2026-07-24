@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { LeftNav } from './LeftNav';
 import { TopBar } from './TopBar';
 import { TasksPanel } from './TasksPanel';
+import { ProjectsPanel } from './ProjectsPanel';
 import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
@@ -154,6 +155,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
   }, [location.pathname]);
 
   const isSettingsRoute = location.pathname.startsWith('/settings');
+  const isProjectOverviewRoute = location.pathname === '/projects';
   const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen);
 
   return (
@@ -166,7 +168,9 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <>
               {filterPanelOpen
                 ? <FilterPanel width={leftWidth} />
-                : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
+                : isProjectOverviewRoute
+                  ? <ProjectsPanel onClose={closeTasksPanel} width={leftWidth} />
+                  : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
               }
               <ResizeHandle onDrag={handleLeftDrag} />
             </>
@@ -179,7 +183,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}
             </div>
-            {!isSettingsRoute && <PreviewPanel />}
+            {!isSettingsRoute && !isProjectOverviewRoute && <PreviewPanel />}
           </div>
           {!isSettingsRoute && offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
             <VehicleInfo

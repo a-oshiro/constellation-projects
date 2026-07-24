@@ -46,3 +46,12 @@ body {
   background-size: 800px 100%;
   animation: skeleton-shimmer 1.4s infinite linear;
 }
+
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}

@@ -27,7 +27,7 @@ const OutOfStockBannerIcon = () => (
 );
 
 export const OffersPage = () => {
-  const { offers, updateOffer } = useProject();
+  const { offers, updateOffer, currentProject } = useProject();
   const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
@@ -76,7 +76,7 @@ export const OffersPage = () => {
         className="flex flex-col flex-1 min-w-0 overflow-hidden"
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
       >
-        <PageHeader breadcrumbs={['Projects', 'May Offers - Specials', 'Offers']} title="Offers">
+        <PageHeader breadcrumbs={['Projects', currentProject.projectName, 'Offers']} title="Offers">
           <button
             className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border cursor-pointer"
             style={{ borderColor: '#473bab', color: '#473bab', background: 'transparent', fontWeight: 500 }}

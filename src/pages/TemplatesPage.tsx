@@ -12,7 +12,7 @@ interface TemplatesPageProps {
 }
 
 export const TemplatesPage = ({}: TemplatesPageProps) => {
-  const { templates, removedTemplateIds, removeTemplate } = useProject();
+  const { templates, removedTemplateIds, removeTemplate, currentProject } = useProject();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -43,7 +43,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
       style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
     >
       <PageHeader
-        breadcrumbs={['Projects', 'May Offers - Specials', 'Templates']}
+        breadcrumbs={['Projects', currentProject.projectName, 'Templates']}
         title="Templates"
       >
         <Button

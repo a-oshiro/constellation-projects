@@ -3,7 +3,6 @@ import { IconButton } from '@mui/material';
 import { ProjectStatusBadge } from './ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from './ProjectStatusBadge';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
-import { PROJECT_INFO } from '../../data/mockData';
 import { useLayout } from '../../context/LayoutContext';
 import { useProject } from '../../context/ProjectContext';
 
@@ -23,7 +22,7 @@ export const PageHeader = ({
   rightExtras,
 }: PageHeaderProps) => {
   const { tasksPanelOpen, openTasksPanel } = useLayout();
-  const { assets } = useProject();
+  const { assets, currentProject } = useProject();
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const hasAwaitingApproval = assets.some((a) => a.status === 'awaiting_approval');
@@ -97,12 +96,12 @@ export const PageHeader = ({
             fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
             color: '#1f1d25', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap',
           }}>
-            {PROJECT_INFO.startDate} - {PROJECT_INFO.endDate}
+            {currentProject.startDate} - {currentProject.endDate}
           </span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <img
-              src={PROJECT_INFO.creatorAvatar}
+              src={currentProject.creatorAvatar}
               alt=""
               style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0 }}
             />
@@ -110,7 +109,7 @@ export const PageHeader = ({
               fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
               color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap',
             }}>
-              {PROJECT_INFO.creator}
+              {currentProject.creator}
             </span>
           </div>
 

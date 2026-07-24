@@ -51,7 +51,7 @@ import { ComparisonModal } from '../components/ui/ComparisonModal';
 import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 
 export const ReviewPage = () => {
-  const { assets, offers, bulkSetAssetStatus, bulkSetDestinationUrls, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls } = useProject();
+  const { assets, offers, bulkSetAssetStatus, bulkSetDestinationUrls, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls, currentProject } = useProject();
   const { showSnackbar } = useSnackbar();
   const { startProgress } = useProgressIndicator();
   const { openAdvancedGeneration, closeAdvancedGeneration, submittingIds, addSubmittingIds, clearSubmittingIds, filterPanelOpen, openFilterPanel, closeFilterPanel, filterState } = useLayout();
@@ -310,7 +310,7 @@ export const ReviewPage = () => {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
 
       <PageHeader
-        breadcrumbs={['Projects', 'May Offers - Specials', approvalEnabled ? 'Review' : 'Assets']}
+        breadcrumbs={['Projects', currentProject.projectName, approvalEnabled ? 'Review' : 'Assets']}
         title={approvalEnabled ? 'Review' : 'Assets'}
         rightExtras={
           <>

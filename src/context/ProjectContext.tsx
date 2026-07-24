@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useCallback, useRef } from 'react';
-import { BACKGROUNDS, TEMPLATES, OFFERS, CURRENT_USER } from '../data/mockData';
+import { CURRENT_USER } from '../data/mockData';
+import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
+import type { Project } from '../data/projects';
 import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment } from '../data/types';
 
 export interface PendingOfferChange {
@@ -50,11 +52,16 @@ interface ProjectContextValue {
   setDestinationUrl: (assetId: string, ctaKey: string, url: string) => void;
   /** Bulk-apply destination URLs: { [assetId]: { [ctaKey]: url } } */
   bulkSetDestinationUrls: (updates: Record<string, Record<string, string>>) => void;
+  /** The project currently loaded into this context — drives every task page's header/breadcrumb. */
+  currentProject: Project;
+  selectedProjectId: string;
+  /** Switches the live project: swaps offers/templates/backgrounds and resets all in-progress workflow state. */
+  selectProject: (id: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
-function computeAssets(offers: Offer[], templates: Template[], backgrounds: Background[]): Asset[] {
+function computeAssets(offers: Offer[], templates: Template[], backgrounds: Background[], folder: string): Asset[] {
   const result: Asset[] = [];
 
   offers.forEach((offer) => {
@@ -76,7 +83,7 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
             dimLabel,
             tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website',
           ],
-          folder: 'May Offers - Specials',
+          folder,
           width: tmpl.width,
           height: tmpl.height,
           imageType: tmpl.type === 'HTML' ? 'HTML' : 'Image',
@@ -93,9 +100,12 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
 }
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
-  const [backgrounds, setBackgrounds] = useState<Background[]>(BACKGROUNDS);
-  const [templates, setTemplates] = useState<Template[]>(TEMPLATES);
-  const [offers, setOffers] = useState<Offer[]>(OFFERS);
+  const [selectedProjectId, setSelectedProjectId] = useState(DEFAULT_PROJECT_ID);
+  const currentProject = useMemo(() => getProjectById(selectedProjectId), [selectedProjectId]);
+
+  const [backgrounds, setBackgrounds] = useState<Background[]>(() => getProjectById(DEFAULT_PROJECT_ID).backgrounds);
+  const [templates, setTemplates] = useState<Template[]>(() => getProjectById(DEFAULT_PROJECT_ID).templates);
+  const [offers, setOffers] = useState<Offer[]>(() => getProjectById(DEFAULT_PROJECT_ID).offers);
   const [assetStatuses, setAssetStatuses] = useState<Record<string, AssetStatus>>({});
   const [everApprovedIds, setEverApprovedIds] = useState<Set<string>>(new Set());
   const [pendingChanges, setPendingChanges] = useState<PendingOfferChange[]>([]);
@@ -147,9 +157,32 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const selectProject = useCallback((id: string) => {
+    const project = getProjectById(id);
+    setSelectedProjectId(id);
+    setOffers(project.offers);
+    setTemplates(project.templates);
+    setBackgrounds(project.backgrounds);
+    setAssetStatuses({});
+    setEverApprovedIds(new Set());
+    setPendingChanges([]);
+    setPendingRemovals([]);
+    setRemovedBgIds(new Set());
+    setRemovedTemplateIds(new Set());
+    setRemovedOfferIds(new Set());
+    setCampaignLoaded(false);
+    setApprovalEnabled(true);
+    setAssetVersionHistory({});
+    setAssetComments({});
+    setDestinationUrlsState({});
+  }, []);
+
   // All items (including pending removals) so computeAssets can still generate ghost assets.
   // Swap-only offers are excluded — they have no assets until they replace an out-of-stock offer.
-  const rawAssets = useMemo(() => computeAssets(offers.filter(o => !o.swapOnly), templates, backgrounds), [offers, templates, backgrounds]);
+  const rawAssets = useMemo(
+    () => computeAssets(offers.filter(o => !o.swapOnly), templates, backgrounds, currentProject.projectName),
+    [offers, templates, backgrounds, currentProject.projectName],
+  );
 
   // Refs so callbacks can always read the latest values without stale closures
   const rawAssetsRef = useRef(rawAssets);
@@ -425,6 +458,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       addAssetComment,
       approvalEnabled, setApprovalEnabled,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
+      currentProject, selectedProjectId, selectProject,
     }}>
       {children}
     </ProjectContext.Provider>

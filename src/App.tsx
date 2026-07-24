@@ -8,6 +8,7 @@ import { ProgressIndicatorProvider } from './context/ProgressIndicatorContext';
 import { ProgressIndicator } from './components/ui/ProgressIndicator';
 import { TestWidgetProvider } from './context/TestWidgetContext';
 import { TestWidget } from './components/ui/TestWidget';
+import { ProjectOverviewPage } from './pages/projectOverview';
 import { OffersPage } from './pages/OffersPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { ThemeAndLogosPage } from './pages/ThemeAndLogosPage';
@@ -59,7 +60,7 @@ function App() {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Navigate to="/projects" replace />} />
-                  <Route path="/projects" element={<OffersPage />} />
+                  <Route path="/projects" element={<ProjectOverviewPage />} />
                   <Route path="/offers" element={<OffersPage />} />
                   <Route path="/templates" element={<TemplatesPage />} />
                   <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />

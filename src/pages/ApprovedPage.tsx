@@ -21,7 +21,7 @@ import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDia
 const EMPTY_ASSETS: never[] = [];
 
 export const ApprovedPage = () => {
-  const { assets, bulkSetAssetStatus } = useProject();
+  const { assets, bulkSetAssetStatus, currentProject } = useProject();
   const { filterPanelOpen, openFilterPanel, closeFilterPanel, filterState } = useLayout();
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -95,7 +95,7 @@ export const ApprovedPage = () => {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
 
       <PageHeader
-        breadcrumbs={['Projects', 'May Offers - Specials', 'Approved']}
+        breadcrumbs={['Projects', currentProject.projectName, 'Approved']}
         title="Approved"
         rightExtras={
           !hasSelection ? (

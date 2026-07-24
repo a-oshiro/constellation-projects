@@ -214,7 +214,7 @@ function LogoCard() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
-  const { backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds } = useProject();
+  const { backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds, currentProject } = useProject();
 
   const visibleBackgrounds = backgrounds.filter((b) => !removedBgIds.has(b.id));
   const visibleTemplates = templates.filter((t) => !removedTemplateIds.has(t.id));
@@ -227,7 +227,7 @@ export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
     <div className="flex flex-col h-full" style={{ background: '#f0f2f4' }}>
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
       <PageHeader
-        breadcrumbs={['Projects', 'May Offers - Specials', 'Theme and Logos']}
+        breadcrumbs={['Projects', currentProject.projectName, 'Theme and Logos']}
         title="Theme and Logos"
       >
         <IconButton size="small"><MoreVert style={{ fontSize: 18 }} /></IconButton>

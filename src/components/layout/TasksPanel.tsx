@@ -4,7 +4,7 @@ import bmwLogoSrc from '../../assets/bmw-logo.png';
 import { IconButton, Menu, MenuItem, Checkbox, Popover } from '@mui/material';
 import { ArrowBack, Close, CheckCircle, PendingOutlined, HourglassEmpty, WarningAmber, MoreVert } from '@mui/icons-material';
 import { NeedsEditsIcon } from '../ui/NeedsEditsIcon';
-import { TASKS, PROJECT_INFO } from '../../data/mockData';
+import { TASKS } from '../../data/mockData';
 import { ProjectStatusBadge } from '../ui/ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from '../ui/ProjectStatusBadge';
 
@@ -52,7 +52,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   const {
     offers, assets, templates, backgrounds, removedTemplateIds, removedBgIds,
     pendingChanges, pendingRemovals, everApprovedIds, campaignLoaded,
-    approvalEnabled, setApprovalEnabled,
+    approvalEnabled, setApprovalEnabled, currentProject,
   } = useProject();
 
   // Three-dots menu anchor
@@ -213,7 +213,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
           flexShrink: 0,
         }}
       >
-        <IconButton size="small" onClick={onClose} sx={{ padding: '5px', flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate('/projects')} sx={{ padding: '5px', flexShrink: 0 }}>
           <ArrowBack style={{ fontSize: 20, color: '#1f1d25' }} />
         </IconButton>
 
@@ -283,7 +283,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                 lineHeight: 1.66,
               }}
             >
-              {PROJECT_INFO.accountName} · {PROJECT_INFO.accountCode}
+              {currentProject.accountName} · {currentProject.accountCode}
             </p>
             <p
               style={{
@@ -299,7 +299,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                 whiteSpace: 'nowrap',
               }}
             >
-              {PROJECT_INFO.projectName}
+              {currentProject.projectName}
             </p>
 
             {/* Project workflow status badge */}

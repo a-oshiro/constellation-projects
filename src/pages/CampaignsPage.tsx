@@ -11,7 +11,7 @@ import type { AdShell } from '../components/ui/AdShellCard';
 import type { AssetStatus } from '../data/types';
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import pageTextLinkSvg from '../assets/icons/page-text-link.svg';
-import { PROJECT_INFO, TEMPLATES, BACKGROUNDS } from '../data/mockData';
+import { TEMPLATES, BACKGROUNDS } from '../data/mockData';
 import { getTemplateCtas } from '../data/destinationUrlOptions';
 import { useProject } from '../context/ProjectContext';
 import { useSnackbar } from '../context/SnackbarContext';
@@ -161,7 +161,7 @@ const MiniShellThumbnail = ({ shell }: { shell: AdShell }) => {
 };
 
 export const CampaignsPage = () => {
-  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled, destinationUrls } = useProject();
+  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled, destinationUrls, currentProject } = useProject();
   const { showSnackbar } = useSnackbar();
   const { shellCustomizations } = useLayout();
 
@@ -207,21 +207,21 @@ export const CampaignsPage = () => {
         assets: shellAssets,
         template,
         bgNum,
-        name: `${PROJECT_INFO.projectName}_${first.width} x ${first.height}_BG_${bgNum}`,
+        name: `${currentProject.projectName}_${first.width} x ${first.height}_BG_${bgNum}`,
         platform: first.platform,
         adType: AD_TYPE_MAP[template.type] ?? 'Grid',
         folder: first.folder,
       };
       return { ...base, ...(shellCustomizations[id] ?? {}) };
     });
-  }, [approvedAssets, shellCustomizations]);
+  }, [approvedAssets, shellCustomizations, currentProject.projectName]);
 
   const hasAdShells = adShells.length > 0;
 
   const [expanded, setExpanded] = useState(true);
-  const [campaignName, setCampaignName] = useState(PROJECT_INFO.projectName);
-  const [campaignStartDate, setCampaignStartDate] = useState(toInputDate(PROJECT_INFO.startDate));
-  const [campaignEndDate, setCampaignEndDate] = useState(toInputDate(PROJECT_INFO.endDate));
+  const [campaignName, setCampaignName] = useState(currentProject.projectName);
+  const [campaignStartDate, setCampaignStartDate] = useState(toInputDate(currentProject.startDate));
+  const [campaignEndDate, setCampaignEndDate] = useState(toInputDate(currentProject.endDate));
 
   // Per-shell overrideable dates and placement
   const [shellData, setShellData] = useState<Record<string, {
@@ -304,7 +304,7 @@ export const CampaignsPage = () => {
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
       >
-        <PageHeader breadcrumbs={['Projects', 'May Offers - Specials', 'Campaigns']} title="Campaigns">
+        <PageHeader breadcrumbs={['Projects', currentProject.projectName, 'Campaigns']} title="Campaigns">
           {campaignLoaded ? (
             <Tooltip title={refreshDisabled ? refreshTooltip : ''} disableHoverListener={!refreshDisabled} arrow>
               <span style={{ display: 'inline-flex', flexShrink: 0 }}>
@@ -460,7 +460,7 @@ export const CampaignsPage = () => {
               {/* Account URL */}
               <div style={{ flex: '1 0 0', paddingLeft: 16, paddingRight: 16, minWidth: 200, overflow: 'hidden' }}>
                 <a
-                  href={PROJECT_INFO.accountUrl}
+                  href={currentProject.accountUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -470,7 +470,7 @@ export const CampaignsPage = () => {
                     textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
                   }}
                 >
-                  {PROJECT_INFO.accountUrl}
+                  {currentProject.accountUrl}
                 </a>
               </div>
             </div>

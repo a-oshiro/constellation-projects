@@ -8,7 +8,7 @@ import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDia
 import { useLayout } from '../context/LayoutContext';
 import emptyFolderSrc from '../assets/empty-folder.png';
 import { useProject } from '../context/ProjectContext';
-import { TEMPLATES, BACKGROUNDS, PROJECT_INFO } from '../data/mockData';
+import { TEMPLATES, BACKGROUNDS } from '../data/mockData';
 
 const AD_TYPE_MAP: Record<string, string> = {
   'Facebook Cover': 'Carousel',
@@ -43,7 +43,7 @@ const CreateAdShellSplitButton = () => (
 );
 
 export const AdsPage = () => {
-  const { assets, everApprovedIds, approvalEnabled } = useProject();
+  const { assets, everApprovedIds, approvalEnabled, currentProject } = useProject();
   const { openAdShellPanel, editingShell, shellCustomizations } = useLayout();
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
@@ -93,7 +93,7 @@ export const AdsPage = () => {
         assets: shellAssets,
         template,
         bgNum,
-        name: `${PROJECT_INFO.projectName}_${first.width} x ${first.height}_BG_${bgNum}`,
+        name: `${currentProject.projectName}_${first.width} x ${first.height}_BG_${bgNum}`,
         platform: first.platform,
         adType: AD_TYPE_MAP[template.type] ?? 'Grid',
         folder: first.folder,
@@ -101,7 +101,7 @@ export const AdsPage = () => {
       // Apply any saved customizations on top of the computed base
       return { ...base, ...(shellCustomizations[id] ?? {}) };
     });
-  }, [approvedAssets, shellCustomizations]);
+  }, [approvedAssets, shellCustomizations, currentProject.projectName]);
 
   const filteredShells = adShells.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -123,7 +123,7 @@ export const AdsPage = () => {
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
       >
         <PageHeader
-          breadcrumbs={['Projects', 'May Offers - Specials', 'Ads']}
+          breadcrumbs={['Projects', currentProject.projectName, 'Ads']}
           title="Ads"
           rightExtras={
             adShells.length > 0 ? (

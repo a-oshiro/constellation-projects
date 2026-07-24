@@ -14,7 +14,7 @@ import {
   SendOutlined,
 } from '@mui/icons-material';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
-import { TEMPLATES, PROJECT_INFO, CURRENT_USER } from '../../data/mockData';
+import { TEMPLATES, CURRENT_USER } from '../../data/mockData';
 import type { Asset, AssetVersion, AssetComment } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { useTestWidget } from '../../context/TestWidgetContext';
@@ -247,7 +247,7 @@ const DestinationUrlField = ({
 };
 
 const MetadataPanel = ({ asset }: { asset: Asset }) => {
-  const { destinationUrls, setDestinationUrl } = useProject();
+  const { destinationUrls, setDestinationUrl, currentProject } = useProject();
   const isLease = asset.offerType?.toLowerCase().includes('lease') ||
     asset.offer.offerType.some((t) => t.toLowerCase().includes('lease'));
 
@@ -348,14 +348,14 @@ const MetadataPanel = ({ asset }: { asset: Asset }) => {
       {/* ── Chip-select fields ──────────────────────────── */}
       <ChipSelectField
         label="Accounts"
-        chips={[PROJECT_INFO.accountName]}
+        chips={[currentProject.accountName]}
         placeholder="Select accounts"
       />
       <ChipSelectField label="Make" chips={[asset.offer.make]} />
       <ChipSelectField label="Model" chips={[asset.offer.model]} />
       <ChipSelectField label="Year" chips={[String(asset.offer.year)]} />
       <ChipSelectField label="Trim" chips={[asset.offer.trim]} />
-      <ChipSelectField label="Account" chips={[PROJECT_INFO.accountName]} />
+      <ChipSelectField label="Account" chips={[currentProject.accountName]} />
       <ChipSelectField label="Asset Type" chips={[asset.platform]} />
       <ChipSelectField label="Offer Type" chips={[asset.offerType]} />
       <ChipSelectField label="Vehicle Condition" chips={['New']} />
