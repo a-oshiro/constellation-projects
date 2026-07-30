@@ -2,7 +2,15 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction } from '../data/types';
+
+/** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
+const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
+  generated: ['approved', 'rejected'],
+  rejected: ['generated'],
+  approved: ['sent'],
+  sent: [],
+};
 
 export interface PendingOfferChange {
   offerId: string;
@@ -57,11 +65,15 @@ interface ProjectContextValue {
   selectedProjectId: string;
   /** Switches the live project: swaps offers/templates/backgrounds and resets all in-progress workflow state. */
   selectProject: (id: string) => void;
+  /** Only populated for Evergreen projects. */
+  alerts: Alert[];
+  /** Moves an alert to a new lifecycle status, enforcing the fixed transition matrix and recording activity. No-ops on an invalid transition. */
+  moveAlert: (id: string, newStatus: AlertStatus) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
-function computeAssets(offers: Offer[], templates: Template[], backgrounds: Background[], folder: string): Asset[] {
+function computeAssets(offers: Offer[], templates: Template[], backgrounds: Background[], folder: string, defaultStatus: AssetStatus = 'draft'): Asset[] {
   const result: Asset[] = [];
 
   offers.forEach((offer) => {
@@ -77,7 +89,7 @@ function computeAssets(offers: Offer[], templates: Template[], backgrounds: Back
           offerId: offer.id,
           templateId: tmpl.id,
           backgroundId: bg.id,
-          status: 'draft',
+          status: defaultStatus,
           tags: [
             offer.offerTypes[0]?.type ?? 'Lease',
             dimLabel,
@@ -118,9 +130,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [removedOfferIds, setRemovedOfferIds] = useState<Set<string>>(new Set());
   const [campaignLoaded, setCampaignLoaded] = useState(false);
   const loadCampaign = useCallback(() => setCampaignLoaded(true), []);
-  const [approvalEnabled, setApprovalEnabled] = useState(true);
+  const [approvalEnabled, setApprovalEnabled] = useState(() => getProjectById(DEFAULT_PROJECT_ID).approvalEnabled ?? true);
   const approvalEnabledRef = useRef(approvalEnabled);
   approvalEnabledRef.current = approvalEnabled;
+  const [alerts, setAlerts] = useState<Alert[]>(() => getProjectById(DEFAULT_PROJECT_ID).alerts ?? []);
   const [assetVersionHistory, setAssetVersionHistory] = useState<Record<string, AssetVersion[]>>({});
   const [assetComments, setAssetComments] = useState<Record<string, AssetComment[]>>({});
   const [destinationUrls, setDestinationUrlsState] = useState<Record<string, Record<string, string>>>({});
@@ -157,6 +170,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const moveAlert = useCallback((id: string, newStatus: AlertStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || !ALERT_TRANSITIONS[a.status].includes(newStatus)) return a;
+      const timestamp = Date.now();
+      const action: AlertActivityAction = newStatus === 'generated' ? 'rebuilt' : newStatus;
+      const entry: AlertActivityEntry = {
+        id: `act-${id}-${timestamp}`,
+        action,
+        timestamp,
+        actorName: CURRENT_USER.name,
+        actorEmail: 'john.doe@mail.com',
+        actorAvatar: CURRENT_USER.avatarUrl,
+      };
+      return {
+        ...a,
+        status: newStatus,
+        // Regenerating (Rejected -> Generated) refreshes the "Created ... ago" clock.
+        createdAt: newStatus === 'generated' ? timestamp : a.createdAt,
+        activity: [...a.activity, entry],
+      };
+    }));
+  }, []);
+
   const selectProject = useCallback((id: string) => {
     const project = getProjectById(id);
     setSelectedProjectId(id);
@@ -171,17 +207,24 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setRemovedTemplateIds(new Set());
     setRemovedOfferIds(new Set());
     setCampaignLoaded(false);
-    setApprovalEnabled(true);
+    setApprovalEnabled(project.approvalEnabled ?? true);
     setAssetVersionHistory({});
     setAssetComments({});
     setDestinationUrlsState({});
+    setAlerts(project.alerts ?? []);
   }, []);
 
   // All items (including pending removals) so computeAssets can still generate ghost assets.
   // Swap-only offers are excluded — they have no assets until they replace an out-of-stock offer.
   const rawAssets = useMemo(
-    () => computeAssets(offers.filter(o => !o.swapOnly), templates, backgrounds, currentProject.projectName),
-    [offers, templates, backgrounds, currentProject.projectName],
+    () => computeAssets(
+      offers.filter(o => !o.swapOnly),
+      templates,
+      backgrounds,
+      currentProject.projectName,
+      currentProject.isEvergreen ? 'generated' : 'draft',
+    ),
+    [offers, templates, backgrounds, currentProject.projectName, currentProject.isEvergreen],
   );
 
   // Refs so callbacks can always read the latest values without stale closures
@@ -459,6 +502,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       approvalEnabled, setApprovalEnabled,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
+      alerts, moveAlert,
     }}>
       {children}
     </ProjectContext.Provider>

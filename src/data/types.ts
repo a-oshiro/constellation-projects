@@ -221,6 +221,38 @@ export interface AssetComment {
   timestamp: number;
 }
 
+export type AlertCategory = 'Losing to Competitor' | 'Demand Spike' | 'Aging Inventory';
+export type AlertStatus = 'generated' | 'rejected' | 'approved' | 'sent';
+export type AlertActivityAction = 'generated' | 'rejected' | 'approved' | 'sent' | 'rebuilt';
+
+export interface AlertActivityEntry {
+  id: string;
+  action: AlertActivityAction;
+  timestamp: number;
+  /** 'AI AutoAgent' for the initial generation, otherwise the acting user's name. */
+  actorName: string;
+  actorEmail?: string;
+  actorAvatar?: string;
+}
+
+/** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */
+export interface Alert {
+  id: string;
+  category: AlertCategory;
+  subject: string;
+  preheader: string;
+  bodyParagraphs: string[];
+  /** The offer this alert's email is built around (the large recommended price card). */
+  featuredOfferId: string;
+  /** The other offers already running on paid media, shown as a secondary grid in the email. */
+  otherOfferIds: string[];
+  vin: string;
+  status: AlertStatus;
+  createdAt: number;
+  /** Ordered oldest -> newest. */
+  activity: AlertActivityEntry[];
+}
+
 export type TaskKey = 'offers' | 'templates' | 'theme_and_logos' | 'review' | 'approved' | 'ads' | 'campaigns';
 
 export interface TaskItem {

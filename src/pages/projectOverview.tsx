@@ -7,6 +7,7 @@ import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { ProjectStatusBadge } from '../components/ui/ProjectStatusBadge';
 import { OverviewOfferCard, OverviewTemplateCard, OverviewAssetCard, OverviewAdShellCard } from '../components/ui/OverviewCards';
 import { FilledTemplatePreview } from '../components/ui/FilledTemplatePreview';
+import { AlertsKanbanBoard } from '../components/ui/AlertsKanbanBoard';
 import type { SectionStatus } from '../data/projects';
 import { computePreviewAssets, groupIntoAdShells } from '../utils/overviewAssets';
 import { useLayout } from '../context/LayoutContext';
@@ -214,6 +215,8 @@ export const ProjectOverviewPage = () => {
         {/* ── Sections ───────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto" style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
+          {project.isEvergreen && <AlertsKanbanBoard />}
+
           <Section
             title="Offers"
             count={project.offers.length}
@@ -347,4 +350,4 @@ export const ProjectOverviewPage = () => {
       </div>
     </div>
   );
-};
+}

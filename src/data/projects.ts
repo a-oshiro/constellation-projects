@@ -1,7 +1,9 @@
-import type { Offer, Template, Background } from './types';
+import type { Offer, Template, Background, Alert } from './types';
 import type { ProjectWorkflowStatus } from '../components/ui/ProjectStatusBadge';
 import { OFFERS } from './offers';
 import { TEMPLATES, BACKGROUNDS, PROJECT_INFO } from './mockData';
+import { SEATTLE_OFFERS } from './evergreen/seattleOffers';
+import { SEATTLE_ALERTS } from './evergreen/alerts';
 
 /** Status of a single accordion section on the Project Overview page. */
 export type SectionStatus = 'done' | 'in_progress' | 'draft';
@@ -36,6 +38,16 @@ export interface Project {
   templates: Template[];
   backgrounds: Background[];
   sectionStatus: ProjectSectionStatus;
+  /** Evergreen projects have no end date, are driven by a monthly AI agent, and show the Alerts Lifecycle Kanban on their Overview page. */
+  isEvergreen?: boolean;
+  /**
+   * Per-project override for the "Approved" workflow step. When false, assets skip
+   * draft/approval entirely and are always 'generated'. Mirrors the ProjectContext-wide
+   * approvalEnabled toggle, but persists per project instead of always defaulting to true.
+   */
+  approvalEnabled?: boolean;
+  /** Only populated for Evergreen projects — the AI-drafted email proposals shown on the Alerts Lifecycle board. */
+  alerts?: Alert[];
 }
 
 const byTemplateIds = (templateIds: string[]) =>
@@ -207,6 +219,36 @@ export const PROJECTS: Project[] = [
       assets: 'done',
       adShells: 'in_progress',
       campaigns: 'draft',
+    },
+  },
+  {
+    id: 'proj-evergreen-bmw-seattle',
+    accountName: 'BMW of Seattle',
+    accountCode: 'WASEABMW',
+    projectName: 'Evergreen BMW of Seattle',
+    projectCode: 'EVG00001_WASEABMW_Evergreen',
+    brandTag: 'BMW',
+    workflowStatus: 'in_progress',
+    startDate: 'Aug 1, 2026',
+    endDate: '∞',
+    creator: 'AI AutoAgent',
+    creatorAvatar: 'https://i.pravatar.cc/32?img=68',
+    lastUpdated: 'Just now',
+    created: '08/2026',
+    accountUrl: PROJECT_INFO.accountUrl,
+    isEvergreen: true,
+    approvalEnabled: false,
+    offers: SEATTLE_OFFERS,
+    templates: [templateById('tmpl-2')],
+    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => b.id === 'bg-4'),
+    alerts: SEATTLE_ALERTS,
+    sectionStatus: {
+      offers: 'done',
+      templates: 'done',
+      themeAndLogos: 'done',
+      assets: 'done',
+      adShells: 'done',
+      campaigns: 'in_progress',
     },
   },
 ];

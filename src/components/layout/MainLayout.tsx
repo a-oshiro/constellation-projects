@@ -12,6 +12,7 @@ import { FilterPanel } from './FilterPanel';
 import { VehicleInfo } from '../ui/VehicleInfo';
 import { OfferDetails } from '../ui/OfferDetails';
 import { useProject } from '../../context/ProjectContext';
+import { EvergreenProjectBadge } from '../ui/EvergreenProjectBadge';
 import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
     offersPanel, closeOffersPanel,
   } = useLayout();
-  const { offers, updateOffer } = useProject();
+  const { offers, updateOffer, currentProject } = useProject();
 
   const offersPanelOffer = offersPanel
     ? (offers.find((o) => o.id === offersPanel.offerId) ?? null)
@@ -178,8 +179,13 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
           <div
             ref={mainPanelRef}
             className="flex-1 min-w-0 overflow-hidden"
-            style={{ display: 'flex', flexDirection: 'column' }}
+            style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
           >
+            {currentProject.isEvergreen && (
+              <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
+                <EvergreenProjectBadge />
+              </div>
+            )}
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}
             </div>
