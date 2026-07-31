@@ -13,6 +13,7 @@ import { VehicleInfo } from '../ui/VehicleInfo';
 import { OfferDetails } from '../ui/OfferDetails';
 import { useProject } from '../../context/ProjectContext';
 import { EvergreenProjectBadge } from '../ui/EvergreenProjectBadge';
+import { UnlockProjectDialog } from '../ui/UnlockProjectDialog';
 import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
@@ -102,7 +103,8 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
     offersPanel, closeOffersPanel,
   } = useLayout();
-  const { offers, updateOffer, currentProject } = useProject();
+  const { offers, updateOffer, currentProject, locked, setLocked } = useProject();
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
 
   const offersPanelOffer = offersPanel
     ? (offers.find((o) => o.id === offersPanel.offerId) ?? null)
@@ -183,8 +185,19 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
           >
             {currentProject.isEvergreen && (
               <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
-                <EvergreenProjectBadge />
+                <EvergreenProjectBadge
+                  locked={locked}
+                  onLockedClick={() => setUnlockDialogOpen(true)}
+                  onUnlockedClick={() => setLocked(true)}
+                />
               </div>
+            )}
+            {currentProject.isEvergreen && (
+              <UnlockProjectDialog
+                open={unlockDialogOpen}
+                onClose={() => setUnlockDialogOpen(false)}
+                onConfirm={() => { setLocked(false); setUnlockDialogOpen(false); }}
+              />
             )}
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}

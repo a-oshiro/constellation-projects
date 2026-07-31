@@ -55,6 +55,9 @@ interface ProjectContextValue {
   /** Whether the Approved task is enabled in the workflow */
   approvalEnabled: boolean;
   setApprovalEnabled: (enabled: boolean) => void;
+  /** Evergreen-only: whether the project is locked against edits. */
+  locked: boolean;
+  setLocked: (locked: boolean) => void;
   /** Destination URLs for HTML asset CTAs: { [assetId]: { [ctaKey]: url } } */
   destinationUrls: Record<string, Record<string, string>>;
   setDestinationUrl: (assetId: string, ctaKey: string, url: string) => void;
@@ -133,6 +136,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [approvalEnabled, setApprovalEnabled] = useState(() => getProjectById(DEFAULT_PROJECT_ID).approvalEnabled ?? true);
   const approvalEnabledRef = useRef(approvalEnabled);
   approvalEnabledRef.current = approvalEnabled;
+  const [locked, setLocked] = useState(() => getProjectById(DEFAULT_PROJECT_ID).locked ?? true);
   const [alerts, setAlerts] = useState<Alert[]>(() => getProjectById(DEFAULT_PROJECT_ID).alerts ?? []);
   const [assetVersionHistory, setAssetVersionHistory] = useState<Record<string, AssetVersion[]>>({});
   const [assetComments, setAssetComments] = useState<Record<string, AssetComment[]>>({});
@@ -208,6 +212,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setRemovedOfferIds(new Set());
     setCampaignLoaded(false);
     setApprovalEnabled(project.approvalEnabled ?? true);
+    setLocked(project.locked ?? true);
     setAssetVersionHistory({});
     setAssetComments({});
     setDestinationUrlsState({});
@@ -500,6 +505,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       assetComments,
       addAssetComment,
       approvalEnabled, setApprovalEnabled,
+      locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
       alerts, moveAlert,

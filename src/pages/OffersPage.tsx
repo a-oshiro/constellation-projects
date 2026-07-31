@@ -7,6 +7,7 @@ import { TaskFooter } from '../components/ui/TaskFooter';
 import { OfferCard } from '../components/ui/OfferCard';
 import { useProject } from '../context/ProjectContext';
 import { useLayout } from '../context/LayoutContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import type { OfferTypeName, OfferTypeData } from '../data/types';
 
 function createDefaultOfferType(type: OfferTypeName): OfferTypeData {
@@ -27,7 +28,7 @@ const OutOfStockBannerIcon = () => (
 );
 
 export const OffersPage = () => {
-  const { offers, updateOffer, currentProject } = useProject();
+  const { offers, updateOffer, currentProject, locked } = useProject();
   const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
@@ -88,7 +89,7 @@ export const OffersPage = () => {
           </IconButton>
         </PageHeader>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto px-4 py-4">
           {/* Add offer options */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
@@ -223,7 +224,7 @@ export const OffersPage = () => {
               />
             ))}
           </div>
-        </div>
+        </LockableContent>
 
         <TaskFooter currentTask="offers" />
       </div>

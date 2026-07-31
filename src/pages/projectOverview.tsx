@@ -12,6 +12,7 @@ import type { SectionStatus } from '../data/projects';
 import { computePreviewAssets, groupIntoAdShells } from '../utils/overviewAssets';
 import { useLayout } from '../context/LayoutContext';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 
 type SectionKey = 'offers' | 'templates' | 'themeAndLogos' | 'assets' | 'adShells' | 'campaigns';
 
@@ -68,6 +69,8 @@ interface SectionProps {
 
 const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMessage, children }: SectionProps) => {
   const isEmpty = count === 0;
+  const { currentProject, locked } = useProject();
+  const isLocked = currentProject.isEvergreen && locked;
 
   return (
     <div style={{ background: '#f4f5f6', borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
@@ -113,9 +116,9 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
             </button>
           </div>
           {expanded && (
-            <div style={{ padding: '4px 16px 12px' }}>
+            <LockableContent locked={isLocked} tint="#f4f5f6" style={{ padding: '4px 16px 12px' }}>
               {children}
-            </div>
+            </LockableContent>
           )}
         </>
       )}

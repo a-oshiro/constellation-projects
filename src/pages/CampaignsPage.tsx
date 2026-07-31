@@ -14,6 +14,7 @@ import pageTextLinkSvg from '../assets/icons/page-text-link.svg';
 import { TEMPLATES, BACKGROUNDS } from '../data/mockData';
 import { getTemplateCtas } from '../data/destinationUrlOptions';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import { useSnackbar } from '../context/SnackbarContext';
 import { useLayout } from '../context/LayoutContext';
 
@@ -161,7 +162,7 @@ const MiniShellThumbnail = ({ shell }: { shell: AdShell }) => {
 };
 
 export const CampaignsPage = () => {
-  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled, destinationUrls, currentProject } = useProject();
+  const { assets, everApprovedIds, campaignLoaded, loadCampaign, approvalEnabled, destinationUrls, currentProject, locked } = useProject();
   const { showSnackbar } = useSnackbar();
   const { shellCustomizations } = useLayout();
 
@@ -352,7 +353,7 @@ export const CampaignsPage = () => {
           )}
         </PageHeader>
 
-        <div className="flex-1 overflow-y-auto flex flex-col" style={{ padding: '0 16px' }}>
+        <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto flex flex-col" style={{ padding: '0 16px' }}>
 
           {/* Warning alert — only when no Ad Shells yet */}
           {!hasAdShells && (
@@ -601,7 +602,7 @@ export const CampaignsPage = () => {
             })}
 
           </div>
-        </div>
+        </LockableContent>
 
         <TaskFooter currentTask="campaigns" />
       </div>

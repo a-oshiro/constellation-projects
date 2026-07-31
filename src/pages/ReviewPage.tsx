@@ -44,6 +44,7 @@ import { AssetCard } from '../components/ui/AssetCard';
 import type { DraftVariant } from '../components/ui/AssetCard';
 import { EmptyStateMessage } from '../components/ui/EmptyStateMessage';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import { useLayout } from '../context/LayoutContext';
 import { applyAssetFilters, hasActiveFilters } from '../utils/assetFilters';
 import { ApplyChangesDialog, RevertChangesDialog } from '../components/ui/ProjectChangesDialogs';
@@ -51,7 +52,7 @@ import { ComparisonModal } from '../components/ui/ComparisonModal';
 import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 
 export const ReviewPage = () => {
-  const { assets, offers, bulkSetAssetStatus, bulkSetDestinationUrls, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls, currentProject } = useProject();
+  const { assets, offers, bulkSetAssetStatus, bulkSetDestinationUrls, pendingChanges, pendingRemovals, applyChanges, revertChanges, revertRemovals, everApprovedIds, campaignLoaded, approvalEnabled, destinationUrls, currentProject, locked } = useProject();
   const { showSnackbar } = useSnackbar();
   const { startProgress } = useProgressIndicator();
   const { openAdvancedGeneration, closeAdvancedGeneration, submittingIds, addSubmittingIds, clearSubmittingIds, filterPanelOpen, openFilterPanel, closeFilterPanel, filterState } = useLayout();
@@ -683,7 +684,7 @@ export const ReviewPage = () => {
       </div>}
 
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
+      <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
           (search.trim().length > 0 || hasActiveFilters(filterState)) ? (
             <EmptyStateMessage
@@ -722,7 +723,7 @@ export const ReviewPage = () => {
             )}
           </div>
         )}
-      </div>
+      </LockableContent>
 
       <TaskFooter currentTask="review" />
     </div>

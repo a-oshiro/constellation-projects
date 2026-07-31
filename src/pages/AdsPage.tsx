@@ -8,6 +8,7 @@ import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDia
 import { useLayout } from '../context/LayoutContext';
 import emptyFolderSrc from '../assets/empty-folder.png';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import { TEMPLATES, BACKGROUNDS } from '../data/mockData';
 
 const AD_TYPE_MAP: Record<string, string> = {
@@ -43,7 +44,7 @@ const CreateAdShellSplitButton = () => (
 );
 
 export const AdsPage = () => {
-  const { assets, everApprovedIds, approvalEnabled, currentProject } = useProject();
+  const { assets, everApprovedIds, approvalEnabled, currentProject, locked } = useProject();
   const { openAdShellPanel, editingShell, shellCustomizations } = useLayout();
   const [search, setSearch] = useState('');
   const [autoFill, setAutoFill] = useState(true);
@@ -197,7 +198,7 @@ export const AdsPage = () => {
         </PageHeader>
 
         {/* Main content area */}
-        <div className="flex-1 overflow-y-auto flex flex-col">
+        <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto flex flex-col">
           {approvedAssets.length === 0 ? (
             /* Empty state — no approved assets yet */
             <div style={{
@@ -246,7 +247,7 @@ export const AdsPage = () => {
               ))}
             </div>
           )}
-        </div>
+        </LockableContent>
 
         <TaskFooter currentTask="ads" />
       </div>

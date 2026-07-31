@@ -7,12 +7,13 @@ import { TemplateCard } from '../components/ui/TemplateCard';
 import { AddTemplatesDialog } from '../components/ui/AddTemplatesDialog';
 import { BACKGROUNDS } from '../data/mockData';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 
 interface TemplatesPageProps {
 }
 
 export const TemplatesPage = ({}: TemplatesPageProps) => {
-  const { templates, removedTemplateIds, removeTemplate, currentProject } = useProject();
+  const { templates, removedTemplateIds, removeTemplate, currentProject, locked } = useProject();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -94,7 +95,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
         />
       </PageHeader>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto px-4 py-4">
         <div
           style={{
             display: 'grid',
@@ -114,7 +115,7 @@ export const TemplatesPage = ({}: TemplatesPageProps) => {
             />
           ))}
         </div>
-      </div>
+      </LockableContent>
 
       <TaskFooter currentTask="templates" />
     </div>

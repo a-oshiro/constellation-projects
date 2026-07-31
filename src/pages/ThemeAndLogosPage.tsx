@@ -5,6 +5,7 @@ import { Add, Delete, MoreVert, Settings, ViewComfy } from '@mui/icons-material'
 import { PageHeader } from '../components/ui/PageHeader';
 import { TaskFooter } from '../components/ui/TaskFooter';
 import { useProject } from '../context/ProjectContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import type { Background } from '../data/types';
 
 interface ThemeAndLogosPageProps {
@@ -214,7 +215,7 @@ function LogoCard() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
-  const { backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds, currentProject } = useProject();
+  const { backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds, currentProject, locked } = useProject();
 
   const visibleBackgrounds = backgrounds.filter((b) => !removedBgIds.has(b.id));
   const visibleTemplates = templates.filter((t) => !removedTemplateIds.has(t.id));
@@ -233,7 +234,7 @@ export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
         <IconButton size="small"><MoreVert style={{ fontSize: 18 }} /></IconButton>
       </PageHeader>
 
-      <div className="flex-1 overflow-y-auto" style={{ padding: '20px 24px' }}>
+      <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto" style={{ padding: '20px 24px' }}>
 
         {/* ── Backgrounds section ───────────────────────────── */}
         <div style={{ marginBottom: 32 }}>
@@ -276,7 +277,7 @@ export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
           <LogoCard />
         </div>
 
-      </div>
+      </LockableContent>
 
       <TaskFooter currentTask="theme_and_logos" />
     </div>

@@ -9,6 +9,7 @@ import { StatusBadge } from './StatusBadge';
 import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { useProject } from '../../context/ProjectContext';
+import { LockableContent } from './LockedOverlay';
 import { useProgressIndicator } from '../../context/ProgressIndicatorContext';
 import { useLayout } from '../../context/LayoutContext';
 import { TEMPLATES } from '../../data/mockData';
@@ -22,7 +23,7 @@ export const PreviewPanel = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { assets, bulkSetAssetStatus, approvalEnabled } = useProject();
+  const { assets, bulkSetAssetStatus, approvalEnabled, currentProject, locked } = useProject();
   const { startProgress } = useProgressIndicator();
   const { mainPanelRef, openAdvancedGeneration, closeAdvancedGeneration, addSubmittingIds, clearSubmittingIds } = useLayout();
 
@@ -151,7 +152,9 @@ export const PreviewPanel = () => {
       >
         {/* Panel content — always mounted so contentHeight stays accurate */}
         <div ref={contentRef}>
-          <div
+          <LockableContent
+            locked={currentProject.isEvergreen && locked}
+            tint="#f0f2f4"
             style={{
               // background: '#ffffff',
               borderRadius: '16px 16px 0 0',
@@ -307,7 +310,7 @@ export const PreviewPanel = () => {
                 );
               })}
             </div>
-          </div>
+          </LockableContent>
         </div>
       </div>
       {previewAsset && (

@@ -15,13 +15,14 @@ import { AssetCard } from '../components/ui/AssetCard';
 import { EmptyStateMessage } from '../components/ui/EmptyStateMessage';
 import { useProject } from '../context/ProjectContext';
 import { useLayout } from '../context/LayoutContext';
+import { LockableContent } from '../components/ui/LockedOverlay';
 import { applyAssetFilters, hasActiveFilters } from '../utils/assetFilters';
 import { AddDestinationUrlsDialog } from '../components/ui/AddDestinationUrlsDialog';
 
 const EMPTY_ASSETS: never[] = [];
 
 export const ApprovedPage = () => {
-  const { assets, bulkSetAssetStatus, currentProject } = useProject();
+  const { assets, bulkSetAssetStatus, currentProject, locked } = useProject();
   const { filterPanelOpen, openFilterPanel, closeFilterPanel, filterState } = useLayout();
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -277,7 +278,7 @@ export const ApprovedPage = () => {
       )}
 
       {/* ── Asset Grid / Empty State ───────────────────────────── */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
+      <LockableContent locked={currentProject.isEvergreen && locked} className="flex-1 overflow-y-auto flex flex-col">
         {filteredAssets.length === 0 ? (
           (search.trim().length > 0 || hasActiveFilters(filterState)) ? (
             <EmptyStateMessage
@@ -305,7 +306,7 @@ export const ApprovedPage = () => {
             ))}
           </div>
         )}
-      </div>
+      </LockableContent>
 
       <TaskFooter currentTask="approved" />
     </div>

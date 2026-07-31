@@ -40,6 +40,8 @@ export interface Project {
   sectionStatus: ProjectSectionStatus;
   /** Evergreen projects have no end date, are driven by a monthly AI agent, and show the Alerts Lifecycle Kanban on their Overview page. */
   isEvergreen?: boolean;
+  /** Evergreen-only: whether the project is locked against edits. Defaults to true — unlocking requires confirming the risks in a popup. */
+  locked?: boolean;
   /**
    * Per-project override for the "Approved" workflow step. When false, assets skip
    * draft/approval entirely and are always 'generated'. Mirrors the ProjectContext-wide
@@ -238,6 +240,7 @@ export const PROJECTS: Project[] = [
     accountUrl: PROJECT_INFO.accountUrl,
     isEvergreen: true,
     approvalEnabled: false,
+    locked: true,
     offers: SEATTLE_OFFERS,
     templates: [templateById('tmpl-2')],
     backgrounds: byTemplateIds(['tmpl-2']).filter((b) => b.id === 'bg-4'),
