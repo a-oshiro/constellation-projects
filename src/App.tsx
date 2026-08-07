@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ProjectProvider } from './context/ProjectContext';
+import { ProjectProvider, useProject } from './context/ProjectContext';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { MainLayout } from './components/layout/MainLayout';
@@ -44,6 +44,12 @@ const theme = createTheme({
   },
 });
 
+/** Bare "/projects" has no dedicated project — redirect to whichever project is currently selected. */
+const ProjectIndexRedirect = () => {
+  const { selectedProjectId } = useProject();
+  return <Navigate to={`/projects/${selectedProjectId}`} replace />;
+};
+
 function App() {
   return (
     <TestWidgetProvider>
@@ -60,7 +66,8 @@ function App() {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Navigate to="/projects" replace />} />
-                  <Route path="/projects" element={<ProjectOverviewPage />} />
+                  <Route path="/projects" element={<ProjectIndexRedirect />} />
+                  <Route path="/projects/:projectId" element={<ProjectOverviewPage />} />
                   <Route path="/offers" element={<OffersPage />} />
                   <Route path="/templates" element={<TemplatesPage />} />
                   <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />

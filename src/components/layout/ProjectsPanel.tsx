@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { ArrowBack, Close, Search, Add, FilterList, LocalOfferOutlined, ViewComfyOutlined, ImageOutlined, CheckCircle, PendingOutlined, RadioButtonUnchecked } from '@mui/icons-material';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
@@ -113,6 +114,7 @@ function ProjectListItem({ project, active, locked, onClick }: { project: Projec
 
 export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
   const { selectedProjectId, selectProject, locked } = useProject();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -193,7 +195,7 @@ export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
             project={project}
             active={project.id === selectedProjectId}
             locked={project.id === selectedProjectId ? locked : (project.locked ?? true)}
-            onClick={() => selectProject(project.id)}
+            onClick={() => { selectProject(project.id); navigate(`/projects/${project.id}`); }}
           />
         ))}
       </div>

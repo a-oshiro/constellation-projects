@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { MoreVert, ExpandMore, ChevronRight, OpenInNew, CheckCircle, PendingOutlined } from '@mui/icons-material';
 import bmwLogoSrc from '../assets/bmw-logo.png';
@@ -124,8 +124,16 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
 
 export const ProjectOverviewPage = () => {
   const { tasksPanelOpen, openTasksPanel } = useLayout();
-  const { currentProject: project, alerts } = useProject();
+  const { currentProject: project, alerts, selectedProjectId, selectProject } = useProject();
   const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
+
+  // The URL is the source of truth for which project is shown — keep context in sync with it.
+  useEffect(() => {
+    if (projectId && projectId !== selectedProjectId) {
+      selectProject(projectId);
+    }
+  }, [projectId, selectedProjectId, selectProject]);
 
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     offers: true, templates: true, themeAndLogos: true, assets: true, adShells: true, campaigns: true,

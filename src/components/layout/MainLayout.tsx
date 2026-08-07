@@ -158,7 +158,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
   }, [location.pathname]);
 
   const isSettingsRoute = location.pathname.startsWith('/settings');
-  const isProjectOverviewRoute = location.pathname === '/projects';
+  const isProjectOverviewRoute = location.pathname.startsWith('/projects/');
   const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen);
 
   return (
