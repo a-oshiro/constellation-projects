@@ -34,7 +34,7 @@ const othersExcept = (featuredId: string) => ALL_OFFER_IDS.filter((id) => id !==
 export const SEATTLE_ALERTS: Alert[] = [
   {
     id: 'sea-alert-irvine-cleared-x3',
-    category: 'Losing to Competitor',
+    category: 'Conquest',
     subject: 'Irvine BMW cleared 27 New 2026 BMW X3 30 xDrive in the last 120 days',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -54,7 +54,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-competition-beating-x3-lease',
-    category: 'Losing to Competitor',
+    category: 'Offers',
     subject: 'Your competition is beating you on New 2026 BMW X3 30 xDrive leases',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -75,7 +75,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-irvine-beating-x1',
-    category: 'Losing to Competitor',
+    category: 'MSRP',
     subject: 'Irvine BMW is beating you on the New 2026 BMW X1 xDrive28i',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -95,7 +95,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-highest-aging-x1',
-    category: 'Losing to Competitor',
+    category: 'Aging',
     subject: 'You have the highest amount of aging New 2026 BMW X1 xDrive28i in your area',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -119,7 +119,7 @@ export const SEATTLE_ALERTS: Alert[] = [
 
   {
     id: 'sea-alert-bellevue-undercuts-330i',
-    category: 'Losing to Competitor',
+    category: 'Offers',
     subject: 'Bellevue BMW is undercutting you on the New 2026 BMW 330i Sedan',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -139,7 +139,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-x5-40i-demand-spike',
-    category: 'Demand Spike',
+    category: 'Inventory Gaps/Levels',
     subject: 'Demand for the New 2026 BMW X5 xDrive40i is outpacing your inventory',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -159,7 +159,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-x5-sdrive-aging',
-    category: 'Aging Inventory',
+    category: 'Aging',
     subject: 'Your New 2026 BMW X5 sDrive40i has been sitting for 61 days',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -169,7 +169,7 @@ export const SEATTLE_ALERTS: Alert[] = [
       'Here is the VIN you need to advertise:',
     ],
     featuredOfferId: 'sea-offer-x5-sdrive40i',
-    otherOfferIds: othersExcept('sea-offer-x5-sdrive40i'),
+    otherOfferIds: [],
     vin: '5UXTA6C09N9M67890',
     status: 'generated',
     createdAt: now - 9 * DAY,
@@ -179,7 +179,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-overlake-beats-m340i-lease',
-    category: 'Losing to Competitor',
+    category: 'Offers',
     subject: 'Overlake BMW beats your lease on the New 2026 BMW M340i Sedan',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -200,7 +200,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-x5-50e-demand-spike',
-    category: 'Demand Spike',
+    category: 'Conquest',
     subject: 'The New 2026 BMW X5 xDrive50e is your fastest-moving YMMT this month',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -210,7 +210,7 @@ export const SEATTLE_ALERTS: Alert[] = [
       'Here is the VIN you need to advertise now:',
     ],
     featuredOfferId: 'sea-offer-x5-xdrive50e',
-    otherOfferIds: othersExcept('sea-offer-x5-xdrive50e'),
+    otherOfferIds: [],
     vin: '5UXTA6C08N9N23456',
     status: 'approved',
     createdAt: now - 12 * DAY,
@@ -221,7 +221,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-330i-aging',
-    category: 'Aging Inventory',
+    category: 'Aging',
     subject: 'Your New 2026 BMW 330i Sedan is the oldest 330i in your market',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -242,7 +242,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-x5-40i-msrp',
-    category: 'Losing to Competitor',
+    category: 'MSRP',
     subject: 'Northwest BMW holds a lower MSRP on the New 2026 BMW X5 xDrive40i',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -264,7 +264,7 @@ export const SEATTLE_ALERTS: Alert[] = [
   },
   {
     id: 'sea-alert-m340i-demand-spike',
-    category: 'Demand Spike',
+    category: 'Conquest',
     subject: 'Competitors are outselling you on the New 2026 BMW M340i Sedan',
     preheader: 'Constellation Insights',
     bodyParagraphs: [
@@ -274,7 +274,7 @@ export const SEATTLE_ALERTS: Alert[] = [
       'Here is the VIN you need to advertise now:',
     ],
     featuredOfferId: 'sea-offer-m340i-sedan',
-    otherOfferIds: othersExcept('sea-offer-m340i-sedan'),
+    otherOfferIds: [],
     vin: 'WBA53AR02PFJ45678',
     status: 'sent',
     createdAt: now - 22 * DAY,

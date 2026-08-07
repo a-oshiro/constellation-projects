@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton } from '@mui/material';
-import { Close, HistoryOutlined, PictureAsPdfOutlined, OpenInNew, Check, Replay, Send } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertStatus, Offer } from '../../data/types';
+import { Close, HistoryOutlined, PictureAsPdfOutlined, Check, Replay, Send, ChevronLeft, ChevronRight, EditOutlined, TuneOutlined } from '@mui/icons-material';
+import type { Alert, AlertActivityEntry, AlertStatus, Offer, Template } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -20,19 +20,6 @@ function actionMessage(entry: AlertActivityEntry): string {
   return `${ACTION_LABEL[entry.action]} ${formatRelativeTime(entry.timestamp)} by ${by}`;
 }
 
-const CTA_CYCLE = ['Shop Now', 'Get Offer', 'Learn More'];
-
-/** Social-campaign copy for the feed table — generated from real offer data (this project only ever has Lease offers). */
-function getFeedCopy(offer: Offer, accountName: string, index: number) {
-  const lease = offer.offerTypes.find((t) => t.type === 'Lease');
-  const payment = lease && 'monthlyPayment' in lease ? lease.monthlyPayment : undefined;
-  const term = lease && 'term' in lease ? lease.term : 36;
-  const dueAtSigning = lease && 'totalDueAtSigning' in lease ? lease.totalDueAtSigning : undefined;
-  const primaryText = `Lease the ${offer.vehicleName} for $${payment}/mo for ${term} months${dueAtSigning ? ` with $${dueAtSigning.toLocaleString()} due at signing` : ''}. Offer available at ${accountName}.`;
-  const headline = `${offer.year} BMW ${offer.model} - Lease Offer`;
-  return { cta: CTA_CYCLE[index % CTA_CYCLE.length], primaryText, headline };
-}
-
 const footerButtonBase: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
   borderRadius: 100, padding: '6px 16px', fontSize: 14, fontFamily: 'Roboto, sans-serif',
@@ -47,35 +34,21 @@ const PaneTitle = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-interface OfferPriceCardProps {
+interface EmailAssetPreviewProps {
   offer: Offer;
-  large?: boolean;
+  template: Template;
+  backgroundUrl: string;
 }
 
-const OfferPriceCard = ({ offer, large }: OfferPriceCardProps) => {
-  const lease = offer.offerTypes.find((t) => t.type === 'Lease');
-  const payment = lease && 'monthlyPayment' in lease ? lease.monthlyPayment : undefined;
-  const term = lease && 'term' in lease ? lease.term : 36;
-
-  return (
-    <div style={{ borderRadius: 8, overflow: 'hidden', background: '#1f1d25', flexShrink: 0, width: large ? '100%' : undefined }}>
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', background: '#2c2a33' }}>
-        <img src={offer.imageUrl} alt={offer.vehicleName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
-      <div style={{ padding: large ? '10px 12px' : '6px 8px' }}>
-        <p style={{ margin: 0, color: '#ffffff', fontFamily: 'Roboto, sans-serif', fontSize: large ? 12 : 10, fontWeight: 500, letterSpacing: '0.4px' }}>
-          LEASE THE {offer.vehicleName.toUpperCase()}
-        </p>
-        <p style={{ margin: '2px 0 0', color: '#ffffff', fontFamily: 'Roboto, sans-serif', fontSize: large ? 28 : 18, fontWeight: 700, lineHeight: 1.1 }}>
-          ${payment ?? '—'}
-        </p>
-        <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,0.6)', fontFamily: 'Roboto, sans-serif', fontSize: 9, letterSpacing: '0.2px' }}>
-          Per month for {term ?? 36} months due at signing, security deposit waived
-        </p>
-      </div>
-    </div>
-  );
-};
+/** The same filled ad-creative asset shown in the dialog's Preview panel, embedded inline in the email body. */
+const EmailAssetPreview = ({ offer, template, backgroundUrl }: EmailAssetPreviewProps) => (
+  <div style={{
+    width: '100%', aspectRatio: `${template.width} / ${template.height}`, position: 'relative',
+    borderRadius: 8, overflow: 'hidden', background: '#f0f2f4', flexShrink: 0,
+  }}>
+    <FilledTemplatePreview template={template} offer={offer} backgroundUrl={backgroundUrl} />
+  </div>
+);
 
 interface AlertDialogProps {
   alert: Alert;
@@ -85,6 +58,7 @@ interface AlertDialogProps {
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const { offers, currentProject, moveAlert } = useProject();
   const [showHistory, setShowHistory] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const handleAction = (newStatus: AlertStatus) => {
     moveAlert(alert.id, newStatus);
@@ -104,6 +78,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const template = currentProject.templates[0];
   const background = currentProject.backgrounds[0];
+
+  const previewCount = rowOffers.length;
+  const previewOffer = rowOffers[Math.min(previewIndex, Math.max(previewCount - 1, 0))];
+  const showPreviewNav = previewCount > 1;
+  const goToPrevPreview = () => setPreviewIndex((i) => (i - 1 + previewCount) % previewCount);
+  const goToNextPreview = () => setPreviewIndex((i) => (i + 1) % previewCount);
 
   const lastEntry = alert.activity[alert.activity.length - 1];
   const historyEntries = [...alert.activity].reverse();
@@ -144,7 +124,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
           {/* Email preview */}
-          <div style={{ width: 540, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ width: 600, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <PaneTitle>Email</PaneTitle>
             <div style={{ flex: 1, overflowY: 'auto', background: '#F4F5F6', padding: 16 }}>
               <div style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px' }}>
@@ -173,12 +153,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   {alert.vin}
                 </p>
 
-                {featuredOffer && (
+                {featuredOffer && template && background && (
                   <div style={{ marginBottom: 16 }}>
                     <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
                       The recommended monthly payment for this YMMT to dominate this market is:
                     </p>
-                    <OfferPriceCard offer={featuredOffer} large />
+                    <EmailAssetPreview offer={featuredOffer} template={template} backgroundUrl={background.url} />
                   </div>
                 )}
 
@@ -186,13 +166,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   SEND TO MY PAID MEDIA TEAM
                 </button>
 
-                {otherOffers.length > 0 && (
+                {otherOffers.length > 0 && template && background && (
                   <>
                     <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
                       These are the other YMMTs that you selected on your enrollment form that you are currently running on paid media:
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                      {otherOffers.map((o) => <OfferPriceCard key={o.id} offer={o} />)}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 20 }}>
+                      {otherOffers.map((o) => <EmailAssetPreview key={o.id} offer={o} template={template} backgroundUrl={background.url} />)}
                     </div>
                   </>
                 )}
@@ -210,83 +190,73 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             </div>
           </div>
 
-          {/* Feed table */}
+          {/* Image preview */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <PaneTitle>Feed</PaneTitle>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-              <thead>
-                <tr>
-                  {[
-                    { label: 'Asset Name', width: 240 },
-                    { label: 'Year', width: 64 },
-                    { label: 'vehicle_1_url', width: 280 },
-                    { label: 'Primary Asset', width: 96 },
-                    { label: 'Carousel 2', width: 96 },
-                    { label: 'Carousel 3', width: 96 },
-                    { label: 'Carousel 4', width: 96 },
-                    { label: 'Call to Action', width: 120 },
-                    { label: 'Primary Text', width: 320 },
-                    { label: 'Headline 1', width: 200 },
-                  ].map((col) => (
-                    <th
-                      key={col.label}
-                      style={{
-                        position: 'sticky', top: 0, background: '#fafafa', zIndex: 1,
-                        width: col.width, minWidth: col.width, maxWidth: col.width,
-                        textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,0.08)',
-                        fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25',
-                      }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rowOffers.map((offer, index) => {
-                  const assetName = template ? `${offer.vehicleName}_${template.width} x ${template.height}_BG1` : offer.vehicleName;
-                  const modelParam = encodeURIComponent(offer.model.replace(/\s+/g, '+'));
-                  const url = `https://www.bmwofseattle.com/new-inventory/index.htm?model=${modelParam}`;
-                  const { cta, primaryText, headline } = getFeedCopy(offer, currentProject.accountName, index);
-                  return (
-                    <tr key={offer.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {assetName}
-                      </td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {offer.year}
-                      </td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <a href={url} target="_blank" rel="noreferrer" style={{ color: '#473bab', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</a>
-                          <OpenInNew style={{ fontSize: 13, color: '#686576', flexShrink: 0 }} />
-                        </span>
-                      </td>
-                      <td style={{ padding: 8 }}>
-                        {template && background ? (
-                          <div style={{ width: 64, height: 64, borderRadius: 4, overflow: 'hidden', position: 'relative', background: '#f0f2f4' }}>
-                            <FilledTemplatePreview template={template} offer={offer} backgroundUrl={background.url} />
-                          </div>
-                        ) : null}
-                      </td>
-                      <td style={{ padding: 8 }} />
-                      <td style={{ padding: 8 }} />
-                      <td style={{ padding: 8 }} />
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {cta}
-                      </td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', lineHeight: 1.4 }}>
-                        {primaryText}
-                      </td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        {headline}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <PaneTitle>Preview</PaneTitle>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, background: '#f0f2f4', padding: 16 }}>
+              <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {showPreviewNav && (
+                  <IconButton
+                    onClick={goToPrevPreview}
+                    sx={{
+                      position: 'absolute', left: 4, zIndex: 2, background: '#ffffff', padding: '8px',
+                      boxShadow: '0px 1px 5px 0px rgba(0,0,0,0.12), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 3px 1px -2px rgba(0,0,0,0.2)',
+                      '&:hover': { background: '#ffffff' },
+                    }}
+                  >
+                    <ChevronLeft style={{ fontSize: 24, color: '#1f1d25' }} />
+                  </IconButton>
+                )}
+
+                {previewOffer && template && background ? (
+                  <div style={{
+                    width: '100%', height: '100%', maxWidth: 575, maxHeight: 575,
+                    position: 'relative', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
+                  }}>
+                    <FilledTemplatePreview template={template} offer={previewOffer} backgroundUrl={background.url} />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>No assets to preview.</span>
+                )}
+
+                {showPreviewNav && (
+                  <IconButton
+                    onClick={goToNextPreview}
+                    sx={{
+                      position: 'absolute', right: 4, zIndex: 2, background: '#ffffff', padding: '8px',
+                      boxShadow: '0px 1px 5px 0px rgba(0,0,0,0.12), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 3px 1px -2px rgba(0,0,0,0.2)',
+                      '&:hover': { background: '#ffffff' },
+                    }}
+                  >
+                    <ChevronRight style={{ fontSize: 24, color: '#1f1d25' }} />
+                  </IconButton>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <button
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                    background: 'transparent', border: '1px solid rgba(99,86,225,0.5)', borderRadius: 100,
+                    padding: '4px 10px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                    color: '#473bab', letterSpacing: '0.46px',
+                  }}
+                >
+                  <EditOutlined style={{ fontSize: 16 }} />
+                  Edit Source Template
+                </button>
+                <button
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                    background: '#473bab', border: 'none', borderRadius: 100,
+                    padding: '4px 10px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                    color: '#ffffff', letterSpacing: '0.46px',
+                  }}
+                >
+                  <TuneOutlined style={{ fontSize: 16 }} />
+                  Configure Variables
+                </button>
+              </div>
             </div>
           </div>
 

@@ -6,6 +6,41 @@ import type { PreviewAdShell } from '../../utils/overviewAssets';
 
 /** Read-only, compact card previews used only on the Project Overview page. */
 
+export const ScrollRow = ({ children }: { children: React.ReactNode }) => (
+  <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'clip' }}>
+    {children}
+  </div>
+);
+
+const TEMPLATE_THUMB_SIZE = 40;
+const TEMPLATE_THUMB_NATIVE = 100;
+
+/**
+ * Fills its container with a template's live Preview component, scaled down via CSS transform —
+ * templates have no static preview image, and the Preview component's fixed-px text needs a real
+ * transform (not just a smaller layout box) to stay legible-proportioned at avatar size.
+ */
+export const TemplateThumb = ({ template }: { template: Template }) => {
+  const isWide = template.width >= template.height;
+  const previewWidth = isWide ? '100%' : `${(template.width / template.height) * 100}%`;
+  const previewHeight = isWide ? `${(template.height / template.width) * 100}%` : '100%';
+  const PreviewComponent = TEMPLATE_REGISTRY[template.id]?.Preview;
+  const scale = TEMPLATE_THUMB_SIZE / TEMPLATE_THUMB_NATIVE;
+
+  return (
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <div style={{
+        width: TEMPLATE_THUMB_NATIVE, height: TEMPLATE_THUMB_NATIVE, transform: `scale(${scale})`, transformOrigin: 'top left',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f4',
+      }}>
+        <div style={{ width: previewWidth, height: previewHeight, position: 'relative', flexShrink: 0 }}>
+          {PreviewComponent ? <PreviewComponent /> : <div style={{ width: '100%', height: '100%', background: '#e8eaed' }} />}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function getLeaseFields(offer: Offer): { label: string; value: string }[] {
   const lease = offer.offerTypes.find((ot) => ot.type === 'Lease');
   if (!lease) return [];

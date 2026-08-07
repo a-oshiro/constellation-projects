@@ -5,11 +5,13 @@ import { MoreVert, ExpandMore, ChevronRight, OpenInNew, CheckCircle, PendingOutl
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { ProjectStatusBadge } from '../components/ui/ProjectStatusBadge';
-import { OverviewOfferCard, OverviewTemplateCard, OverviewAssetCard, OverviewAdShellCard } from '../components/ui/OverviewCards';
+import { OverviewOfferCard, OverviewTemplateCard, OverviewAssetCard, OverviewAdShellCard, ScrollRow, TemplateThumb } from '../components/ui/OverviewCards';
 import { FilledTemplatePreview } from '../components/ui/FilledTemplatePreview';
 import { AlertsKanbanBoard } from '../components/ui/AlertsKanbanBoard';
+import { ProjectSummary } from '../components/ui/ProjectSummary';
+import type { SummaryCardConfig } from '../components/ui/ProjectSummary';
 import type { SectionStatus } from '../data/projects';
-import { computePreviewAssets, groupIntoAdShells } from '../utils/overviewAssets';
+import { computePreviewAssets, groupIntoAdShells, computeAlertOfferVisibility } from '../utils/overviewAssets';
 import { useLayout } from '../context/LayoutContext';
 import { useProject } from '../context/ProjectContext';
 import { LockableContent } from '../components/ui/LockedOverlay';
@@ -46,12 +48,6 @@ const DraftBadge = () => (
   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px 3px 6px', borderRadius: 8, background: 'rgba(2, 136, 209, 0.08)' }}>
     <PendingOutlined style={{ fontSize: 14, color: '#01579b' }} />
     <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#01579b', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>Draft</span>
-  </div>
-);
-
-const ScrollRow = ({ children }: { children: React.ReactNode }) => (
-  <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'clip' }}>
-    {children}
   </div>
 );
 
@@ -128,7 +124,7 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
 
 export const ProjectOverviewPage = () => {
   const { tasksPanelOpen, openTasksPanel } = useLayout();
-  const { currentProject: project } = useProject();
+  const { currentProject: project, alerts } = useProject();
   const navigate = useNavigate();
 
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
@@ -141,12 +137,64 @@ export const ProjectOverviewPage = () => {
     () => computePreviewAssets(project.offers, project.templates, project.backgrounds, project.projectName),
     [project],
   );
-  const adShells = useMemo(
-    () => groupIntoAdShells(previewAssets, project.templates, project.projectName),
-    [previewAssets, project],
+
+  // Evergreen only: an offer's preview assets stay hidden from the Project Summary until an
+  // Alert featuring it is Approved, and only get grouped into Ad Shells once that Alert is Sent.
+  // Offers no alert ever references are outside that lifecycle and stay always-visible.
+  const previewOfferIds = useMemo(() => Array.from(new Set(previewAssets.map((a) => a.offerId))), [previewAssets]);
+  const alertVisibility = useMemo(() => computeAlertOfferVisibility(alerts, previewOfferIds), [alerts, previewOfferIds]);
+
+  const visibleAssets = useMemo(
+    () => (project.isEvergreen ? previewAssets.filter((a) => alertVisibility.unlockedOfferIds.has(a.offerId)) : previewAssets),
+    [previewAssets, alertVisibility, project.isEvergreen],
   );
 
+  const adShells = useMemo(() => {
+    const shellAssets = project.isEvergreen
+      ? previewAssets.filter((a) => alertVisibility.shellOfferIds.has(a.offerId))
+      : previewAssets;
+    return groupIntoAdShells(shellAssets, project.templates, project.projectName);
+  }, [previewAssets, alertVisibility, project]);
+
+  const newAssetsCount = useMemo(
+    () => visibleAssets.filter((a) => alertVisibility.newOfferIds.has(a.offerId)).length,
+    [visibleAssets, alertVisibility],
+  );
+
+  const latestAssets = useMemo(() => {
+    if (!project.isEvergreen) return visibleAssets.slice(0, 12);
+    return [...visibleAssets]
+      .sort((a, b) => (alertVisibility.unlockedAt[b.offerId] ?? 0) - (alertVisibility.unlockedAt[a.offerId] ?? 0))
+      .slice(0, 12);
+  }, [visibleAssets, alertVisibility, project.isEvergreen]);
+
   const campaignsActive = project.sectionStatus.campaigns === 'done';
+
+  const thumbImg = (src: string) => <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+
+  const summaryCards: SummaryCardConfig[] = [
+    {
+      key: 'offers', title: 'Offers', count: project.offers.length, route: SECTION_ROUTES.offers,
+      previewItems: project.offers.map((o) => thumbImg(o.imageUrl)),
+    },
+    {
+      key: 'templates', title: 'Templates', count: project.templates.length, route: SECTION_ROUTES.templates,
+      previewItems: project.templates.map((t) => <TemplateThumb key={t.id} template={t} />),
+    },
+    {
+      key: 'themeAndLogos', title: 'Theme and Logos', count: project.backgrounds.length, route: SECTION_ROUTES.themeAndLogos,
+      previewItems: project.backgrounds.map((b) => thumbImg(b.url)),
+    },
+    {
+      key: 'assets', title: 'Assets', count: visibleAssets.length, delta: newAssetsCount, route: SECTION_ROUTES.assets,
+      previewItems: visibleAssets.map((a) => thumbImg(a.backgroundUrl)),
+    },
+    {
+      key: 'adShells', title: 'Ad Shells', count: adShells.length, route: SECTION_ROUTES.adShells,
+      previewItems: adShells.map((s) => s.assets[0]?.backgroundUrl).filter((u): u is string => Boolean(u)).map(thumbImg),
+    },
+    { key: 'campaigns', title: 'Campaign', count: adShells.length, live: campaignsActive, route: SECTION_ROUTES.campaigns },
+  ];
 
   return (
     <div className="flex h-full" style={{ background: '#f0f2f4' }}>
@@ -218,136 +266,149 @@ export const ProjectOverviewPage = () => {
         {/* ── Sections ───────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto" style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {project.isEvergreen && <AlertsKanbanBoard />}
+          {project.isEvergreen ? (
+            <>
+              <AlertsKanbanBoard />
+              <ProjectSummary
+                cards={summaryCards}
+                latestAssets={latestAssets}
+                totalAssetsCount={visibleAssets.length}
+                assetsRoute={SECTION_ROUTES.assets}
+                onNavigate={navigate}
+              />
+            </>
+          ) : (
+            <>
+              <Section
+                title="Offers"
+                count={project.offers.length}
+                status={project.sectionStatus.offers}
+                expanded={expanded.offers}
+                onToggle={() => toggle('offers')}
+                onDetails={() => navigate(SECTION_ROUTES.offers)}
+                emptyMessage="No offers added yet."
+              >
+                <ScrollRow>
+                  {project.offers.map((offer) => <OverviewOfferCard key={offer.id} offer={offer} />)}
+                </ScrollRow>
+              </Section>
 
-          <Section
-            title="Offers"
-            count={project.offers.length}
-            status={project.sectionStatus.offers}
-            expanded={expanded.offers}
-            onToggle={() => toggle('offers')}
-            onDetails={() => navigate(SECTION_ROUTES.offers)}
-            emptyMessage="No offers added yet."
-          >
-            <ScrollRow>
-              {project.offers.map((offer) => <OverviewOfferCard key={offer.id} offer={offer} />)}
-            </ScrollRow>
-          </Section>
+              <Section
+                title="Templates"
+                count={project.templates.length}
+                status={project.sectionStatus.templates}
+                expanded={expanded.templates}
+                onToggle={() => toggle('templates')}
+                onDetails={() => navigate(SECTION_ROUTES.templates)}
+                emptyMessage="No templates added yet."
+              >
+                <ScrollRow>
+                  {project.templates.map((tmpl) => <OverviewTemplateCard key={tmpl.id} template={tmpl} />)}
+                </ScrollRow>
+              </Section>
 
-          <Section
-            title="Templates"
-            count={project.templates.length}
-            status={project.sectionStatus.templates}
-            expanded={expanded.templates}
-            onToggle={() => toggle('templates')}
-            onDetails={() => navigate(SECTION_ROUTES.templates)}
-            emptyMessage="No templates added yet."
-          >
-            <ScrollRow>
-              {project.templates.map((tmpl) => <OverviewTemplateCard key={tmpl.id} template={tmpl} />)}
-            </ScrollRow>
-          </Section>
-
-          <Section
-            title="Theme and Logos"
-            count={project.backgrounds.length}
-            status={project.sectionStatus.themeAndLogos}
-            expanded={expanded.themeAndLogos}
-            onToggle={() => toggle('themeAndLogos')}
-            onDetails={() => navigate(SECTION_ROUTES.themeAndLogos)}
-            emptyMessage="No backgrounds or logos added yet."
-          >
-            <div style={{ display: 'flex', gap: 12 }}>
-              {project.backgrounds[0] && (
-                <img
-                  src={project.backgrounds[0].url}
-                  alt=""
-                  style={{ width: 180, height: 130, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }}
-                />
-              )}
-              <div style={{
-                width: 130, height: 130, flexShrink: 0, background: '#f8f9fa', border: '1px solid #f0f0f0',
-                borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <img src={bmwLogoSrc} alt="" style={{ width: 80, height: 80, objectFit: 'contain' }} />
-              </div>
-            </div>
-          </Section>
-
-          <Section
-            title="Assets"
-            count={previewAssets.length}
-            status={project.sectionStatus.assets}
-            expanded={expanded.assets}
-            onToggle={() => toggle('assets')}
-            onDetails={() => navigate(SECTION_ROUTES.assets)}
-            emptyMessage="No assets generated yet."
-          >
-            <ScrollRow>
-              {previewAssets.slice(0, 12).map((asset) => <OverviewAssetCard key={asset.id} asset={asset} />)}
-            </ScrollRow>
-          </Section>
-
-          <Section
-            title="Ad Shells"
-            count={adShells.length}
-            status={project.sectionStatus.adShells}
-            expanded={expanded.adShells}
-            onToggle={() => toggle('adShells')}
-            onDetails={() => navigate(SECTION_ROUTES.adShells)}
-            emptyMessage="No ad shells created yet."
-          >
-            <ScrollRow>
-              {adShells.slice(0, 12).map((shell) => <OverviewAdShellCard key={shell.id} shell={shell} />)}
-            </ScrollRow>
-          </Section>
-
-          <Section
-            title="Campaigns"
-            count={adShells.length}
-            status={project.sectionStatus.campaigns}
-            expanded={expanded.campaigns}
-            onToggle={() => toggle('campaigns')}
-            onDetails={() => navigate(SECTION_ROUTES.campaigns)}
-            emptyMessage="No campaigns loaded yet."
-          >
-            <div style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', height: 40, background: '#fafafa', padding: '0 12px', gap: 16, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                <span style={{ flex: 1, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Ad Shell</span>
-                <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Status</span>
-                <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Start Date</span>
-                <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>End Date</span>
-                <span style={{ width: 140, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Placement</span>
-              </div>
-              {adShells.slice(0, 4).map((shell, i) => (
-                <div
-                  key={shell.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', height: 52, padding: '0 12px', gap: 16,
-                    borderBottom: i < Math.min(adShells.length, 4) - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 4, overflow: 'hidden', flexShrink: 0, position: 'relative', background: '#f0f2f4' }}>
-                      {shell.assets[0] && (
-                        <FilledTemplatePreview template={shell.template} offer={shell.assets[0].offer} backgroundUrl={shell.assets[0].backgroundUrl} />
-                      )}
-                    </div>
-                    <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {shell.name}
-                    </span>
+              <Section
+                title="Theme and Logos"
+                count={project.backgrounds.length}
+                status={project.sectionStatus.themeAndLogos}
+                expanded={expanded.themeAndLogos}
+                onToggle={() => toggle('themeAndLogos')}
+                onDetails={() => navigate(SECTION_ROUTES.themeAndLogos)}
+                emptyMessage="No backgrounds or logos added yet."
+              >
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {project.backgrounds[0] && (
+                    <img
+                      src={project.backgrounds[0].url}
+                      alt=""
+                      style={{ width: 180, height: 130, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }}
+                    />
+                  )}
+                  <div style={{
+                    width: 130, height: 130, flexShrink: 0, background: '#f8f9fa', border: '1px solid #f0f0f0',
+                    borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <img src={bmwLogoSrc} alt="" style={{ width: 80, height: 80, objectFit: 'contain' }} />
                   </div>
-                  <span style={{ width: 90 }}>{campaignsActive ? <ActiveBadge /> : <DraftBadge />}</span>
-                  <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{project.startDate}</span>
-                  <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{project.endDate}</span>
-                  <span style={{ width: 140, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                    Specials grid top
-                    <OpenInNew style={{ fontSize: 14, color: '#686576' }} />
-                  </span>
                 </div>
-              ))}
-            </div>
-          </Section>
+              </Section>
+
+              <Section
+                title="Assets"
+                count={previewAssets.length}
+                status={project.sectionStatus.assets}
+                expanded={expanded.assets}
+                onToggle={() => toggle('assets')}
+                onDetails={() => navigate(SECTION_ROUTES.assets)}
+                emptyMessage="No assets generated yet."
+              >
+                <ScrollRow>
+                  {previewAssets.slice(0, 12).map((asset) => <OverviewAssetCard key={asset.id} asset={asset} />)}
+                </ScrollRow>
+              </Section>
+
+              <Section
+                title="Ad Shells"
+                count={adShells.length}
+                status={project.sectionStatus.adShells}
+                expanded={expanded.adShells}
+                onToggle={() => toggle('adShells')}
+                onDetails={() => navigate(SECTION_ROUTES.adShells)}
+                emptyMessage="No ad shells created yet."
+              >
+                <ScrollRow>
+                  {adShells.slice(0, 12).map((shell) => <OverviewAdShellCard key={shell.id} shell={shell} />)}
+                </ScrollRow>
+              </Section>
+
+              <Section
+                title="Campaigns"
+                count={adShells.length}
+                status={project.sectionStatus.campaigns}
+                expanded={expanded.campaigns}
+                onToggle={() => toggle('campaigns')}
+                onDetails={() => navigate(SECTION_ROUTES.campaigns)}
+                emptyMessage="No campaigns loaded yet."
+              >
+                <div style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', height: 40, background: '#fafafa', padding: '0 12px', gap: 16, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                    <span style={{ flex: 1, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Ad Shell</span>
+                    <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Status</span>
+                    <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Start Date</span>
+                    <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>End Date</span>
+                    <span style={{ width: 140, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Placement</span>
+                  </div>
+                  {adShells.slice(0, 4).map((shell, i) => (
+                    <div
+                      key={shell.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', height: 52, padding: '0 12px', gap: 16,
+                        borderBottom: i < Math.min(adShells.length, 4) - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 4, overflow: 'hidden', flexShrink: 0, position: 'relative', background: '#f0f2f4' }}>
+                          {shell.assets[0] && (
+                            <FilledTemplatePreview template={shell.template} offer={shell.assets[0].offer} backgroundUrl={shell.assets[0].backgroundUrl} />
+                          )}
+                        </div>
+                        <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {shell.name}
+                        </span>
+                      </div>
+                      <span style={{ width: 90 }}>{campaignsActive ? <ActiveBadge /> : <DraftBadge />}</span>
+                      <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{project.startDate}</span>
+                      <span style={{ width: 90, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{project.endDate}</span>
+                      <span style={{ width: 140, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+                        Specials grid top
+                        <OpenInNew style={{ fontSize: 14, color: '#686576' }} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </>
+          )}
 
         </div>
       </div>

@@ -6,6 +6,7 @@ import { PROJECTS } from '../../data/projects';
 import type { Project } from '../../data/projects';
 import { useProject } from '../../context/ProjectContext';
 import { computePreviewAssets, groupIntoAdShells } from '../../utils/overviewAssets';
+import { EvergreenIndicatorIcon } from '../ui/EvergreenProjectBadge';
 
 interface ProjectsPanelProps {
   onClose?: () => void;
@@ -25,7 +26,7 @@ function statusDot(project: Project) {
   }
 }
 
-function ProjectListItem({ project, active, onClick }: { project: Project; active: boolean; onClick: () => void }) {
+function ProjectListItem({ project, active, locked, onClick }: { project: Project; active: boolean; locked: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
 
   const shellCount = useMemo(() => {
@@ -101,7 +102,8 @@ function ProjectListItem({ project, active, onClick }: { project: Project; activ
         </div>
 
         {/* Status */}
-        <div style={{ flexShrink: 0, alignSelf: 'flex-start', paddingTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, alignSelf: 'flex-start', paddingTop: 4 }}>
+          {project.isEvergreen && <EvergreenIndicatorIcon locked={locked} />}
           {statusDot(project)}
         </div>
       </div>
@@ -110,7 +112,7 @@ function ProjectListItem({ project, active, onClick }: { project: Project; activ
 }
 
 export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
-  const { selectedProjectId, selectProject } = useProject();
+  const { selectedProjectId, selectProject, locked } = useProject();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -190,6 +192,7 @@ export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
             key={project.id}
             project={project}
             active={project.id === selectedProjectId}
+            locked={project.id === selectedProjectId ? locked : (project.locked ?? true)}
             onClick={() => selectProject(project.id)}
           />
         ))}

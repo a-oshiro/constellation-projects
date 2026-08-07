@@ -221,7 +221,7 @@ export interface AssetComment {
   timestamp: number;
 }
 
-export type AlertCategory = 'Losing to Competitor' | 'Demand Spike' | 'Aging Inventory';
+export type AlertCategory = 'Conquest' | 'Aging' | 'MSRP' | 'Offers' | 'De-Listing' | 'Inventory Gaps/Levels' | 'FTC';
 export type AlertStatus = 'generated' | 'rejected' | 'approved' | 'sent';
 export type AlertActivityAction = 'generated' | 'rejected' | 'approved' | 'sent' | 'rebuilt';
 

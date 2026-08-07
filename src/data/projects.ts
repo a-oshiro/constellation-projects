@@ -230,7 +230,7 @@ export const PROJECTS: Project[] = [
     projectName: 'Evergreen BMW of Seattle',
     projectCode: 'EVG00001_WASEABMW_Evergreen',
     brandTag: 'BMW',
-    workflowStatus: 'in_progress',
+    workflowStatus: 'live',
     startDate: 'Aug 1, 2026',
     endDate: '∞',
     creator: 'AI AutoAgent',
@@ -241,9 +241,11 @@ export const PROJECTS: Project[] = [
     isEvergreen: true,
     approvalEnabled: false,
     locked: true,
-    offers: SEATTLE_OFFERS,
+    // The Alerts Lifecycle board only ever references SEATTLE_OFFERS ids, so those stay first;
+    // the rest of the BMW catalog is appended purely to give the Overview's Preview panel more assets.
+    offers: [...SEATTLE_OFFERS, ...OFFERS.filter((o) => !o.swapOnly)],
     templates: [templateById('tmpl-2')],
-    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => b.id === 'bg-4'),
+    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => b.id === 'bg-4' || b.id === 'bg-5'),
     alerts: SEATTLE_ALERTS,
     sectionStatus: {
       offers: 'done',
@@ -251,7 +253,7 @@ export const PROJECTS: Project[] = [
       themeAndLogos: 'done',
       assets: 'done',
       adShells: 'done',
-      campaigns: 'in_progress',
+      campaigns: 'done',
     },
   },
 ];

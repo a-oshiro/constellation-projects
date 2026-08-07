@@ -1,4 +1,4 @@
-import { HourglassEmpty, CheckCircle, WarningAmber, PendingOutlined } from '@mui/icons-material';
+import { HourglassEmpty, CheckCircle, WarningAmber, PendingOutlined, Sensors } from '@mui/icons-material';
 import { NeedsEditsIcon } from './NeedsEditsIcon';
 
 export type ProjectWorkflowStatus =
@@ -9,6 +9,7 @@ export type ProjectWorkflowStatus =
   | 'assets_generated_no_approval'
   | 'pending_changes'
   | 'campaign_loaded'
+  | 'live'
   | 'done'
   | 'draft';
 
@@ -65,6 +66,12 @@ const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     color: '#c45500',
     opacity: 0.75,
     Icon: WarningAmber,
+  },
+  live: {
+    label: 'Live',
+    background: '#e8f5e9',
+    color: '#1b5e20',
+    Icon: Sensors,
   },
   done: {
     label: 'Done',

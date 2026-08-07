@@ -1,4 +1,4 @@
-import type { Offer, Template, Background, Asset } from '../data/types';
+import type { Offer, Template, Background, Asset, Alert } from '../data/types';
 
 export interface PreviewAdShell {
   id: string;
@@ -69,4 +69,53 @@ export function groupIntoAdShells(assets: Asset[], templates: Template[], projec
       platform: first.platform,
     };
   });
+}
+
+export interface AlertOfferVisibility {
+  /** Offer IDs whose preview assets should be visible — the featured offer of any Approved or Sent alert. */
+  unlockedOfferIds: Set<string>;
+  /** Offer IDs whose assets should be grouped into Ad Shells — the featured offer of any Sent alert. */
+  shellOfferIds: Set<string>;
+  /** Unlocked offer IDs still awaiting Send — drives the "+N new" Assets badge. */
+  newOfferIds: Set<string>;
+  /** Timestamp each offer was unlocked (its alert's Approved/Sent activity), for "most recent first" ordering. */
+  unlockedAt: Record<string, number>;
+}
+
+/**
+ * Derives which offers' preview Assets/Ad Shells should surface in the Project Summary, driven by
+ * the Alerts Kanban lifecycle. `allOfferIds` should be every offer id with a preview asset — offers
+ * that no alert ever references (e.g. catalog padding unrelated to the Alerts story) aren't part of
+ * that lifecycle at all, so they're always unlocked rather than waiting on an Approve that will never come.
+ */
+export function computeAlertOfferVisibility(alerts: Alert[], allOfferIds: string[] = []): AlertOfferVisibility {
+  const unlockedOfferIds = new Set<string>();
+  const shellOfferIds = new Set<string>();
+  const unlockedAt: Record<string, number> = {};
+
+  const referencedOfferIds = new Set(alerts.map((a) => a.featuredOfferId));
+  allOfferIds.forEach((id) => {
+    if (referencedOfferIds.has(id)) return;
+    unlockedOfferIds.add(id);
+    shellOfferIds.add(id);
+  });
+
+  alerts.forEach((alert) => {
+    if (alert.status !== 'approved' && alert.status !== 'sent') return;
+    const offerId = alert.featuredOfferId;
+    unlockedOfferIds.add(offerId);
+    if (alert.status === 'sent') shellOfferIds.add(offerId);
+
+    const entry = [...alert.activity].reverse().find((e) => e.action === alert.status);
+    const timestamp = entry?.timestamp ?? alert.createdAt;
+    if (!unlockedAt[offerId] || timestamp > unlockedAt[offerId]) unlockedAt[offerId] = timestamp;
+  });
+
+  // "New" = unlocked by an alert but not yet part of a Sent Ad Shell — offers outside the alert
+  // lifecycle entirely are never "new", they're just always-there catalog assets.
+  const newOfferIds = new Set(
+    [...unlockedOfferIds].filter((id) => referencedOfferIds.has(id) && !shellOfferIds.has(id)),
+  );
+
+  return { unlockedOfferIds, shellOfferIds, newOfferIds, unlockedAt };
 }

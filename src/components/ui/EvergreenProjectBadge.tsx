@@ -28,6 +28,27 @@ const indicatorTextStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+interface EvergreenIndicatorIconProps {
+  locked: boolean;
+}
+
+/** Icon-only chip variant of the Evergreen indicator — shown on Evergreen project cards in the Projects list. */
+export const EvergreenIndicatorIcon = ({ locked }: EvergreenIndicatorIconProps) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: locked ? '#473bab' : 'rgba(99, 86, 225, 0.12)',
+      borderRadius: 8,
+      padding: 3,
+      flexShrink: 0,
+    }}
+  >
+    <AllInclusive style={{ fontSize: 14, color: locked ? '#ffffff' : '#6356e1' }} />
+  </div>
+);
+
 /** Shown on the top-right of the main panel for Evergreen projects (Overview + every task page). */
 export const EvergreenProjectBadge = ({ locked, onLockedClick, onUnlockedClick }: EvergreenProjectBadgeProps) => {
   return (

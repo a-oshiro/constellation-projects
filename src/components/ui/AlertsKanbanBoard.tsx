@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Checkbox } from '@mui/material';
 import { Close, Check, Replay, Send } from '@mui/icons-material';
-import type { Alert, AlertCategory, AlertStatus, AlertActivityEntry } from '../../data/types';
+import type { Alert, AlertCategory, AlertStatus, AlertActivityEntry, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
+import { computePreviewAssets } from '../../utils/overviewAssets';
+import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -24,9 +26,13 @@ const COLUMNS: { key: AlertStatus; label: string }[] = [
 ];
 
 const CATEGORY_STYLE: Record<AlertCategory, { background: string; color: string }> = {
-  'Losing to Competitor': { background: '#FBEFF0', color: '#be0e1c' },
-  'Demand Spike': { background: '#EBF5FB', color: '#01579b' },
-  'Aging Inventory': { background: '#FDF4EC', color: '#c45500' },
+  Conquest: { background: '#EBF5FB', color: '#01579b' },
+  Aging: { background: 'rgba(99,86,225,0.12)', color: '#6356e1' },
+  MSRP: { background: '#e8f5e9', color: '#1b5e20' },
+  Offers: { background: '#E0F7FA', color: '#006064' },
+  'De-Listing': { background: '#FDF4EC', color: '#c45500' },
+  'Inventory Gaps/Levels': { background: '#FFF8E1', color: '#8d6e00' },
+  FTC: { background: '#FBEFF0', color: '#be0e1c' },
 };
 
 interface ColumnAction {
@@ -61,8 +67,71 @@ function statusLine(alert: Alert): { text: string; actor?: AlertActivityEntry } 
   return { text: `${verb} ${formatRelativeTime(entry.timestamp)} by:`, actor: entry };
 }
 
+const THUMB_SIZE = 72;
+
+const ThumbTile = ({ asset, dim }: { asset: Asset; dim?: boolean }) => {
+  const isWide = asset.width > asset.height;
+  const innerWidthPct = isWide ? 100 : (asset.width / asset.height) * 100;
+  const innerHeightPct = !isWide ? 100 : (asset.height / asset.width) * 100;
+
+  return (
+    <div style={{
+      position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#f0f2f4',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      filter: dim ? 'brightness(0.5)' : undefined,
+    }}>
+      <div style={{ width: `${innerWidthPct}%`, height: `${innerHeightPct}%`, position: 'relative', flexShrink: 0 }}>
+        <FilledTemplatePreview
+          template={{ id: asset.templateId, name: '', type: asset.imageType, width: asset.width, height: asset.height, brand: '', previewUrl: '' }}
+          offer={asset.offer}
+          backgroundUrl={asset.backgroundUrl}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Preview of the assets referenced by an alert's email — one full tile, or a 2x2 grid with a "+N" overlay past four. */
+const AlertThumbnail = ({ assets }: { assets: Asset[] }) => {
+  if (assets.length === 0) {
+    return <div style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, background: '#f0f2f4', flexShrink: 0 }} />;
+  }
+
+  if (assets.length === 1) {
+    return (
+      <div style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+        <ThumbTile asset={assets[0]} />
+      </div>
+    );
+  }
+
+  const overflow = assets.length > 4 ? assets.length - 3 : 0;
+  const gridAssets = overflow > 0 ? assets.slice(0, 3) : assets.slice(0, 4);
+
+  return (
+    <div style={{
+      width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, overflow: 'hidden', flexShrink: 0,
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1, background: '#ffffff',
+    }}>
+      {gridAssets.map((asset) => <ThumbTile key={asset.id} asset={asset} />)}
+      {overflow > 0 && (
+        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+          <ThumbTile asset={assets[3]} dim />
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#ffffff', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+          }}>
+            +{overflow}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface AlertCardProps {
   alert: Alert;
+  assets: Asset[];
   dragging: boolean;
   selected: boolean;
   selectable: boolean;
@@ -75,7 +144,7 @@ interface AlertCardProps {
 }
 
 const AlertCard = ({
-  alert, dragging, selected, selectable, bulkActive, onToggleSelect, onDragStart, onDragEnd, onOpen, onMove,
+  alert, assets, dragging, selected, selectable, bulkActive, onToggleSelect, onDragStart, onDragEnd, onOpen, onMove,
 }: AlertCardProps) => {
   const [hovered, setHovered] = useState(false);
   const { text, actor } = statusLine(alert);
@@ -115,6 +184,7 @@ const AlertCard = ({
       ) : (
         <div style={{ width: 28, flexShrink: 0 }} />
       )}
+      <AlertThumbnail assets={assets} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span
           style={{
@@ -175,12 +245,35 @@ const AlertCard = ({
 };
 
 export const AlertsKanbanBoard = () => {
-  const { alerts, moveAlert } = useProject();
+  const { alerts, moveAlert, currentProject } = useProject();
   const [filter, setFilter] = useState<FilterKey>('month');
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<AlertStatus | null>(null);
   const [openAlertId, setOpenAlertId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // One representative preview asset per offer, used to build each alert card's thumbnail
+  // from the offers its email actually references (featured + the secondary grid).
+  const assetByOfferId = useMemo(() => {
+    const previewAssets = computePreviewAssets(
+      currentProject.offers, currentProject.templates, currentProject.backgrounds, currentProject.projectName,
+    );
+    const map = new Map<string, Asset>();
+    previewAssets.forEach((asset) => {
+      if (!map.has(asset.offerId)) map.set(asset.offerId, asset);
+    });
+    return map;
+  }, [currentProject]);
+
+  const assetsByAlertId = useMemo(() => {
+    const map = new Map<string, Asset[]>();
+    alerts.forEach((alert) => {
+      const offerIds = [alert.featuredOfferId, ...alert.otherOfferIds];
+      const assets = offerIds.map((id) => assetByOfferId.get(id)).filter((a): a is Asset => Boolean(a));
+      map.set(alert.id, assets);
+    });
+    return map;
+  }, [alerts, assetByOfferId]);
 
   const filtered = useMemo(() => {
     const withinDays = FILTERS.find((f) => f.key === filter)!.withinDays;
@@ -308,6 +401,7 @@ export const AlertsKanbanBoard = () => {
                   <AlertCard
                     key={alert.id}
                     alert={alert}
+                    assets={assetsByAlertId.get(alert.id) ?? []}
                     dragging={draggingId === alert.id}
                     selected={selectedIds.has(alert.id)}
                     selectable={col.key !== 'sent'}
