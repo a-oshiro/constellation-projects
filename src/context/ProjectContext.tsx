@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, ReviewStatus } from '../data/types';
 
 /** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
@@ -11,6 +11,13 @@ const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
   approved: ['sent'],
   sent: [],
 };
+
+/** The overall Kanban column is derived from the two independent review tracks: any rejection wins, both-approved is Approved, otherwise Generated. */
+function deriveAlertStatus(emailStatus: ReviewStatus, assetsStatus: ReviewStatus): AlertStatus {
+  if (emailStatus === 'rejected' || assetsStatus === 'rejected') return 'rejected';
+  if (emailStatus === 'approved' && assetsStatus === 'approved') return 'approved';
+  return 'generated';
+}
 
 export interface PendingOfferChange {
   offerId: string;
@@ -70,8 +77,16 @@ interface ProjectContextValue {
   selectProject: (id: string) => void;
   /** Only populated for Evergreen projects. */
   alerts: Alert[];
-  /** Moves an alert to a new lifecycle status, enforcing the fixed transition matrix and recording activity. No-ops on an invalid transition. */
+  /** Bulk shortcut (Kanban drag-drop / quick actions): applies the same transition to both the email and assets tracks at once. No-ops on an invalid transition. */
   moveAlert: (id: string, newStatus: AlertStatus) => void;
+  /** Sets the email track's review state independently, recomputing the overall status. No-ops once the alert has been sent. */
+  setEmailReview: (id: string, status: ReviewStatus) => void;
+  /** Sets the assets track's review state independently, recomputing the overall status. No-ops once the alert has been sent. */
+  setAssetsReview: (id: string, status: ReviewStatus) => void;
+  /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Rejected. */
+  rebuildAlert: (id: string) => void;
+  /** Marks a fully-approved alert as Sent. Only valid while the alert is Approved. */
+  sendAlert: (id: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -174,26 +189,92 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const makeActivityEntry = (id: string, action: AlertActivityAction, timestamp: number): AlertActivityEntry => ({
+    id: `act-${id}-${timestamp}-${action}`,
+    action,
+    timestamp,
+    actorName: CURRENT_USER.name,
+    actorEmail: 'john.doe@mail.com',
+    actorAvatar: CURRENT_USER.avatarUrl,
+  });
+
+  // Bulk shortcut used by the Kanban's drag-drop and quick-action buttons: applies the same
+  // decision to both tracks at once, rather than requiring two separate dialog actions.
   const moveAlert = useCallback((id: string, newStatus: AlertStatus) => {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || !ALERT_TRANSITIONS[a.status].includes(newStatus)) return a;
       const timestamp = Date.now();
-      const action: AlertActivityAction = newStatus === 'generated' ? 'rebuilt' : newStatus;
-      const entry: AlertActivityEntry = {
-        id: `act-${id}-${timestamp}`,
-        action,
-        timestamp,
-        actorName: CURRENT_USER.name,
-        actorEmail: 'john.doe@mail.com',
-        actorAvatar: CURRENT_USER.avatarUrl,
-      };
+
+      if (newStatus === 'generated') {
+        return {
+          ...a,
+          status: 'generated',
+          emailStatus: 'pending',
+          assetsStatus: 'pending',
+          createdAt: timestamp, // Regenerating refreshes the "Created ... ago" clock.
+          activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
+        };
+      }
+      if (newStatus === 'sent') {
+        return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', timestamp)] };
+      }
+
+      const reviewStatus: ReviewStatus = newStatus === 'approved' ? 'approved' : 'rejected';
+      const entries: AlertActivityEntry[] = [];
+      if (a.emailStatus !== reviewStatus) entries.push(makeActivityEntry(id, reviewStatus === 'approved' ? 'email_approved' : 'email_rejected', timestamp));
+      if (a.assetsStatus !== reviewStatus) entries.push(makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp));
+
       return {
         ...a,
+        emailStatus: reviewStatus,
+        assetsStatus: reviewStatus,
         status: newStatus,
-        // Regenerating (Rejected -> Generated) refreshes the "Created ... ago" clock.
-        createdAt: newStatus === 'generated' ? timestamp : a.createdAt,
-        activity: [...a.activity, entry],
+        activity: [...a.activity, ...entries],
       };
+    }));
+  }, []);
+
+  const setEmailReview = useCallback((id: string, reviewStatus: ReviewStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const timestamp = Date.now();
+      const activity = reviewStatus === 'pending'
+        ? a.activity
+        : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'email_approved' : 'email_rejected', timestamp)];
+      return { ...a, emailStatus: reviewStatus, status: deriveAlertStatus(reviewStatus, a.assetsStatus), activity };
+    }));
+  }, []);
+
+  const setAssetsReview = useCallback((id: string, reviewStatus: ReviewStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const timestamp = Date.now();
+      const activity = reviewStatus === 'pending'
+        ? a.activity
+        : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp)];
+      return { ...a, assetsStatus: reviewStatus, status: deriveAlertStatus(a.emailStatus, reviewStatus), activity };
+    }));
+  }, []);
+
+  const rebuildAlert = useCallback((id: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status !== 'rejected') return a;
+      const timestamp = Date.now();
+      return {
+        ...a,
+        status: 'generated',
+        emailStatus: 'pending',
+        assetsStatus: 'pending',
+        createdAt: timestamp,
+        activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
+      };
+    }));
+  }, []);
+
+  const sendAlert = useCallback((id: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status !== 'approved') return a;
+      return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', Date.now())] };
     }));
   }, []);
 
@@ -508,7 +589,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert,
+      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert,
     }}>
       {children}
     </ProjectContext.Provider>

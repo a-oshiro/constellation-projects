@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Checkbox } from '@mui/material';
-import { Close, Check, Replay, Send } from '@mui/icons-material';
-import type { Alert, AlertCategory, AlertStatus, AlertActivityEntry, Asset } from '../../data/types';
+import { Close, Check, Replay, Send, CheckCircle, Cancel, CheckCircleOutlined } from '@mui/icons-material';
+import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets } from '../../utils/overviewAssets';
+import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 
@@ -24,16 +25,6 @@ const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'approved', label: 'Approved' },
   { key: 'sent', label: 'Sent' },
 ];
-
-const CATEGORY_STYLE: Record<AlertCategory, { background: string; color: string }> = {
-  Conquest: { background: '#EBF5FB', color: '#01579b' },
-  Aging: { background: 'rgba(99,86,225,0.12)', color: '#6356e1' },
-  MSRP: { background: '#e8f5e9', color: '#1b5e20' },
-  Offers: { background: '#E0F7FA', color: '#006064' },
-  'De-Listing': { background: '#FDF4EC', color: '#c45500' },
-  'Inventory Gaps/Levels': { background: '#FFF8E1', color: '#8d6e00' },
-  FTC: { background: '#FBEFF0', color: '#be0e1c' },
-};
 
 interface ColumnAction {
   icon: React.ElementType;
@@ -57,15 +48,39 @@ const COLUMN_ACTIONS: Partial<Record<AlertStatus, ColumnAction[]>> = {
   ],
 };
 
-function statusLine(alert: Alert): { text: string; actor?: AlertActivityEntry } {
-  if (alert.status === 'generated') {
-    return { text: `Created ${formatRelativeTime(alert.createdAt)}` };
-  }
-  const verb = alert.status === 'rejected' ? 'Rejected' : alert.status === 'approved' ? 'Approved' : 'Sent';
-  const entry = [...alert.activity].reverse().find((e) => e.action === alert.status);
-  if (!entry) return { text: verb };
-  return { text: `${verb} ${formatRelativeTime(entry.timestamp)} by:`, actor: entry };
+/** Most recent activity entry for a given review track, used to attribute its row on the card. */
+function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | undefined {
+  const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
+  const entry = [...alert.activity].reverse().find((e) => actions.includes(e.action));
+  return entry?.actorName;
 }
+
+const REVIEW_ROW_STYLE: Record<ReviewStatus, { Icon: React.ElementType; color: string }> = {
+  pending: { Icon: CheckCircleOutlined, color: '#9c99a9' },
+  approved: { Icon: CheckCircle, color: '#4caf50' },
+  rejected: { Icon: Cancel, color: '#d2323f' },
+};
+
+interface ReviewRowProps {
+  label: string;
+  status: ReviewStatus;
+  actorName?: string;
+}
+
+const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
+  const { Icon, color } = REVIEW_ROW_STYLE[status];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <Icon style={{ fontSize: 16, color, flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px', whiteSpace: 'nowrap', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {status === 'pending' ? 'Pending' : formatReviewerName(actorName ?? '')}
+      </span>
+    </div>
+  );
+};
 
 const THUMB_SIZE = 72;
 
@@ -147,7 +162,6 @@ const AlertCard = ({
   alert, assets, dragging, selected, selectable, bulkActive, onToggleSelect, onDragStart, onDragEnd, onOpen, onMove,
 }: AlertCardProps) => {
   const [hovered, setHovered] = useState(false);
-  const { text, actor } = statusLine(alert);
   const categoryStyle = CATEGORY_STYLE[alert.category];
   const actions = COLUMN_ACTIONS[alert.status] ?? [];
   const highlighted = hovered || selected;
@@ -205,21 +219,13 @@ const AlertCard = ({
         >
           {alert.subject}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {alert.status === 'generated' && (
           <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-            {text}
+            Created {formatRelativeTime(alert.createdAt)}
           </span>
-          {actor && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-              {actor.actorAvatar && (
-                <img src={actor.actorAvatar} alt="" style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0 }} />
-              )}
-              <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {actor.actorEmail ?? actor.actorName}
-              </span>
-            </span>
-          )}
-        </div>
+        )}
+        <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} />
+        <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} />
       </div>
 
       {showActions && (

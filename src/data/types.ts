@@ -222,8 +222,18 @@ export interface AssetComment {
 }
 
 export type AlertCategory = 'Conquest' | 'Aging' | 'MSRP' | 'Offers' | 'De-Listing' | 'Inventory Gaps/Levels' | 'FTC';
+/** Overall Kanban column — derived from `emailStatus`/`assetsStatus`, except 'sent' which is set explicitly. */
 export type AlertStatus = 'generated' | 'rejected' | 'approved' | 'sent';
-export type AlertActivityAction = 'generated' | 'rejected' | 'approved' | 'sent' | 'rebuilt';
+/** Per-half review state, independently tracked for the email and the assets. */
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+export type AlertActivityAction =
+  | 'generated'
+  | 'email_approved'
+  | 'email_rejected'
+  | 'assets_approved'
+  | 'assets_rejected'
+  | 'rebuilt'
+  | 'sent';
 
 export interface AlertActivityEntry {
   id: string;
@@ -248,6 +258,10 @@ export interface Alert {
   otherOfferIds: string[];
   vin: string;
   status: AlertStatus;
+  /** Independent review state of the email content — approved/rejected in parallel with `assetsStatus`. */
+  emailStatus: ReviewStatus;
+  /** Independent review state of the assets — approved/rejected in parallel with `emailStatus`. */
+  assetsStatus: ReviewStatus;
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];

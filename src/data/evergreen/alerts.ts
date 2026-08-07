@@ -6,6 +6,8 @@ const now = Date.now();
 
 const AI_AGENT = { actorName: 'AI AutoAgent' };
 const JOHN_DOE = { actorName: CURRENT_USER.name, actorEmail: 'john.doe@mail.com', actorAvatar: CURRENT_USER.avatarUrl };
+/** Second reviewer persona — demonstrates that the email and assets tracks can be approved/rejected by different people. */
+const MICHAEL_STUART = { actorName: 'Michael Stuart', actorEmail: 'm.stuart@company.com', actorAvatar: 'https://i.pravatar.cc/40?img=52' };
 
 const OTHER_YMMT_IDS = [
   'sea-offer-330i-sedan',
@@ -30,6 +32,8 @@ const othersExcept = (featuredId: string) => ALL_OFFER_IDS.filter((id) => id !==
 /**
  * 4 alerts for "Evergreen BMW of Seattle", one per reference email, seeded one-per-column
  * so the board demonstrates the full Generated -> Rejected/Approved -> Sent lifecycle.
+ * Each alert's email and assets are reviewed independently — `emailStatus`/`assetsStatus` drive
+ * the two rows on the Kanban card, and `status` is always the derived combination of the two.
  */
 export const SEATTLE_ALERTS: Alert[] = [
   {
@@ -47,9 +51,12 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: OTHER_YMMT_IDS.concat('sea-offer-x1-xdrive28i'),
     vin: '5UX53GP0T9513011',
     status: 'generated',
+    emailStatus: 'approved',
+    assetsStatus: 'pending',
     createdAt: now - 7 * DAY,
     activity: [
       { id: 'act-1-generated', action: 'generated', timestamp: now - 7 * DAY, ...AI_AGENT },
+      { id: 'act-1-email-approved', action: 'email_approved', timestamp: now - 2 * DAY, ...MICHAEL_STUART },
     ],
   },
   {
@@ -67,10 +74,12 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: OTHER_YMMT_IDS.concat('sea-offer-x1-xdrive28i'),
     vin: '5UX53GP0T9513011',
     status: 'rejected',
+    emailStatus: 'rejected',
+    assetsStatus: 'pending',
     createdAt: now - 14 * DAY,
     activity: [
       { id: 'act-2-generated', action: 'generated', timestamp: now - 14 * DAY, ...AI_AGENT },
-      { id: 'act-2-rejected', action: 'rejected', timestamp: now - 3 * DAY, ...JOHN_DOE },
+      { id: 'act-2-email-rejected', action: 'email_rejected', timestamp: now - 3 * DAY, ...MICHAEL_STUART },
     ],
   },
   {
@@ -87,10 +96,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: OTHER_YMMT_IDS.concat('sea-offer-x3-30xdrive'),
     vin: 'WBX73EF08T5548316',
     status: 'approved',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 10 * DAY,
     activity: [
       { id: 'act-3-generated', action: 'generated', timestamp: now - 10 * DAY, ...AI_AGENT },
-      { id: 'act-3-approved', action: 'approved', timestamp: now - 4 * DAY, ...JOHN_DOE },
+      { id: 'act-3-email-approved', action: 'email_approved', timestamp: now - 5 * DAY, ...MICHAEL_STUART },
+      { id: 'act-3-assets-approved', action: 'assets_approved', timestamp: now - 4 * DAY, ...JOHN_DOE },
     ],
   },
   {
@@ -107,10 +119,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: OTHER_YMMT_IDS.concat('sea-offer-x3-30xdrive'),
     vin: 'WBX73EF08T5548316',
     status: 'sent',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 16 * DAY,
     activity: [
       { id: 'act-4-generated', action: 'generated', timestamp: now - 16 * DAY, ...AI_AGENT },
-      { id: 'act-4-approved', action: 'approved', timestamp: now - 5 * DAY, ...JOHN_DOE },
+      { id: 'act-4-email-approved', action: 'email_approved', timestamp: now - 6 * DAY, ...MICHAEL_STUART },
+      { id: 'act-4-assets-approved', action: 'assets_approved', timestamp: now - 5 * DAY, ...JOHN_DOE },
       { id: 'act-4-sent', action: 'sent', timestamp: now - 3 * DAY, ...JOHN_DOE },
     ],
   },
@@ -132,9 +147,12 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: othersExcept('sea-offer-330i-sedan'),
     vin: 'WBA5R7C05PFH23456',
     status: 'generated',
+    emailStatus: 'pending',
+    assetsStatus: 'approved',
     createdAt: now - 3 * DAY,
     activity: [
       { id: 'act-5-generated', action: 'generated', timestamp: now - 3 * DAY, ...AI_AGENT },
+      { id: 'act-5-assets-approved', action: 'assets_approved', timestamp: now - 1 * DAY, ...JOHN_DOE },
     ],
   },
   {
@@ -152,6 +170,8 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: othersExcept('sea-offer-x5-xdrive40i'),
     vin: '5UXCR6C0XN9L45678',
     status: 'generated',
+    emailStatus: 'pending',
+    assetsStatus: 'pending',
     createdAt: now - 5 * DAY,
     activity: [
       { id: 'act-6-generated', action: 'generated', timestamp: now - 5 * DAY, ...AI_AGENT },
@@ -172,6 +192,8 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: [],
     vin: '5UXTA6C09N9M67890',
     status: 'generated',
+    emailStatus: 'pending',
+    assetsStatus: 'pending',
     createdAt: now - 9 * DAY,
     activity: [
       { id: 'act-7-generated', action: 'generated', timestamp: now - 9 * DAY, ...AI_AGENT },
@@ -192,10 +214,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: othersExcept('sea-offer-m340i-sedan'),
     vin: 'WBA53AR0XPFJ12398',
     status: 'rejected',
+    emailStatus: 'approved',
+    assetsStatus: 'rejected',
     createdAt: now - 20 * DAY,
     activity: [
       { id: 'act-8-generated', action: 'generated', timestamp: now - 20 * DAY, ...AI_AGENT },
-      { id: 'act-8-rejected', action: 'rejected', timestamp: now - 6 * DAY, ...JOHN_DOE },
+      { id: 'act-8-email-approved', action: 'email_approved', timestamp: now - 7 * DAY, ...MICHAEL_STUART },
+      { id: 'act-8-assets-rejected', action: 'assets_rejected', timestamp: now - 6 * DAY, ...JOHN_DOE },
     ],
   },
   {
@@ -213,10 +238,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: [],
     vin: '5UXTA6C08N9N23456',
     status: 'approved',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 12 * DAY,
     activity: [
       { id: 'act-9-generated', action: 'generated', timestamp: now - 12 * DAY, ...AI_AGENT },
-      { id: 'act-9-approved', action: 'approved', timestamp: now - 2 * DAY, ...JOHN_DOE },
+      { id: 'act-9-email-approved', action: 'email_approved', timestamp: now - 3 * DAY, ...MICHAEL_STUART },
+      { id: 'act-9-assets-approved', action: 'assets_approved', timestamp: now - 2 * DAY, ...JOHN_DOE },
     ],
   },
   {
@@ -234,10 +262,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: othersExcept('sea-offer-330i-sedan'),
     vin: 'WBA5R7C07PFH34567',
     status: 'approved',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 25 * DAY,
     activity: [
       { id: 'act-10-generated', action: 'generated', timestamp: now - 25 * DAY, ...AI_AGENT },
-      { id: 'act-10-approved', action: 'approved', timestamp: now - 8 * DAY, ...JOHN_DOE },
+      { id: 'act-10-email-approved', action: 'email_approved', timestamp: now - 9 * DAY, ...MICHAEL_STUART },
+      { id: 'act-10-assets-approved', action: 'assets_approved', timestamp: now - 8 * DAY, ...JOHN_DOE },
     ],
   },
   {
@@ -255,10 +286,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: othersExcept('sea-offer-x5-xdrive40i'),
     vin: '5UXCR6C02N9L56789',
     status: 'sent',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 28 * DAY,
     activity: [
       { id: 'act-11-generated', action: 'generated', timestamp: now - 28 * DAY, ...AI_AGENT },
-      { id: 'act-11-approved', action: 'approved', timestamp: now - 11 * DAY, ...JOHN_DOE },
+      { id: 'act-11-email-approved', action: 'email_approved', timestamp: now - 12 * DAY, ...MICHAEL_STUART },
+      { id: 'act-11-assets-approved', action: 'assets_approved', timestamp: now - 11 * DAY, ...JOHN_DOE },
       { id: 'act-11-sent', action: 'sent', timestamp: now - 4 * DAY, ...JOHN_DOE },
     ],
   },
@@ -277,10 +311,13 @@ export const SEATTLE_ALERTS: Alert[] = [
     otherOfferIds: [],
     vin: 'WBA53AR02PFJ45678',
     status: 'sent',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
     createdAt: now - 22 * DAY,
     activity: [
       { id: 'act-12-generated', action: 'generated', timestamp: now - 22 * DAY, ...AI_AGENT },
-      { id: 'act-12-approved', action: 'approved', timestamp: now - 9 * DAY, ...JOHN_DOE },
+      { id: 'act-12-email-approved', action: 'email_approved', timestamp: now - 10 * DAY, ...MICHAEL_STUART },
+      { id: 'act-12-assets-approved', action: 'assets_approved', timestamp: now - 9 * DAY, ...JOHN_DOE },
       { id: 'act-12-sent', action: 'sent', timestamp: now - 1 * DAY, ...JOHN_DOE },
     ],
   },
