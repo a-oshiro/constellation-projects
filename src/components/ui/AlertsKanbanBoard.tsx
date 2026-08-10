@@ -165,7 +165,7 @@ const AlertCard = ({
   const categoryStyle = CATEGORY_STYLE[alert.category];
   const actions = COLUMN_ACTIONS[alert.status] ?? [];
   const highlighted = hovered || selected;
-  const showActions = hovered && !bulkActive && actions.length > 0;
+  const showActions = hovered && !bulkActive && actions.length > 0 && alert.status !== 'generated';
 
   return (
     <div
@@ -193,10 +193,10 @@ const AlertCard = ({
           checked={selected}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onToggleSelect(e.target.checked)}
-          style={{ padding: 4, marginTop: -2, flexShrink: 0 }}
+          style={{ margin: 4, padding: 0, flexShrink: 0, position: 'absolute', top: 0, left: 0, zIndex: 1, backgroundColor: '#ffffff', borderRadius: 4 }}
         />
       ) : (
-        <div style={{ width: 28, flexShrink: 0 }} />
+        <div style={{ width: 0, flexShrink: 0 }} />
       )}
       <AlertThumbnail assets={assets} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -410,7 +410,7 @@ export const AlertsKanbanBoard = () => {
                     assets={assetsByAlertId.get(alert.id) ?? []}
                     dragging={draggingId === alert.id}
                     selected={selectedIds.has(alert.id)}
-                    selectable={col.key !== 'sent'}
+                    selectable={col.key !== 'sent' && col.key !== 'generated'}
                     bulkActive={bulkActive}
                     onToggleSelect={(checked) => toggleSelect(alert.id, checked)}
                     onDragStart={(e) => { e.dataTransfer.setData('text/plain', alert.id); setDraggingId(alert.id); }}
