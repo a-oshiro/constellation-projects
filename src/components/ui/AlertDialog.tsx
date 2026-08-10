@@ -247,8 +247,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   </div>
                 )}
               />
-              <div style={{ flex: 1, overflowY: 'auto', background: '#F4F5F6', padding: 16 }}>
-                <div style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px' }}>
+              <div style={{ flex: 1, overflowY: 'auto', background: '#F4F5F6', padding: 16, justifyContent: 'center', display: 'flex' }}>
+                <div style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 440, maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
                   <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
                     {alert.preheader}
                   </p>

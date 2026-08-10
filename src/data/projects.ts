@@ -4,6 +4,7 @@ import { OFFERS } from './offers';
 import { TEMPLATES, BACKGROUNDS, PROJECT_INFO } from './mockData';
 import { SEATTLE_OFFERS } from './evergreen/seattleOffers';
 import { SEATTLE_ALERTS } from './evergreen/alerts';
+import constellationLogo from '../assets/constellation-logo.png';
 
 /** Status of a single accordion section on the Project Overview page. */
 export type SectionStatus = 'done' | 'in_progress' | 'draft';
@@ -234,7 +235,7 @@ export const PROJECTS: Project[] = [
     startDate: 'Aug 1, 2026',
     endDate: '∞',
     creator: 'AI AutoAgent',
-    creatorAvatar: 'https://i.pravatar.cc/32?img=68',
+    creatorAvatar: constellationLogo,
     lastUpdated: 'Just now',
     created: '08/2026',
     accountUrl: PROJECT_INFO.accountUrl,

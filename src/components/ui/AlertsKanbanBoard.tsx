@@ -348,7 +348,7 @@ export const AlertsKanbanBoard = () => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 400 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 500 }}>
         {COLUMNS.map((col) => {
           const columnAlerts = byColumn[col.key];
           const selectedInColumn = columnAlerts.filter((a) => selectedIds.has(a.id));

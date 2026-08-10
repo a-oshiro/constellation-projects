@@ -1,10 +1,12 @@
 import type { Alert } from '../types';
 import { CURRENT_USER } from '../mockData';
+import constellationLogo from '../../assets/constellation-logo.png'
 
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
-const AI_AGENT = { actorName: 'AI AutoAgent' };
+const AI_AGENT = { actorName: 'AI AutoAgent', actorAvatar: constellationLogo
+ };
 const JOHN_DOE = { actorName: CURRENT_USER.name, actorEmail: 'john.doe@mail.com', actorAvatar: CURRENT_USER.avatarUrl };
 /** Second reviewer persona — demonstrates that the email and assets tracks can be approved/rejected by different people. */
 const MICHAEL_STUART = { actorName: 'Michael Stuart', actorEmail: 'm.stuart@company.com', actorAvatar: 'https://i.pravatar.cc/40?img=52' };
