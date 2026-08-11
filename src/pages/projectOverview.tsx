@@ -183,23 +183,25 @@ export const ProjectOverviewPage = () => {
   const summaryCards: SummaryCardConfig[] = [
     {
       key: 'offers', title: 'Offers', count: project.offers.length, route: SECTION_ROUTES.offers,
-      previewItems: project.offers.map((o) => thumbImg(o.imageUrl)),
+      previewItems: project.offers.map((o) => ({ node: thumbImg(o.imageUrl), label: o.vehicleName })),
     },
     {
       key: 'templates', title: 'Templates', count: project.templates.length, route: SECTION_ROUTES.templates,
-      previewItems: project.templates.map((t) => <TemplateThumb key={t.id} template={t} />),
+      previewItems: project.templates.map((t) => ({ node: <TemplateThumb key={t.id} template={t} />, label: t.name })),
     },
     {
       key: 'themeAndLogos', title: 'Theme and Logos', count: project.backgrounds.length, route: SECTION_ROUTES.themeAndLogos,
-      previewItems: project.backgrounds.map((b) => thumbImg(b.url)),
+      previewItems: project.backgrounds.map((b) => ({ node: thumbImg(b.url), label: b.name })),
     },
     {
       key: 'assets', title: 'Assets', count: visibleAssets.length, delta: newAssetsCount, route: SECTION_ROUTES.assets,
-      previewItems: visibleAssets.map((a) => thumbImg(a.backgroundUrl)),
+      previewItems: visibleAssets.map((a) => ({ node: thumbImg(a.backgroundUrl), label: a.name })),
     },
     {
       key: 'adShells', title: 'Ad Shells', count: adShells.length, route: SECTION_ROUTES.adShells,
-      previewItems: adShells.map((s) => s.assets[0]?.backgroundUrl).filter((u): u is string => Boolean(u)).map(thumbImg),
+      previewItems: adShells
+        .filter((s) => Boolean(s.assets[0]?.backgroundUrl))
+        .map((s) => ({ node: thumbImg(s.assets[0].backgroundUrl), label: s.name })),
     },
     { key: 'campaigns', title: 'Campaign', count: adShells.length, live: campaignsActive, route: SECTION_ROUTES.campaigns },
   ];

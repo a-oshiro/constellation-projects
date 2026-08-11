@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { OpenInNew, Sensors, Public } from '@mui/icons-material';
 import type { Asset } from '../../data/types';
 import { OverviewAssetCard, ScrollRow } from './OverviewCards';
+import { Tooltip } from './Tooltip';
+
+export interface PreviewItem {
+  node: React.ReactNode;
+  label: string;
+}
 
 export interface SummaryCardConfig {
   key: string;
@@ -12,8 +18,8 @@ export interface SummaryCardConfig {
   delta?: number;
   /** Shows the green "Live" indicator instead of the delta badge (Campaign card only). */
   live?: boolean;
-  /** Rendered thumbnail content for the avatar-stack preview row, one per item — omit for the Campaign card. */
-  previewItems?: React.ReactNode[];
+  /** Rendered thumbnail content plus a name/label for the avatar-stack preview row, one per item — omit for the Campaign card. */
+  previewItems?: PreviewItem[];
 }
 
 interface ProjectSummaryProps {
@@ -29,7 +35,7 @@ const AVATAR_STEP = 24;
 const OVERFLOW_LABEL_RESERVE = 84;
 
 /** Overlapping circular thumbnail stack — shows as many previews as the container width allows, then "+N items". */
-const AvatarPreviewRow = ({ items }: { items: React.ReactNode[] }) => {
+const AvatarPreviewRow = ({ items }: { items: PreviewItem[] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(items.length);
 
@@ -58,28 +64,32 @@ const AvatarPreviewRow = ({ items }: { items: React.ReactNode[] }) => {
   if (items.length === 0) return null;
 
   const shown = items.slice(0, visibleCount);
-  const overflow = items.length - shown.length;
+  const truncated = items.slice(visibleCount);
+  const overflow = truncated.length;
 
   return (
     <div ref={containerRef} style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0 }}>
       <div style={{ display: 'flex', flexShrink: 0 }}>
         {shown.map((item, i) => (
-          <div
-            key={i}
-            style={{
-              width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: '50%', flexShrink: 0,
-              border: '2.5px solid #f4f5f6', overflow: 'hidden', background: '#ffffff',
-              marginLeft: i === 0 ? 0 : -(AVATAR_SIZE - AVATAR_STEP),
-            }}
-          >
-            {item}
-          </div>
+          <Tooltip key={i} title={item.label}>
+            <div
+              style={{
+                width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: '50%', flexShrink: 0,
+                border: '2.5px solid #f4f5f6', overflow: 'hidden', background: '#ffffff',
+                marginLeft: i === 0 ? 0 : -(AVATAR_SIZE - AVATAR_STEP),
+              }}
+            >
+              {item.node}
+            </div>
+          </Tooltip>
         ))}
       </div>
       {overflow > 0 && (
-        <span style={{ marginLeft: 8, fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.15px', whiteSpace: 'nowrap' }}>
-          + {overflow} items
-        </span>
+        <Tooltip title={<>{truncated.map((item, i) => <div key={i}>{item.label}</div>)}</>}>
+          <span style={{ marginLeft: 8, fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.15px', whiteSpace: 'nowrap', cursor: 'default' }}>
+            + {overflow} items
+          </span>
+        </Tooltip>
       )}
     </div>
   );
