@@ -14,7 +14,7 @@ export function AppSnackbar({ message, action, onClose }: SnackbarProps) {
       position: 'fixed',
       bottom: 24,
       left: widgetWidth + 24,
-      zIndex: 9999,
+      zIndex: 300000,
       transition: 'left 0.2s ease',
     }}>
       <div style={{

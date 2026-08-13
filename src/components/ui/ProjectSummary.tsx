@@ -32,7 +32,7 @@ interface ProjectSummaryProps {
   showAssetsPreview?: boolean;
 }
 
-const AVATAR_SIZE = 40;
+const AVATAR_SIZE = 36;
 const AVATAR_STEP = 24;
 const OVERFLOW_LABEL_RESERVE = 84;
 
@@ -118,7 +118,7 @@ const SummaryStatCard = ({ card, onNavigate }: { card: SummaryCardConfig; onNavi
   }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <span style={{
-        fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px',
+        fontSize: 14, fontWeight: 400, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
         {card.title}
@@ -132,7 +132,7 @@ const SummaryStatCard = ({ card, onNavigate }: { card: SummaryCardConfig; onNavi
       </button>
     </div>
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-      <span style={{ fontSize: 34, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.25px', lineHeight: 1.2 }}>
+      <span style={{ fontSize: 24, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#686576', letterSpacing: '0.25px', lineHeight: 1.2 }}>
         {card.count}
       </span>
       <div style={{minHeight: 22, display: 'flex', alignItems: 'center' }}>
@@ -151,9 +151,9 @@ const SummaryStatCard = ({ card, onNavigate }: { card: SummaryCardConfig; onNavi
 
 export const ProjectSummary = ({ cards, latestAssets, totalAssetsCount, assetsRoute, onNavigate, showAssetsPreview = true }: ProjectSummaryProps) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-    <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
+    {/* <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
       Project Summary
-    </span>
+    </span> */}
 
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cards.length}, 1fr)`, gap: 8 }}>
       {cards.map((card) => <SummaryStatCard key={card.key} card={card} onNavigate={onNavigate} />)}

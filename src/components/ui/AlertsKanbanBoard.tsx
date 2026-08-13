@@ -11,6 +11,7 @@ import { applyAlertFilters, getActiveFilterChips, removeFilterChip, hasActiveAle
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 import { AlertsTable } from './AlertsTable';
+import { FeedQc } from './FeedQc';
 
 type ViewMode = 'kanban' | 'table';
 
@@ -390,7 +391,7 @@ export const AlertsKanbanBoard = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <IconButton
           size="large"
@@ -403,10 +404,40 @@ export const AlertsKanbanBoard = () => {
         >
           <FiltersIconWithBadge count={activeFilterFieldCount} />
         </IconButton>
-        <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
+        <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
           Alerts Lifecycle
         </span>
+        <div style={{ marginLeft: 8 }}>
+          <FeedQc />
+        </div>
         <div style={{ flex: 1 }} />
+        
+        {/* If any filters are active, show them as chips with a "Clear Filters" button. */}
+        {activeFilterChips.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
+              Filtering by
+            </span>
+            {activeFilterChips.map((chip) => (
+              <Chip
+                key={chip.id}
+                label={chip.label}
+                onDelete={() => updateAlertFilterState(removeFilterChip(alertFilterState, chip))}
+                sx={CHIP_SX}
+              />
+            ))}
+            <button
+              onClick={resetAlertFilterState}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
+                fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px',
+              }}
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+
         <IconButton
           size="large"
           onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
@@ -417,35 +448,10 @@ export const AlertsKanbanBoard = () => {
         </IconButton>
       </div>
 
-      {activeFilterChips.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
-            Filtering by
-          </span>
-          {activeFilterChips.map((chip) => (
-            <Chip
-              key={chip.id}
-              label={chip.label}
-              onDelete={() => updateAlertFilterState(removeFilterChip(alertFilterState, chip))}
-              sx={CHIP_SX}
-            />
-          ))}
-          <button
-            onClick={resetAlertFilterState}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
-              fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px',
-            }}
-          >
-            Clear Filters
-          </button>
-        </div>
-      )}
-
       {viewMode === 'table' ? (
         <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} />
       ) : (
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', height: 'fit-content' }}>
         {COLUMNS.map((col) => {
           const columnAlerts = byColumn[col.key];
           const selectedInColumn = columnAlerts.filter((a) => selectedIds.has(a.id));
