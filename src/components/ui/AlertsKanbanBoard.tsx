@@ -1,23 +1,87 @@
 import { useMemo, useState } from 'react';
-import { Checkbox } from '@mui/material';
+import { Checkbox, IconButton, Chip } from '@mui/material';
 import { Close, Check, Replay, Send, CheckCircle, Cancel, CheckCircleOutlined } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
+import { useLayout } from '../../context/LayoutContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
+import { applyAlertFilters, getActiveFilterChips, removeFilterChip, hasActiveAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
+import { AlertsTable } from './AlertsTable';
 
-const DAY = 24 * 60 * 60 * 1000;
+type ViewMode = 'kanban' | 'table';
 
-type FilterKey = 'month' | 'quarter' | 'all';
+const CHIP_SX = {
+  background: '#f0f2f4',
+  borderRadius: '8px',
+  height: 24,
+  maxHeight: 24,
+  '& .MuiChip-label': {
+    fontSize: 11,
+    fontFamily: 'Roboto, sans-serif',
+    color: '#1f1d25',
+    letterSpacing: '0.16px',
+    padding: '0 6px',
+  },
+  '& .MuiChip-deleteIcon': {
+    fontSize: 16,
+    opacity: 0.26,
+    color: '#1f1d25',
+    margin: '0 4px 0 -2px',
+  },
+};
 
-const FILTERS: { key: FilterKey; label: string; withinDays: number | null }[] = [
-  { key: 'month', label: 'This Month', withinDays: 31 },
-  { key: 'quarter', label: 'Last 3 Months', withinDays: 92 },
-  { key: 'all', label: 'All', withinDays: null },
-];
+const FiltersIcon = () => (
+  <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M7.2915 8.95825H22.7082M12.2915 21.0416H17.7082M9.7915 14.9999H20.2082" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const FiltersIconWithBadge = ({ count }: { count: number }) => (
+  <div style={{ position: 'relative', display: 'inline-flex' }}>
+    <FiltersIcon />
+    {count > 0 && (
+      <span
+        style={{
+          position: 'absolute',
+          top: -2,
+          right: -2,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          background: '#473bab',
+          color: '#ffffff',
+          fontSize: 10,
+          lineHeight: '10px',
+          fontFamily: 'Roboto, sans-serif',
+          fontWeight: 500,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {count}
+      </span>
+    )}
+  </div>
+);
+
+const TableViewIcon = () => (
+  <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9.16659 17.4998H20.8333C21.2916 17.4998 21.6666 17.1248 21.6666 16.6665C21.6666 16.2082 21.2916 15.8332 20.8333 15.8332H9.16659C8.70825 15.8332 8.33325 16.2082 8.33325 16.6665C8.33325 17.1248 8.70825 17.4998 9.16659 17.4998ZM9.16659 20.8332H20.8333C21.2916 20.8332 21.6666 20.4582 21.6666 19.9998C21.6666 19.5415 21.2916 19.1665 20.8333 19.1665H9.16659C8.70825 19.1665 8.33325 19.5415 8.33325 19.9998C8.33325 20.4582 8.70825 20.8332 9.16659 20.8332ZM9.16659 14.1665H20.8333C21.2916 14.1665 21.6666 13.7915 21.6666 13.3332C21.6666 12.8748 21.2916 12.4998 20.8333 12.4998H9.16659C8.70825 12.4998 8.33325 12.8748 8.33325 13.3332C8.33325 13.7915 8.70825 14.1665 9.16659 14.1665ZM8.33325 9.99984C8.33325 10.4582 8.70825 10.8332 9.16659 10.8332H20.8333C21.2916 10.8332 21.6666 10.4582 21.6666 9.99984C21.6666 9.5415 21.2916 9.1665 20.8333 9.1665H9.16659C8.70825 9.1665 8.33325 9.5415 8.33325 9.99984Z" fill="currentColor" />
+  </svg>
+);
+
+const KanbanViewIcon = () => (
+  <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M21.5588 8C22.0786 8 22.5 8.39797 22.5 8.88889L22.5 21.1111C22.5 21.602 22.0786 22 21.5588 22L19.7353 22C19.2155 22 18.7941 21.602 18.7941 21.1111L18.7941 8.88889C18.7941 8.39797 19.2155 8 19.7353 8L21.5588 8Z" fill="currentColor" />
+    <path d="M15.9118 8C16.4316 8 16.8529 8.39797 16.8529 8.88889L16.8529 21.1111C16.8529 21.602 16.4316 22 15.9118 22L14.0882 22C13.5684 22 13.1471 21.602 13.1471 21.1111L13.1471 8.88889C13.1471 8.39797 13.5684 8 14.0882 8L15.9118 8Z" fill="currentColor" />
+    <path d="M10.2647 8C10.7845 8 11.2059 8.39797 11.2059 8.88889L11.2059 21.1111C11.2059 21.602 10.7845 22 10.2647 22L8.44118 22C7.92138 22 7.5 21.602 7.5 21.1111L7.5 8.88889C7.5 8.39797 7.92138 8 8.44118 8L10.2647 8Z" fill="currentColor" />
+  </svg>
+);
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
@@ -49,7 +113,7 @@ const COLUMN_ACTIONS: Partial<Record<AlertStatus, ColumnAction[]>> = {
 };
 
 /** Most recent activity entry for a given review track, used to attribute its row on the card. */
-function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | undefined {
+export function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | undefined {
   const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
   const entry = [...alert.activity].reverse().find((e) => actions.includes(e.action));
   return entry?.actorName;
@@ -67,7 +131,7 @@ interface ReviewRowProps {
   actorName?: string;
 }
 
-const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
+export const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
   const { Icon, color } = REVIEW_ROW_STYLE[status];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -82,7 +146,7 @@ const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
   );
 };
 
-const THUMB_SIZE = 72;
+export const THUMB_SIZE = 72;
 
 const ThumbTile = ({ asset, dim }: { asset: Asset; dim?: boolean }) => {
   const isWide = asset.width > asset.height;
@@ -107,14 +171,14 @@ const ThumbTile = ({ asset, dim }: { asset: Asset; dim?: boolean }) => {
 };
 
 /** Preview of the assets referenced by an alert's email — one full tile, or a 2x2 grid with a "+N" overlay past four. */
-const AlertThumbnail = ({ assets }: { assets: Asset[] }) => {
+export const AlertThumbnail = ({ assets, size = THUMB_SIZE }: { assets: Asset[]; size?: number }) => {
   if (assets.length === 0) {
-    return <div style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, background: '#f0f2f4', flexShrink: 0 }} />;
+    return <div style={{ width: size, height: size, borderRadius: 12, background: '#f0f2f4', flexShrink: 0 }} />;
   }
 
   if (assets.length === 1) {
     return (
-      <div style={{ width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
         <ThumbTile asset={assets[0]} />
       </div>
     );
@@ -125,7 +189,7 @@ const AlertThumbnail = ({ assets }: { assets: Asset[] }) => {
 
   return (
     <div style={{
-      width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 12, overflow: 'hidden', flexShrink: 0,
+      width: size, height: size, borderRadius: 12, overflow: 'hidden', flexShrink: 0,
       display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1, background: '#ffffff',
     }}>
       {gridAssets.map((asset) => <ThumbTile key={asset.id} asset={asset} />)}
@@ -251,8 +315,12 @@ const AlertCard = ({
 };
 
 export const AlertsKanbanBoard = () => {
-  const { alerts, moveAlert, currentProject } = useProject();
-  const [filter, setFilter] = useState<FilterKey>('month');
+  const { alerts, offers, moveAlert, currentProject } = useProject();
+  const {
+    alertsFilterPanelOpen, openAlertsFilterPanel, closeAlertsFilterPanel,
+    alertFilterState, updateAlertFilterState, resetAlertFilterState,
+  } = useLayout();
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<AlertStatus | null>(null);
   const [openAlertId, setOpenAlertId] = useState<string | null>(null);
@@ -281,12 +349,13 @@ export const AlertsKanbanBoard = () => {
     return map;
   }, [alerts, assetByOfferId]);
 
-  const filtered = useMemo(() => {
-    const withinDays = FILTERS.find((f) => f.key === filter)!.withinDays;
-    if (withinDays == null) return alerts;
-    const cutoff = Date.now() - withinDays * DAY;
-    return alerts.filter((a) => a.createdAt >= cutoff);
-  }, [alerts, filter]);
+  const filtered = useMemo(
+    () => applyAlertFilters(alerts, offers, alertFilterState),
+    [alerts, offers, alertFilterState],
+  );
+
+  const activeFilterChips = useMemo(() => getActiveFilterChips(alertFilterState), [alertFilterState]);
+  const activeFilterFieldCount = useMemo(() => getActiveFilterFieldCount(alertFilterState), [alertFilterState]);
 
   const byColumn = useMemo(() => {
     const map: Record<AlertStatus, Alert[]> = { generated: [], rejected: [], approved: [], sent: [] };
@@ -322,33 +391,61 @@ export const AlertsKanbanBoard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <IconButton
+          size="large"
+          onClick={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
+          sx={{
+            padding: '5px', flexShrink: 0,
+            color: alertsFilterPanelOpen || hasActiveAlertFilters(alertFilterState) ? '#473bab' : '#1f1d25',
+            '&:hover': { background: '#f0eeff', color: '#473bab' },
+          }}
+        >
+          <FiltersIconWithBadge count={activeFilterFieldCount} />
+        </IconButton>
         <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px' }}>
           Alerts Lifecycle
         </span>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-          Show alerts from:
-        </span>
-        <div style={{ display: 'inline-flex', background: '#f0f2f4', borderRadius: 8, padding: 2 }}>
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              style={{
-                border: 'none', cursor: 'pointer', borderRadius: 6, padding: '4px 10px',
-                fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.46px',
-                background: filter === f.key ? '#473bab' : 'transparent',
-                color: filter === f.key ? '#ffffff' : '#1f1d25',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <IconButton
+          size="large"
+          onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
+          title={viewMode === 'kanban' ? 'Switch to table view' : 'Switch to Kanban view'}
+          sx={{ padding: '5px', flexShrink: 0, color: '#686576', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
+        >
+          {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
+        </IconButton>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 500 }}>
+      {activeFilterChips.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
+            Filtering by
+          </span>
+          {activeFilterChips.map((chip) => (
+            <Chip
+              key={chip.id}
+              label={chip.label}
+              onDelete={() => updateAlertFilterState(removeFilterChip(alertFilterState, chip))}
+              sx={CHIP_SX}
+            />
+          ))}
+          <button
+            onClick={resetAlertFilterState}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
+              fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px',
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
+      {viewMode === 'table' ? (
+        <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} />
+      ) : (
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', height: 'fit-content' }}>
         {COLUMNS.map((col) => {
           const columnAlerts = byColumn[col.key];
           const selectedInColumn = columnAlerts.filter((a) => selectedIds.has(a.id));
@@ -424,6 +521,7 @@ export const AlertsKanbanBoard = () => {
           );
         })}
       </div>
+      )}
 
       {openAlert && <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />}
     </div>

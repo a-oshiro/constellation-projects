@@ -28,6 +28,8 @@ interface ProjectSummaryProps {
   totalAssetsCount: number;
   assetsRoute: string;
   onNavigate: (route: string) => void;
+  /** Hides the "Preview" assets strip below the cards without removing it — currently off for Evergreen. */
+  showAssetsPreview?: boolean;
 }
 
 const AVATAR_SIZE = 40;
@@ -112,7 +114,7 @@ const CampaignPreview = ({ live }: { live?: boolean }) => (
 const SummaryStatCard = ({ card, onNavigate }: { card: SummaryCardConfig; onNavigate: (route: string) => void }) => (
   <div style={{
     background: '#f4f5f6', borderRadius: 12,
-    padding: 16, display: 'flex', flexDirection: 'column', minWidth: 0,
+    padding: 16, display: 'flex', flexDirection: 'column', minWidth: 0, gap: 4
   }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <span style={{
@@ -129,23 +131,25 @@ const SummaryStatCard = ({ card, onNavigate }: { card: SummaryCardConfig; onNavi
         <OpenInNew style={{ fontSize: 16 }} />
       </button>
     </div>
-    <span style={{ fontSize: 34, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.25px', lineHeight: 1.2, marginTop: 8 }}>
-      {card.count}
-    </span>
-    <div style={{ marginTop: 8, minHeight: 22, display: 'flex', alignItems: 'center' }}>
-      {card.delta ? (
-        <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#4caf50', letterSpacing: '0.17px' }}>
-          + {card.delta} new
-        </span>
-      ) : null}
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+      <span style={{ fontSize: 34, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.25px', lineHeight: 1.2 }}>
+        {card.count}
+      </span>
+      <div style={{minHeight: 22, display: 'flex', alignItems: 'center' }}>
+        {card.delta ? (
+          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#4caf50', letterSpacing: '0.17px' }}>
+            + {card.delta} new
+          </span>
+        ) : null}
     </div>
-    <div style={{ marginTop: 8 }}>
+    </div>
+    <div style={{marginTop: 4}}>
       {card.key === 'campaigns' ? <CampaignPreview live={card.live} /> : <AvatarPreviewRow items={card.previewItems ?? []} />}
     </div>
   </div>
 );
 
-export const ProjectSummary = ({ cards, latestAssets, totalAssetsCount, assetsRoute, onNavigate }: ProjectSummaryProps) => (
+export const ProjectSummary = ({ cards, latestAssets, totalAssetsCount, assetsRoute, onNavigate, showAssetsPreview = true }: ProjectSummaryProps) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
     <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
       Project Summary
@@ -155,37 +159,39 @@ export const ProjectSummary = ({ cards, latestAssets, totalAssetsCount, assetsRo
       {cards.map((card) => <SummaryStatCard key={card.key} card={card} onNavigate={onNavigate} />)}
     </div>
 
-    <div style={{ background: '#f4f5f6', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', whiteSpace: 'nowrap' }}>
-          Preview:
-        </span>
-        <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.1px', whiteSpace: 'nowrap' }}>
-          ({totalAssetsCount})
-        </span>
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => onNavigate(assetsRoute)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-            cursor: 'pointer', color: '#686576', fontSize: 12, fontFamily: 'Roboto, sans-serif',
-            fontWeight: 400, letterSpacing: '0.17px', padding: '4px 8px', flexShrink: 0,
-          }}
-        >
-          <OpenInNew style={{ fontSize: 16 }} />
-          See all Assets
-        </button>
-      </div>
+    {showAssetsPreview && (
+      <div style={{ background: '#f4f5f6', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', whiteSpace: 'nowrap' }}>
+            Preview:
+          </span>
+          <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.1px', whiteSpace: 'nowrap' }}>
+            ({totalAssetsCount})
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => onNavigate(assetsRoute)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+              cursor: 'pointer', color: '#686576', fontSize: 12, fontFamily: 'Roboto, sans-serif',
+              fontWeight: 400, letterSpacing: '0.17px', padding: '4px 8px', flexShrink: 0,
+            }}
+          >
+            <OpenInNew style={{ fontSize: 16 }} />
+            See all Assets
+          </button>
+        </div>
 
-      {latestAssets.length > 0 ? (
-        <ScrollRow>
-          {latestAssets.map((asset) => <OverviewAssetCard key={asset.id} asset={asset} />)}
-        </ScrollRow>
-      ) : (
-        <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43 }}>
-          No assets yet — approve an alert above to populate assets here.
-        </span>
-      )}
-    </div>
+        {latestAssets.length > 0 ? (
+          <ScrollRow>
+            {latestAssets.map((asset) => <OverviewAssetCard key={asset.id} asset={asset} />)}
+          </ScrollRow>
+        ) : (
+          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43 }}>
+            No assets yet — approve an alert above to populate assets here.
+          </span>
+        )}
+      </div>
+    )}
   </div>
 );

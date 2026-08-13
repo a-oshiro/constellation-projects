@@ -4,8 +4,10 @@ import type { AdShell } from '../components/ui/AdShellCard';
 import type { Asset } from '../data/types';
 import { DEFAULT_FILTER_STATE } from '../utils/assetFilters';
 import type { FilterState } from '../utils/assetFilters';
+import { DEFAULT_ALERT_FILTER_STATE } from '../utils/alertFilters';
+import type { AlertFilterState } from '../utils/alertFilters';
 
-export type { FilterState };
+export type { FilterState, AlertFilterState };
 
 export type OffersPanelType = 'vehicle-info' | 'write-pane';
 
@@ -28,6 +30,12 @@ interface LayoutContextValue {
   filterState: FilterState;
   updateFilterState: (updates: Partial<FilterState>) => void;
   resetFilterState: () => void;
+  alertsFilterPanelOpen: boolean;
+  openAlertsFilterPanel: () => void;
+  closeAlertsFilterPanel: () => void;
+  alertFilterState: AlertFilterState;
+  updateAlertFilterState: (updates: Partial<AlertFilterState>) => void;
+  resetAlertFilterState: () => void;
   mainPanelRef: RefObject<HTMLDivElement | null>;
   editingShell: AdShell | null;
   openAdShellPanel: (shell: AdShell) => void;
@@ -57,6 +65,12 @@ const LayoutContext = createContext<LayoutContextValue>({
   filterState: DEFAULT_FILTER_STATE,
   updateFilterState: () => {},
   resetFilterState: () => {},
+  alertsFilterPanelOpen: false,
+  openAlertsFilterPanel: () => {},
+  closeAlertsFilterPanel: () => {},
+  alertFilterState: DEFAULT_ALERT_FILTER_STATE,
+  updateAlertFilterState: () => {},
+  resetAlertFilterState: () => {},
   mainPanelRef: { current: null },
   editingShell: null,
   openAdShellPanel: () => {},
@@ -76,6 +90,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(DEFAULT_FILTER_STATE);
+  const [alertsFilterPanelOpen, setAlertsFilterPanelOpen] = useState(false);
+  const [alertFilterState, setAlertFilterState] = useState<AlertFilterState>(DEFAULT_ALERT_FILTER_STATE);
   const [offersPanel, setOffersPanel] = useState<OffersPanel | null>(null);
   const [editingShell, setEditingShell] = useState<AdShell | null>(null);
   const [shellCustomizations, setShellCustomizations] = useState<Record<string, Partial<AdShell>>>({});
@@ -92,6 +108,14 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     setFilterState(DEFAULT_FILTER_STATE);
   }, []);
 
+  const updateAlertFilterState = useCallback((updates: Partial<AlertFilterState>) => {
+    setAlertFilterState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const resetAlertFilterState = useCallback(() => {
+    setAlertFilterState(DEFAULT_ALERT_FILTER_STATE);
+  }, []);
+
   return (
     <LayoutContext.Provider value={{
       offersPanel,
@@ -106,6 +130,12 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
       filterState,
       updateFilterState,
       resetFilterState,
+      alertsFilterPanelOpen,
+      openAlertsFilterPanel: () => setAlertsFilterPanelOpen(true),
+      closeAlertsFilterPanel: () => setAlertsFilterPanelOpen(false),
+      alertFilterState,
+      updateAlertFilterState,
+      resetAlertFilterState,
       mainPanelRef,
       editingShell,
       openAdShellPanel: (shell) => setEditingShell(shell),

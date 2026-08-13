@@ -9,6 +9,7 @@ import { PreviewPanel } from '../ui/PreviewPanel';
 import { AdShellPanel } from '../ui/AdShellPanel';
 import { AdvancedGenerationPanel } from '../ui/AdvancedGenerationPanel';
 import { FilterPanel } from './FilterPanel';
+import { AlertsFilterPanel } from '../ui/AlertsFilterPanel';
 import { VehicleInfo } from '../ui/VehicleInfo';
 import { OfferDetails } from '../ui/OfferDetails';
 import { useProject } from '../../context/ProjectContext';
@@ -99,11 +100,12 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
   const {
     tasksPanelOpen, closeTasksPanel, mainPanelRef,
     filterPanelOpen, closeFilterPanel,
+    alertsFilterPanelOpen, closeAlertsFilterPanel, alertFilterState, updateAlertFilterState,
     editingShell, closeAdShellPanel,
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
     offersPanel, closeOffersPanel,
   } = useLayout();
-  const { offers, updateOffer, currentProject, locked, setLocked } = useProject();
+  const { offers, alerts, updateOffer, currentProject, locked, setLocked } = useProject();
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
 
   const offersPanelOffer = offersPanel
@@ -157,9 +159,16 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname]);
 
+  // Close the Alerts filter panel when navigating away from a project overview
+  useEffect(() => {
+    if (!location.pathname.startsWith('/projects/')) {
+      closeAlertsFilterPanel();
+    }
+  }, [location.pathname]);
+
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isProjectOverviewRoute = location.pathname.startsWith('/projects/');
-  const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen);
+  const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -171,9 +180,20 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <>
               {filterPanelOpen
                 ? <FilterPanel width={leftWidth} />
-                : isProjectOverviewRoute
-                  ? <ProjectsPanel onClose={closeTasksPanel} width={leftWidth} />
-                  : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
+                : alertsFilterPanelOpen
+                  ? (
+                    <AlertsFilterPanel
+                      width={leftWidth}
+                      alerts={alerts}
+                      offers={offers}
+                      state={alertFilterState}
+                      onChange={updateAlertFilterState}
+                      onClose={closeAlertsFilterPanel}
+                    />
+                  )
+                  : isProjectOverviewRoute
+                    ? <ProjectsPanel onClose={closeTasksPanel} width={leftWidth} />
+                    : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
               }
               <ResizeHandle onDrag={handleLeftDrag} />
             </>

@@ -278,14 +278,15 @@ export const ProjectOverviewPage = () => {
 
           {project.isEvergreen ? (
             <>
-              <AlertsKanbanBoard />
               <ProjectSummary
                 cards={summaryCards}
                 latestAssets={latestAssets}
                 totalAssetsCount={visibleAssets.length}
                 assetsRoute={SECTION_ROUTES.assets}
                 onNavigate={navigate}
+                showAssetsPreview={false}
               />
+              <AlertsKanbanBoard />
             </>
           ) : (
             <>
