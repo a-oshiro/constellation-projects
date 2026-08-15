@@ -18,7 +18,7 @@ import { UnlockProjectDialog } from '../ui/UnlockProjectDialog';
 import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
-const LEFT_DEFAULT  = 280;
+const LEFT_DEFAULT  = 320;
 const LEFT_MIN      = 180;
 const LEFT_MAX      = 480;
 const RIGHT_DEFAULT = 320;

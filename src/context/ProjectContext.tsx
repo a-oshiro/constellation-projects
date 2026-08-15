@@ -87,6 +87,8 @@ interface ProjectContextValue {
   rebuildAlert: (id: string) => void;
   /** Marks a fully-approved alert as Sent. Only valid while the alert is Approved. */
   sendAlert: (id: string) => void;
+  /** Manually removes an alert from the Kanban/Table into the Archived Alerts dialog. No-ops if already archived. */
+  archiveAlert: (id: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -275,6 +277,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || a.status !== 'approved') return a;
       return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', Date.now())] };
+    }));
+  }, []);
+
+  // Manual archive — removes the alert from the Kanban/Table without changing its lifecycle status,
+  // so the Archived Alerts dialog can still show what column it was in when archived.
+  const archiveAlert = useCallback((id: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.archivedAt) return a;
+      const timestamp = Date.now();
+      return { ...a, archivedAt: timestamp, activity: [...a.activity, makeActivityEntry(id, 'archived', timestamp)] };
     }));
   }, []);
 
@@ -589,7 +601,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert,
+      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert,
     }}>
       {children}
     </ProjectContext.Provider>

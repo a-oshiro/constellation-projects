@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { MoreVert, Inventory2Outlined } from '@mui/icons-material';
 import type { Alert, AlertActivityAction, Asset } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
@@ -23,6 +24,7 @@ const ACTIVITY_VERB: Record<AlertActivityAction, string> = {
   assets_rejected: 'Assets rejected by',
   rebuilt: 'Rebuilt by',
   sent: 'Sent by',
+  archived: 'Archived by',
 };
 
 /** The most recent activity entry across both tracks, shown as the row's "Last Update" summary. */
@@ -37,10 +39,13 @@ interface AlertsTableProps {
   alerts: Alert[];
   assetsByAlertId: Map<string, Asset[]>;
   onOpenAlert: (id: string) => void;
+  /** Manual archive action — omitted for the read-only Archived Alerts dialog's own table view. */
+  onArchive?: (id: string) => void;
 }
 
-export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert }: AlertsTableProps) => {
+export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert, onArchive }: AlertsTableProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [menuState, setMenuState] = useState<{ id: string; el: HTMLElement } | null>(null);
 
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
   const someSelected = alerts.some((a) => selectedIds.has(a.id));
@@ -78,6 +83,7 @@ export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert }: AlertsTabl
             <TableCell sx={{ ...HEADER_CELL_SX, background: '#ffffff' }}>Model Type</TableCell>
             <TableCell sx={{ ...HEADER_CELL_SX, background: '#ffffff' }}>Approvals</TableCell>
             <TableCell sx={{ ...HEADER_CELL_SX, background: '#ffffff' }}>Last Update</TableCell>
+            {onArchive && <TableCell sx={{ ...HEADER_CELL_SX, background: '#ffffff' }} />}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -91,7 +97,11 @@ export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert }: AlertsTabl
                 key={alert.id}
                 hover
                 onClick={() => onOpenAlert(alert.id)}
-                sx={{ cursor: 'pointer', background: isSelected ? 'rgba(99,86,225,0.08)' : 'transparent', '& td': { borderBottom: '1px solid #f0f0f0' } }}
+                sx={{
+                  cursor: 'pointer', background: isSelected ? 'rgba(99,86,225,0.08)' : 'transparent',
+                  '& td': { borderBottom: '1px solid #f0f0f0' },
+                  '&:hover .row-archive-btn': { opacity: 1 },
+                }}
               >
                 <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -138,11 +148,36 @@ export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert }: AlertsTabl
                     </div>
                   )}
                 </TableCell>
+                {onArchive && (
+                  <TableCell padding="none" onClick={(e) => e.stopPropagation()} sx={{ width: 40 }}>
+                    <IconButton
+                      className="row-archive-btn"
+                      size="small"
+                      onClick={(e) => setMenuState({ id: alert.id, el: e.currentTarget })}
+                      sx={{ opacity: 0, padding: '4px', transition: 'opacity 0.1s' }}
+                    >
+                      <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+                    </IconButton>
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
+      {onArchive && (
+        <Menu anchorEl={menuState?.el ?? null} open={!!menuState} onClose={() => setMenuState(null)}>
+          <MenuItem
+            onClick={() => {
+              if (menuState) onArchive(menuState.id);
+              setMenuState(null);
+            }}
+          >
+            <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
+            Archive Alert
+          </MenuItem>
+        </Menu>
+      )}
     </TableContainer>
   );
 };

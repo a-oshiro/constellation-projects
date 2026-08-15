@@ -166,7 +166,7 @@ interface AlertsFilterPanelProps {
   width?: number;
 }
 
-export const AlertsFilterPanel = ({ alerts, offers, state, onChange, onClose, width = 280 }: AlertsFilterPanelProps) => {
+export const AlertsFilterPanel = ({ alerts, offers, state, onChange, onClose, width = 320 }: AlertsFilterPanelProps) => {
   const options = useMemo(() => buildAlertFilterOptions(alerts, offers), [alerts, offers]);
   const isActive = hasActiveAlertFilters(state);
 

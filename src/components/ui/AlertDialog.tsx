@@ -19,6 +19,7 @@ const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   assets_rejected: 'Assets Rejected',
   rebuilt: 'Rebuilt',
   sent: 'Sent',
+  archived: 'Archived',
 };
 
 /** Most recent activity entry for a given review track — powers both the footer banner and the Undo action. */
@@ -66,6 +67,8 @@ interface ReviewFooterProps {
   timestamp?: number;
   /** Once the alert has been sent, the decision is final — hide Undo/Rebuild. */
   locked?: boolean;
+  /** Archived alerts are read-only — every CTA stays visible but disabled. */
+  disabled?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onUndo: () => void;
@@ -73,15 +76,15 @@ interface ReviewFooterProps {
 }
 
 /** Per-half approve/reject controls, or the approved/rejected banner once a decision has been made. */
-const ReviewFooter = ({ status, nounLabel, shortLabel, actorName, timestamp, locked, onApprove, onReject, onUndo, onRebuild }: ReviewFooterProps) => {
+const ReviewFooter = ({ status, nounLabel, shortLabel, actorName, timestamp, locked, disabled, onApprove, onReject, onUndo, onRebuild }: ReviewFooterProps) => {
   if (status === 'pending') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, height: 60, boxSizing: 'border-box', padding: '0 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
-        <button onClick={onReject} style={{ ...footerButtonBase, background: '#ffffff', border: '1px solid rgba(210,50,63,0.5)', color: '#d2323f' }}>
+        <button disabled={disabled} onClick={onReject} style={{ ...footerButtonBase, background: '#ffffff', border: '1px solid rgba(210,50,63,0.5)', color: '#d2323f', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
           <Close style={{ fontSize: 16 }} />
           Reject
         </button>
-        <button onClick={onApprove} style={{ ...footerButtonBase, background: '#4caf50', color: '#ffffff' }}>
+        <button disabled={disabled} onClick={onApprove} style={{ ...footerButtonBase, background: '#4caf50', color: '#ffffff', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
           <Check style={{ fontSize: 16 }} />
           Approve {shortLabel}
         </button>
@@ -111,13 +114,18 @@ const ReviewFooter = ({ status, nounLabel, shortLabel, actorName, timestamp, loc
       {!locked && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
           <button
+            disabled={disabled}
             onClick={onUndo}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: accentColor, textDecoration: 'underline' }}
+            style={{
+              background: 'none', border: 'none', padding: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif',
+              fontWeight: 500, color: accentColor, textDecoration: 'underline',
+              opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
           >
             Undo {isApproved ? 'Approval' : 'Rejection'}
           </button>
           {!isApproved && (
-            <button onClick={onRebuild} style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff', padding: '6px 14px' }}>
+            <button disabled={disabled} onClick={onRebuild} style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff', padding: '6px 14px', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
               <Replay style={{ fontSize: 16 }} />
               Rebuild
             </button>
@@ -193,6 +201,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const emailActivity = lastActivityFor(alert, 'email');
   const assetsActivity = lastActivityFor(alert, 'assets');
   const isSent = alert.status === 'sent';
+  const isArchived = !!alert.archivedAt;
 
   const handleRebuild = () => { rebuildAlert(alert.id); onClose(); };
   const handleSend = () => { sendAlert(alert.id); onClose(); };
@@ -317,6 +326,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 actorName={emailActivity?.actorName}
                 timestamp={emailActivity?.timestamp}
                 locked={isSent}
+                disabled={isArchived}
                 onApprove={() => setEmailReview(alert.id, 'approved')}
                 onReject={() => setEmailReview(alert.id, 'rejected')}
                 onUndo={() => setEmailReview(alert.id, 'pending')}
@@ -377,6 +387,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 actorName={assetsActivity?.actorName}
                 timestamp={assetsActivity?.timestamp}
                 locked={isSent}
+                disabled={isArchived}
                 onApprove={() => setAssetsReview(alert.id, 'approved')}
                 onReject={() => setAssetsReview(alert.id, 'rejected')}
                 onUndo={() => setAssetsReview(alert.id, 'pending')}
@@ -421,7 +432,11 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           {alert.status === 'approved' && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16, padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, background: '#ffffff' }}>
               <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Email and Assets approved • Ready to Send</span>
-              <button onClick={handleSend} style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff' }}>
+              <button
+                disabled={isArchived}
+                onClick={handleSend}
+                style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff', opacity: isArchived ? 0.5 : 1, cursor: isArchived ? 'not-allowed' : 'pointer' }}
+              >
                 <Send style={{ fontSize: 16 }} />
                 Send
               </button>

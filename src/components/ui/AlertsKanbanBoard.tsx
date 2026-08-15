@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Checkbox, IconButton, Chip } from '@mui/material';
-import { Close, Check, Replay, Send, CheckCircle, Cancel, CheckCircleOutlined } from '@mui/icons-material';
+import { Checkbox, IconButton, Chip, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import {
+  Close, Check, Replay, Send, CheckCircle, Cancel, CheckCircleOutlined, MoreVert, Inventory2Outlined,
+} from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { useLayout } from '../../context/LayoutContext';
+import { useSnackbar } from '../../context/SnackbarContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
@@ -12,10 +15,11 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 import { AlertsTable } from './AlertsTable';
 import { FeedQc } from './FeedQc';
+import { ArchivedAlertsDialog } from './ArchivedAlertsDialog';
 
 type ViewMode = 'kanban' | 'table';
 
-const CHIP_SX = {
+export const CHIP_SX = {
   background: '#f0f2f4',
   borderRadius: '8px',
   height: 24,
@@ -35,13 +39,13 @@ const CHIP_SX = {
   },
 };
 
-const FiltersIcon = () => (
+export const FiltersIcon = () => (
   <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M7.2915 8.95825H22.7082M12.2915 21.0416H17.7082M9.7915 14.9999H20.2082" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 );
 
-const FiltersIconWithBadge = ({ count }: { count: number }) => (
+export const FiltersIconWithBadge = ({ count }: { count: number }) => (
   <div style={{ position: 'relative', display: 'inline-flex' }}>
     <FiltersIcon />
     {count > 0 && (
@@ -70,13 +74,13 @@ const FiltersIconWithBadge = ({ count }: { count: number }) => (
   </div>
 );
 
-const TableViewIcon = () => (
+export const TableViewIcon = () => (
   <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M9.16659 17.4998H20.8333C21.2916 17.4998 21.6666 17.1248 21.6666 16.6665C21.6666 16.2082 21.2916 15.8332 20.8333 15.8332H9.16659C8.70825 15.8332 8.33325 16.2082 8.33325 16.6665C8.33325 17.1248 8.70825 17.4998 9.16659 17.4998ZM9.16659 20.8332H20.8333C21.2916 20.8332 21.6666 20.4582 21.6666 19.9998C21.6666 19.5415 21.2916 19.1665 20.8333 19.1665H9.16659C8.70825 19.1665 8.33325 19.5415 8.33325 19.9998C8.33325 20.4582 8.70825 20.8332 9.16659 20.8332ZM9.16659 14.1665H20.8333C21.2916 14.1665 21.6666 13.7915 21.6666 13.3332C21.6666 12.8748 21.2916 12.4998 20.8333 12.4998H9.16659C8.70825 12.4998 8.33325 12.8748 8.33325 13.3332C8.33325 13.7915 8.70825 14.1665 9.16659 14.1665ZM8.33325 9.99984C8.33325 10.4582 8.70825 10.8332 9.16659 10.8332H20.8333C21.2916 10.8332 21.6666 10.4582 21.6666 9.99984C21.6666 9.5415 21.2916 9.1665 20.8333 9.1665H9.16659C8.70825 9.1665 8.33325 9.5415 8.33325 9.99984Z" fill="currentColor" />
   </svg>
 );
 
-const KanbanViewIcon = () => (
+export const KanbanViewIcon = () => (
   <svg width={28} height={28} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M21.5588 8C22.0786 8 22.5 8.39797 22.5 8.88889L22.5 21.1111C22.5 21.602 22.0786 22 21.5588 22L19.7353 22C19.2155 22 18.7941 21.602 18.7941 21.1111L18.7941 8.88889C18.7941 8.39797 19.2155 8 19.7353 8L21.5588 8Z" fill="currentColor" />
     <path d="M15.9118 8C16.4316 8 16.8529 8.39797 16.8529 8.88889L16.8529 21.1111C16.8529 21.602 16.4316 22 15.9118 22L14.0882 22C13.5684 22 13.1471 21.602 13.1471 21.1111L13.1471 8.88889C13.1471 8.39797 13.5684 8 14.0882 8L15.9118 8Z" fill="currentColor" />
@@ -221,16 +225,19 @@ interface AlertCardProps {
   onDragEnd: () => void;
   onOpen: () => void;
   onMove: (status: AlertStatus) => void;
+  onArchive: () => void;
 }
 
 const AlertCard = ({
-  alert, assets, dragging, selected, selectable, bulkActive, onToggleSelect, onDragStart, onDragEnd, onOpen, onMove,
+  alert, assets, dragging, selected, selectable, bulkActive, onToggleSelect, onDragStart, onDragEnd, onOpen, onMove, onArchive,
 }: AlertCardProps) => {
   const [hovered, setHovered] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const categoryStyle = CATEGORY_STYLE[alert.category];
   const actions = COLUMN_ACTIONS[alert.status] ?? [];
   const highlighted = hovered || selected;
   const showActions = hovered && !bulkActive && actions.length > 0 && alert.status !== 'generated';
+  const showArchiveButton = (hovered || !!menuAnchor) && !bulkActive;
 
   return (
     <div
@@ -311,21 +318,44 @@ const AlertCard = ({
           ))}
         </div>
       )}
+
+      {showArchiveButton && (
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }}
+          sx={{
+            position: 'absolute', top: 6, right: 6, padding: '4px',
+            background: '#ffffff', boxShadow: '0px 1px 5px 0px rgba(0,0,0,0.12), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 3px 1px -2px rgba(0,0,0,0.2)',
+            '&:hover': { background: '#f0eeff' },
+          }}
+        >
+          <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+        </IconButton>
+      )}
+      <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        <MenuItem onClick={(e) => { e.stopPropagation(); setMenuAnchor(null); onArchive(); }}>
+          <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
+          Archive Alert
+        </MenuItem>
+      </Menu>
     </div>
   );
 };
 
 export const AlertsKanbanBoard = () => {
-  const { alerts, offers, moveAlert, currentProject } = useProject();
+  const { alerts, offers, moveAlert, archiveAlert, currentProject } = useProject();
   const {
     alertsFilterPanelOpen, openAlertsFilterPanel, closeAlertsFilterPanel,
     alertFilterState, updateAlertFilterState, resetAlertFilterState,
   } = useLayout();
+  const { showSnackbar } = useSnackbar();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<AlertStatus | null>(null);
   const [openAlertId, setOpenAlertId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [archiveMenuAnchor, setArchiveMenuAnchor] = useState<HTMLElement | null>(null);
+  const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
 
   // One representative preview asset per offer, used to build each alert card's thumbnail
   // from the offers its email actually references (featured + the secondary grid).
@@ -350,9 +380,13 @@ export const AlertsKanbanBoard = () => {
     return map;
   }, [alerts, assetByOfferId]);
 
+  // Archived alerts are pulled off the board entirely — they only show up in the Archived Alerts dialog.
+  const activeAlerts = useMemo(() => alerts.filter((a) => !a.archivedAt), [alerts]);
+  const archivedAlerts = useMemo(() => alerts.filter((a) => a.archivedAt), [alerts]);
+
   const filtered = useMemo(
-    () => applyAlertFilters(alerts, offers, alertFilterState),
-    [alerts, offers, alertFilterState],
+    () => applyAlertFilters(activeAlerts, offers, alertFilterState),
+    [activeAlerts, offers, alertFilterState],
   );
 
   const activeFilterChips = useMemo(() => getActiveFilterChips(alertFilterState), [alertFilterState]);
@@ -376,6 +410,18 @@ export const AlertsKanbanBoard = () => {
       next.delete(id);
       return next;
     });
+  };
+
+  // Mirrors moveAndDeselect: manual archiving also needs to drop the id from any in-progress bulk selection.
+  const archiveAndDeselect = (id: string) => {
+    archiveAlert(id);
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    showSnackbar({ message: 'Alert archived' });
   };
 
   const toggleSelect = (id: string, checked: boolean) => {
@@ -410,6 +456,19 @@ export const AlertsKanbanBoard = () => {
         <div style={{ marginLeft: 8 }}>
           <FeedQc />
         </div>
+        <IconButton
+          size="large"
+          onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
+          sx={{ padding: '5px', flexShrink: 0, color: '#1f1d25', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
+        >
+          <MoreVert style={{ fontSize: 24 }} />
+        </IconButton>
+        <Menu anchorEl={archiveMenuAnchor} open={!!archiveMenuAnchor} onClose={() => setArchiveMenuAnchor(null)}>
+          <MenuItem onClick={() => { setArchiveMenuAnchor(null); setArchivedDialogOpen(true); }}>
+            <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
+            View archived alerts
+          </MenuItem>
+        </Menu>
         <div style={{ flex: 1 }} />
         
         {/* If any filters are active, show them as chips with a "Clear Filters" button. */}
@@ -449,7 +508,7 @@ export const AlertsKanbanBoard = () => {
       </div>
 
       {viewMode === 'table' ? (
-        <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} />
+        <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
       ) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', height: 'fit-content' }}>
         {COLUMNS.map((col) => {
@@ -520,6 +579,7 @@ export const AlertsKanbanBoard = () => {
                     onDragEnd={() => setDraggingId(null)}
                     onOpen={() => setOpenAlertId(alert.id)}
                     onMove={(status) => moveAndDeselect(alert.id, status)}
+                    onArchive={() => archiveAndDeselect(alert.id)}
                   />
                 ))}
               </div>
@@ -527,6 +587,16 @@ export const AlertsKanbanBoard = () => {
           );
         })}
       </div>
+      )}
+
+      {archivedDialogOpen && (
+        <ArchivedAlertsDialog
+          alerts={archivedAlerts}
+          offers={offers}
+          assetsByAlertId={assetsByAlertId}
+          onClose={() => setArchivedDialogOpen(false)}
+          onOpenAlert={setOpenAlertId}
+        />
       )}
 
       {openAlert && <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />}

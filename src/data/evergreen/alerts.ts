@@ -1,4 +1,4 @@
-import type { Alert } from '../types';
+import type { Alert, AlertActivityEntry, AlertCategory, AlertStatus, ReviewStatus } from '../types';
 import { CURRENT_USER } from '../mockData';
 import constellationLogo from '../../assets/constellation-logo.png'
 
@@ -30,6 +30,92 @@ const ALL_OFFER_IDS = [
 ];
 
 const othersExcept = (featuredId: string) => ALL_OFFER_IDS.filter((id) => id !== featuredId);
+
+interface ArchivedMockSpec {
+  id: string;
+  category: AlertCategory;
+  subject: string;
+  featuredOfferId: string;
+  vin: string;
+  status: AlertStatus;
+  emailStatus: ReviewStatus;
+  assetsStatus: ReviewStatus;
+  createdDaysAgo: number;
+  archivedDaysAgo: number;
+}
+
+/** Builds a full mock Alert (with a plausible activity trail) from a compact spec — used to bulk-seed the Archived Alerts dialog. */
+function makeArchivedAlert(spec: ArchivedMockSpec): Alert {
+  const createdAt = now - spec.createdDaysAgo * DAY;
+  const archivedAt = now - spec.archivedDaysAgo * DAY;
+  const activity: AlertActivityEntry[] = [
+    { id: `act-${spec.id}-generated`, action: 'generated', timestamp: createdAt, ...AI_AGENT },
+  ];
+  if (spec.emailStatus !== 'pending') {
+    activity.push({
+      id: `act-${spec.id}-email`,
+      action: spec.emailStatus === 'approved' ? 'email_approved' : 'email_rejected',
+      timestamp: createdAt + DAY,
+      ...MICHAEL_STUART,
+    });
+  }
+  if (spec.assetsStatus !== 'pending') {
+    activity.push({
+      id: `act-${spec.id}-assets`,
+      action: spec.assetsStatus === 'approved' ? 'assets_approved' : 'assets_rejected',
+      timestamp: createdAt + 2 * DAY,
+      ...JOHN_DOE,
+    });
+  }
+  if (spec.status === 'sent') {
+    activity.push({ id: `act-${spec.id}-sent`, action: 'sent', timestamp: createdAt + 3 * DAY, ...JOHN_DOE });
+  }
+  activity.push({ id: `act-${spec.id}-archived`, action: 'archived', timestamp: archivedAt, ...JOHN_DOE });
+
+  return {
+    id: spec.id,
+    category: spec.category,
+    subject: spec.subject,
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      `${spec.subject}.`,
+      'Here is the VIN you need to advertise now:',
+    ],
+    featuredOfferId: spec.featuredOfferId,
+    otherOfferIds: othersExcept(spec.featuredOfferId),
+    vin: spec.vin,
+    status: spec.status,
+    emailStatus: spec.emailStatus,
+    assetsStatus: spec.assetsStatus,
+    createdAt,
+    activity,
+    archivedAt,
+  };
+}
+
+/** 20 additional archived alerts — bulk mock data so the Archived Alerts dialog can be exercised with a larger, more realistic list. */
+const BULK_ARCHIVED_ALERTS: Alert[] = [
+  { id: 'sea-alert-arch-01', category: 'Conquest', subject: 'Bellevue BMW cleared 12 New 2026 BMW X1 xDrive28i in the last 90 days', featuredOfferId: 'sea-offer-x1-xdrive28i', vin: 'WBX73EF01T5561234', status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 95, archivedDaysAgo: 40 },
+  { id: 'sea-alert-arch-02', category: 'Aging', subject: 'Your New 2026 BMW 330i Sedan has been sitting for 55 days', featuredOfferId: 'sea-offer-330i-sedan', vin: 'WBA5R7C09PFH67891', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 55, archivedDaysAgo: 8 },
+  { id: 'sea-alert-arch-03', category: 'MSRP', subject: 'Sound BMW holds a lower MSRP on the New 2026 BMW X5 xDrive50e', featuredOfferId: 'sea-offer-x5-xdrive50e', vin: '5UXTA6C03N9N45671', status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 42, archivedDaysAgo: 15 },
+  { id: 'sea-alert-arch-04', category: 'Offers', subject: 'Northwest BMW beats your lease on the New 2026 BMW M340i Sedan', featuredOfferId: 'sea-offer-m340i-sedan', vin: 'WBA53AR08PFJ67823', status: 'rejected', emailStatus: 'rejected', assetsStatus: 'pending', createdDaysAgo: 70, archivedDaysAgo: 25 },
+  { id: 'sea-alert-arch-05', category: 'De-Listing', subject: 'The New 2026 BMW X3 30 xDrive is being de-listed next month', featuredOfferId: 'sea-offer-x3-30xdrive', vin: '5UX53GP04T9535599', status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 110, archivedDaysAgo: 60 },
+  { id: 'sea-alert-arch-06', category: 'Inventory Gaps/Levels', subject: 'Demand for the New 2026 BMW X5 xDrive40i continues to outpace your inventory', featuredOfferId: 'sea-offer-x5-xdrive40i', vin: '5UXCR6C04N9L67892', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 18, archivedDaysAgo: 3 },
+  { id: 'sea-alert-arch-07', category: 'FTC', subject: 'Your New 2026 BMW X1 xDrive28i advertisement may not meet FTC disclosure requirements', featuredOfferId: 'sea-offer-x1-xdrive28i', vin: 'WBX73EF03T5572345', status: 'rejected', emailStatus: 'rejected', assetsStatus: 'pending', createdDaysAgo: 30, archivedDaysAgo: 12 },
+  { id: 'sea-alert-arch-08', category: 'Conquest', subject: 'Irvine BMW cleared 9 New 2026 BMW X5 sDrive40i in the last 60 days', featuredOfferId: 'sea-offer-x5-sdrive40i', vin: '5UXTA6C05N9M78903', status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 65, archivedDaysAgo: 20 },
+  { id: 'sea-alert-arch-09', category: 'Aging', subject: 'Your New 2026 BMW X5 xDrive50e has been sitting for 92 days', featuredOfferId: 'sea-offer-x5-xdrive50e', vin: '5UXTA6C07N9N89014', status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 92, archivedDaysAgo: 45 },
+  { id: 'sea-alert-arch-10', category: 'MSRP', subject: 'Bellevue BMW is beating you on the New 2026 BMW 330i Sedan', featuredOfferId: 'sea-offer-330i-sedan', vin: 'WBA5R7C02PFH90125', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 25, archivedDaysAgo: 6 },
+  { id: 'sea-alert-arch-11', category: 'Offers', subject: 'Overlake BMW undercuts your lease on the New 2026 BMW X1 xDrive28i', featuredOfferId: 'sea-offer-x1-xdrive28i', vin: 'WBX73EF05T5583456', status: 'rejected', emailStatus: 'approved', assetsStatus: 'rejected', createdDaysAgo: 48, archivedDaysAgo: 18 },
+  { id: 'sea-alert-arch-12', category: 'Inventory Gaps/Levels', subject: 'Demand for the New 2026 BMW M340i Sedan is outpacing your inventory', featuredOfferId: 'sea-offer-m340i-sedan', vin: 'WBA53AR01PFJ01236', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 14, archivedDaysAgo: 1 },
+  { id: 'sea-alert-arch-13', category: 'Conquest', subject: 'Northwest BMW cleared 18 New 2026 BMW X3 30 xDrive in the last 90 days', featuredOfferId: 'sea-offer-x3-30xdrive', vin: '5UX53GP06T9546670', status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 88, archivedDaysAgo: 33 },
+  { id: 'sea-alert-arch-14', category: 'Aging', subject: 'Your New 2026 BMW X5 xDrive40i has been sitting for 66 days', featuredOfferId: 'sea-offer-x5-xdrive40i', vin: '5UXCR6C06N9L12347', status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 66, archivedDaysAgo: 22 },
+  { id: 'sea-alert-arch-15', category: 'MSRP', subject: 'Sound BMW holds a lower MSRP on the New 2026 BMW X5 sDrive40i', featuredOfferId: 'sea-offer-x5-sdrive40i', vin: '5UXTA6C09N9M23458', status: 'rejected', emailStatus: 'rejected', assetsStatus: 'pending', createdDaysAgo: 36, archivedDaysAgo: 10 },
+  { id: 'sea-alert-arch-16', category: 'Offers', subject: 'Bellevue BMW beats your lease on the New 2026 BMW X5 xDrive50e', featuredOfferId: 'sea-offer-x5-xdrive50e', vin: '5UXTA6C01N9N34569', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 20, archivedDaysAgo: 4 },
+  { id: 'sea-alert-arch-17', category: 'De-Listing', subject: 'The New 2026 BMW M340i Sedan is being de-listed next quarter', featuredOfferId: 'sea-offer-m340i-sedan', vin: 'WBA53AR03PFJ45670', status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 100, archivedDaysAgo: 52 },
+  { id: 'sea-alert-arch-18', category: 'FTC', subject: 'Your New 2026 BMW 330i Sedan advertisement may not meet FTC disclosure requirements', featuredOfferId: 'sea-offer-330i-sedan', vin: 'WBA5R7C04PFH56781', status: 'rejected', emailStatus: 'rejected', assetsStatus: 'pending', createdDaysAgo: 40, archivedDaysAgo: 14 },
+  { id: 'sea-alert-arch-19', category: 'Conquest', subject: 'Overlake BMW cleared 14 New 2026 BMW X1 xDrive28i in the last 120 days', featuredOfferId: 'sea-offer-x1-xdrive28i', vin: 'WBX73EF07T5594567', status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 125, archivedDaysAgo: 70 },
+  { id: 'sea-alert-arch-20', category: 'Offers', subject: 'Irvine BMW undercuts your lease on the New 2026 BMW X3 30 xDrive', featuredOfferId: 'sea-offer-x3-30xdrive', vin: '5UX53GP08T9557891', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 22, archivedDaysAgo: 5 },
+].map(makeArchivedAlert);
 
 /**
  * 4 alerts for "Evergreen BMW of Seattle", one per reference email, seeded one-per-column
@@ -323,4 +409,131 @@ export const SEATTLE_ALERTS: Alert[] = [
       { id: 'act-12-sent', action: 'sent', timestamp: now - 1 * DAY, ...JOHN_DOE },
     ],
   },
+
+  // ── Archived alerts — manually archived off the board, shown only in the Archived Alerts dialog ──
+
+  {
+    id: 'sea-alert-kickoff-monthly-assets',
+    category: 'Offers',
+    subject: "Kickoff: Here are this month's assets.",
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      "Here's your first batch of AI-recommended creative for the month, built around your top-performing YMMTs.",
+      'Review and approve to get these into market ahead of the competitive set.',
+      'Here is the VIN you need to advertise now:',
+    ],
+    featuredOfferId: 'sea-offer-x1-xdrive28i',
+    otherOfferIds: othersExcept('sea-offer-x1-xdrive28i'),
+    vin: 'WBX73EF09T5559427',
+    status: 'rejected',
+    emailStatus: 'approved',
+    assetsStatus: 'pending',
+    createdAt: now - 45 * DAY,
+    activity: [
+      { id: 'act-13-generated', action: 'generated', timestamp: now - 45 * DAY, ...AI_AGENT },
+      { id: 'act-13-email-approved', action: 'email_approved', timestamp: now - 40 * DAY, ...MICHAEL_STUART },
+      { id: 'act-13-archived', action: 'archived', timestamp: now - 30 * DAY, ...JOHN_DOE },
+    ],
+    archivedAt: now - 30 * DAY,
+  },
+  {
+    id: 'sea-alert-x3-msrp-archived',
+    category: 'MSRP',
+    subject: 'Irvine BMW is beating you on the New 2026 BMW X3 30 xDrive',
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      'Irvine BMW MSRP on 2026 X3 30 xDrive is $2,400 below yours.',
+      'Reduce your price on this YMMT to win.',
+      'Here is the VIN you need to advertise now:',
+    ],
+    featuredOfferId: 'sea-offer-x3-30xdrive',
+    otherOfferIds: othersExcept('sea-offer-x3-30xdrive'),
+    vin: '5UX53GP02T9524488',
+    status: 'sent',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
+    createdAt: now - 60 * DAY,
+    activity: [
+      { id: 'act-14-generated', action: 'generated', timestamp: now - 60 * DAY, ...AI_AGENT },
+      { id: 'act-14-email-approved', action: 'email_approved', timestamp: now - 55 * DAY, ...MICHAEL_STUART },
+      { id: 'act-14-assets-approved', action: 'assets_approved', timestamp: now - 54 * DAY, ...JOHN_DOE },
+      { id: 'act-14-sent', action: 'sent', timestamp: now - 50 * DAY, ...JOHN_DOE },
+      { id: 'act-14-archived', action: 'archived', timestamp: now - 35 * DAY, ...JOHN_DOE },
+    ],
+    archivedAt: now - 35 * DAY,
+  },
+  {
+    id: 'sea-alert-m340i-aging-archived',
+    category: 'Aging',
+    subject: 'Your New 2026 BMW M340i Sedan has been sitting for 70 days',
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      'The New 2026 BMW M340i Sedan on your lot has 70 days of age — past your turn target.',
+      'Comparable builds at competing dealers are turning much faster.',
+      'Here is the VIN you need to advertise:',
+    ],
+    featuredOfferId: 'sea-offer-m340i-sedan',
+    otherOfferIds: [],
+    vin: 'WBA53AR06PFJ56712',
+    status: 'rejected',
+    emailStatus: 'rejected',
+    assetsStatus: 'pending',
+    createdAt: now - 50 * DAY,
+    activity: [
+      { id: 'act-15-generated', action: 'generated', timestamp: now - 50 * DAY, ...AI_AGENT },
+      { id: 'act-15-email-rejected', action: 'email_rejected', timestamp: now - 44 * DAY, ...MICHAEL_STUART },
+      { id: 'act-15-archived', action: 'archived', timestamp: now - 20 * DAY, ...JOHN_DOE },
+    ],
+    archivedAt: now - 20 * DAY,
+  },
+  {
+    id: 'sea-alert-x5-50e-conquest-archived',
+    category: 'Conquest',
+    subject: 'Sound BMW cleared 15 New 2026 BMW X5 xDrive50e in the last 90 days',
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      'Sound BMW is outperforming you on X5 xDrive50e clearance this quarter.',
+      'Matching their advertised build could help you close the volume gap.',
+      'Here is the VIN you need to advertise now:',
+    ],
+    featuredOfferId: 'sea-offer-x5-xdrive50e',
+    otherOfferIds: [],
+    vin: '5UXTA6C01N9N34509',
+    status: 'approved',
+    emailStatus: 'approved',
+    assetsStatus: 'approved',
+    createdAt: now - 38 * DAY,
+    activity: [
+      { id: 'act-16-generated', action: 'generated', timestamp: now - 38 * DAY, ...AI_AGENT },
+      { id: 'act-16-email-approved', action: 'email_approved', timestamp: now - 33 * DAY, ...MICHAEL_STUART },
+      { id: 'act-16-assets-approved', action: 'assets_approved', timestamp: now - 32 * DAY, ...JOHN_DOE },
+      { id: 'act-16-archived', action: 'archived', timestamp: now - 5 * DAY, ...JOHN_DOE },
+    ],
+    archivedAt: now - 5 * DAY,
+  },
+  {
+    id: 'sea-alert-330i-inventory-archived',
+    category: 'Inventory Gaps/Levels',
+    subject: 'Demand for the New 2026 BMW 330i Sedan is outpacing your inventory',
+    preheader: 'Constellation Insights',
+    bodyParagraphs: [
+      'Search volume for the New 2026 BMW 330i Sedan is up sharply this month, but your ad spend hasn’t moved.',
+      'Increasing frequency on this VIN now would let you capture demand before competitors absorb it.',
+      'Here is the VIN you need to advertise now:',
+    ],
+    featuredOfferId: 'sea-offer-330i-sedan',
+    otherOfferIds: othersExcept('sea-offer-330i-sedan'),
+    vin: 'WBA5R7C01PFH45781',
+    status: 'generated',
+    emailStatus: 'pending',
+    assetsStatus: 'pending',
+    createdAt: now - 33 * DAY,
+    activity: [
+      { id: 'act-17-generated', action: 'generated', timestamp: now - 33 * DAY, ...AI_AGENT },
+      { id: 'act-17-archived', action: 'archived', timestamp: now - 2 * DAY, ...JOHN_DOE },
+    ],
+    archivedAt: now - 2 * DAY,
+  },
+
+  ...BULK_ARCHIVED_ALERTS,
 ];

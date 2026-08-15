@@ -233,7 +233,8 @@ export type AlertActivityAction =
   | 'assets_approved'
   | 'assets_rejected'
   | 'rebuilt'
-  | 'sent';
+  | 'sent'
+  | 'archived';
 
 export interface AlertActivityEntry {
   id: string;
@@ -265,6 +266,8 @@ export interface Alert {
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];
+  /** Set once the alert is manually archived — removed from the Kanban/Table and shown in the Archived Alerts dialog instead. */
+  archivedAt?: number;
 }
 
 export type TaskKey = 'offers' | 'templates' | 'theme_and_logos' | 'review' | 'approved' | 'ads' | 'campaigns';
