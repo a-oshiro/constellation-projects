@@ -9,6 +9,7 @@ import type { Alert, AlertActivityEntry, Offer, Template, ReviewStatus } from '.
 import { useProject } from '../../context/ProjectContext';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
+import { backgroundForOffer } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
@@ -187,7 +188,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const rowOffers = featuredOffer ? [featuredOffer, ...otherOffers] : otherOffers;
 
   const template = currentProject.templates[0];
-  const background = currentProject.backgrounds[0];
+  const hasBackgrounds = currentProject.backgrounds.length > 0;
+  const bgFor = (o: Offer) => backgroundForOffer(o, offers, currentProject.backgrounds);
 
   const previewCount = rowOffers.length;
   const previewOffer = rowOffers[Math.min(previewIndex, Math.max(previewCount - 1, 0))];
@@ -283,12 +285,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     {alert.vin}
                   </p>
 
-                  {featuredOffer && template && background && (
+                  {featuredOffer && template && hasBackgrounds && (
                     <div style={{ marginBottom: 16 }}>
                       <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
                         The recommended monthly payment for this YMMT to dominate this market is:
                       </p>
-                      <EmailAssetPreview offer={featuredOffer} template={template} backgroundUrl={background.url} />
+                      <EmailAssetPreview offer={featuredOffer} template={template} backgroundUrl={bgFor(featuredOffer)!.url} />
                     </div>
                   )}
 
@@ -296,13 +298,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     SEND TO MY PAID MEDIA TEAM
                   </button>
 
-                  {otherOffers.length > 0 && template && background && (
+                  {otherOffers.length > 0 && template && hasBackgrounds && (
                     <>
                       <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
                         These are the other YMMTs that you selected on your enrollment form that you are currently running on paid media:
                       </p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 20 }}>
-                        {otherOffers.map((o) => <EmailAssetPreview key={o.id} offer={o} template={template} backgroundUrl={background.url} />)}
+                        {otherOffers.map((o) => <EmailAssetPreview key={o.id} offer={o} template={template} backgroundUrl={bgFor(o)!.url} />)}
                       </div>
                     </>
                   )}
@@ -352,12 +354,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     </IconButton>
                   )}
 
-                  {previewOffer && template && background ? (
+                  {previewOffer && template && hasBackgrounds ? (
                     <div style={{
                       width: '100%', height: '100%', maxWidth: 575, maxHeight: 575,
                       position: 'relative', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
                     }}>
-                      <FilledTemplatePreview template={template} offer={previewOffer} backgroundUrl={background.url} />
+                      <FilledTemplatePreview template={template} offer={previewOffer} backgroundUrl={bgFor(previewOffer)!.url} />
                     </div>
                   ) : (
                     <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>No assets to preview.</span>

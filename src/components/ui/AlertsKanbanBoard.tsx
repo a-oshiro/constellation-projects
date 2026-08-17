@@ -8,7 +8,7 @@ import { useProject } from '../../context/ProjectContext';
 import { useLayout } from '../../context/LayoutContext';
 import { useSnackbar } from '../../context/SnackbarContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import { computePreviewAssets } from '../../utils/overviewAssets';
+import { computePreviewAssets, backgroundForOffer } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
 import { applyAlertFilters, getActiveFilterChips, removeFilterChip, hasActiveAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
@@ -353,14 +353,17 @@ export const AlertsKanbanBoard = () => {
   const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
 
   // One representative preview asset per offer, used to build each alert card's thumbnail
-  // from the offers its email actually references (featured + the secondary grid).
+  // from the offers its email actually references (featured + the secondary grid). Each offer's
+  // background is picked via backgroundForOffer so it stays consistent with the Alert Dialog.
   const assetByOfferId = useMemo(() => {
     const previewAssets = computePreviewAssets(
       currentProject.offers, currentProject.templates, currentProject.backgrounds, currentProject.projectName,
     );
     const map = new Map<string, Asset>();
-    previewAssets.forEach((asset) => {
-      if (!map.has(asset.offerId)) map.set(asset.offerId, asset);
+    currentProject.offers.forEach((offer) => {
+      const bg = backgroundForOffer(offer, currentProject.offers, currentProject.backgrounds);
+      const asset = previewAssets.find((a) => a.offerId === offer.id && a.backgroundId === bg?.id);
+      if (asset) map.set(offer.id, asset);
     });
     return map;
   }, [currentProject]);

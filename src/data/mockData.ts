@@ -7,6 +7,8 @@ import bg600_3 from '../assets/backgrounds/600_250_3.png';
 import bg1080_1 from '../assets/backgrounds/1080_1080_1.png';
 import bg1080_2 from '../assets/backgrounds/1080_1080_2.png';
 import bg1080_3 from '../assets/backgrounds/1080_1080_3.png';
+import bg1080_4 from '../assets/backgrounds/1080_1080_4.png';
+import bg1080_5 from '../assets/backgrounds/1080_1080_5.png';
 import bgHtml1 from '../assets/backgrounds/html_1100_1.png';
 import bgHtml2 from '../assets/backgrounds/html_1100_2.png';
 import bgHtml3 from '../assets/backgrounds/html_1100_3.png';
@@ -89,6 +91,8 @@ export const BACKGROUNDS: Background[] = [
   { id: 'bg-4', templateId: 'tmpl-2', url: bg1080_1, name: '1080x1080 Background 1' },
   { id: 'bg-5', templateId: 'tmpl-2', url: bg1080_2, name: '1080x1080 Background 2' },
   { id: 'bg-6', templateId: 'tmpl-2', url: bg1080_3, name: '1080x1080 Background 3' },
+  { id: 'bg-13', templateId: 'tmpl-2', url: bg1080_4, name: '1080x1080 Background 4' },
+  { id: 'bg-14', templateId: 'tmpl-2', url: bg1080_5, name: '1080x1080 Background 5' },
   { id: 'bg-7', templateId: 'tmpl-3', url: bgHtml1, name: '1100x560 Background 1' },
   { id: 'bg-8', templateId: 'tmpl-3', url: bgHtml2, name: '1100x560 Background 2' },
   { id: 'bg-9', templateId: 'tmpl-3', url: bgHtml3, name: '1100x560 Background 3' },

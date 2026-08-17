@@ -246,7 +246,7 @@ export const PROJECTS: Project[] = [
     // the rest of the BMW catalog is appended purely to give the Overview's Preview panel more assets.
     offers: [...SEATTLE_OFFERS, ...OFFERS.filter((o) => !o.swapOnly)],
     templates: [templateById('tmpl-2')],
-    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => b.id === 'bg-4' || b.id === 'bg-5'),
+    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => ['bg-4', 'bg-5', 'bg-13', 'bg-14'].includes(b.id)),
     alerts: SEATTLE_ALERTS,
     sectionStatus: {
       offers: 'done',

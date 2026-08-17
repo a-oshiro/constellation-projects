@@ -1,5 +1,16 @@
 import type { Offer, Template, Background, Asset, Alert } from '../data/types';
 
+/**
+ * Deterministically varies which background an offer's preview asset uses, so different offers
+ * don't all render the same photo. Indexed by the offer's stable position in the project's offer
+ * list, so a given offer always maps to the same background everywhere it's previewed.
+ */
+export function backgroundForOffer(offer: Offer, offers: Offer[], backgrounds: Background[]): Background | undefined {
+  if (backgrounds.length === 0) return undefined;
+  const index = offers.findIndex((o) => o.id === offer.id);
+  return backgrounds[(index < 0 ? 0 : index) % backgrounds.length];
+}
+
 export interface PreviewAdShell {
   id: string;
   name: string;
