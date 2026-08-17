@@ -167,6 +167,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         fontSize: 14, fontWeight: 600, color: '#ffffff',
         lineHeight: 1.43, letterSpacing: 0.17,
         whiteSpace: 'nowrap',
+        fontFamily: "'BMW Type Next', Roboto, sans-serif",
         zIndex: 2,
       }}>
         {offer.year} {offer.make} {offer.model} {offer.trim}
@@ -180,6 +181,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         right: width * 0.3639,
         fontSize: 30, fontWeight: 400, color: '#ffffff',
         lineHeight: 1.2, letterSpacing: 0.25,
+        fontFamily: "'BMW Type Next', Roboto, sans-serif",
         zIndex: 2,
       }}>
         {socialHeader}
@@ -207,7 +209,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         width: width * 0.25,
       }}>
         <div style={{
-          background: '#1E88E5', color: 'white',
+          background: '#1B69D5', color: 'white',
           borderRadius: 100, padding: '8px 22px',
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
@@ -226,7 +228,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         width: width * 0.25,
       }}>
         <div style={{
-          background: '#1E88E5', color: 'white',
+          background: '#1B69D5', color: 'white',
           borderRadius: 100, padding: '8px 22px',
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
@@ -245,7 +247,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         width: width * 0.25,
       }}>
         <div style={{
-          background: '#1E88E5', color: 'white',
+          background: '#1B69D5', color: 'white',
           borderRadius: 100, padding: '8px 22px',
           fontSize: 15, fontWeight: 500, letterSpacing: 0.46,
           whiteSpace: 'nowrap', textAlign: 'center', textTransform: 'uppercase',
@@ -269,6 +271,24 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.35))' }}
         />
       </div>
+
+      {/* Bottom: fine-print disclosure */}
+      {offer.disclosure && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.55)',
+          padding: '3px 12px',
+          zIndex: 3,
+        }}>
+          <span style={{
+            fontSize: 9, fontFamily: 'Roboto, sans-serif', color: 'rgba(255,255,255,0.85)',
+            lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            display: 'block',
+          }}>
+            {offer.disclosure}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

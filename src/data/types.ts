@@ -141,6 +141,8 @@ export interface Offer {
   stockNumber?: string;
   styleName?: string;
   accountImages?: string;
+  /** Fine-print lease disclosure shown at the bottom of generated ad assets. Fixed per offer so every asset built from it shows identical legal copy. */
+  disclosure?: string;
 }
 
 /** Returns the first Lease offer type data, used by templates and asset previews. */

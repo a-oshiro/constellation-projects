@@ -201,6 +201,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           position: 'absolute', top: titleTop, left: vehicleLeft,
           fontSize: 40, fontWeight: 800, color: '#ffffff',
           lineHeight: 1.2, letterSpacing: 0.25,
+          fontFamily: "'BMW Type Next', Roboto, sans-serif",
           zIndex: 2,
         }}>
           {offer.year} {offer.make} {offer.model}<br />{offer.trim}
@@ -242,7 +243,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           transform: 'translateY(-50%)',
           zIndex: 2,
           display: 'flex', flexDirection: 'column', gap: 4,
-           backgroundColor: '#ffffff', padding: 16, borderRadius: 8,
+          backgroundColor: '#ffffff', padding: 16, borderRadius: 8,
+          fontFamily: "'BMW Type Next', Roboto, sans-serif",
         }}>
           {/* Offer type */}
           <span style={{ fontSize: 14, fontWeight: 400, color: '#111014', letterSpacing: 1, textTransform: 'uppercase', lineHeight: 2.66 }}>
@@ -279,10 +281,10 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           zIndex: 2,
         }}>
           <div style={{
-            background: '#1E88E5', color: 'white',
+            background: '#1B69D5', color: 'white',
             borderRadius: 4, padding: '16px 32px',
             fontSize: 20, fontWeight: 800, letterSpacing: 0.46,
-            whiteSpace: 'nowrap', boxShadow: '0 4px 16px rgba(71,59,171,0.4)',
+            whiteSpace: 'nowrap', boxShadow: '0 4px 16px rgba(27,105,213,0.4)',
           }}>
             CLAIM SPECIAL
           </div>
@@ -295,16 +297,29 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         bottom: 0, left: 0, right: 0,
         height: footerH,
         background: '#ffffff',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6,
       }}>
-        {['View Inventory', 'Value Your Trade', 'Offer Details'].map((label) => (
-          <span key={label} style={{
-            fontSize: 20, fontWeight: 800, color: '#1E88E5',
-            letterSpacing: 0.46, textTransform: 'uppercase',
-          }}>
-            {label}
-          </span>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
+          {['View Inventory', 'Value Your Trade', 'Offer Details'].map((label) => (
+            <span key={label} style={{
+              fontSize: 20, fontWeight: 800, color: '#1E88E5',
+              letterSpacing: 0.46, textTransform: 'uppercase',
+            }}>
+              {label}
+            </span>
+          ))}
+        </div>
+        {offer.disclosure && (
+          <div style={{ padding: '0 32px', textAlign: 'center' }}>
+            <span style={{
+              fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576',
+              lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {offer.disclosure}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

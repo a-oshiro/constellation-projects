@@ -129,27 +129,35 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       {/* Left: offer text */}
       <div style={{
         position: 'absolute',
-        left: '4%', top: '10%',
-        width: '60%',
+        left: '4%', top: '7%',
+        width: '70%',
         display: 'flex', flexDirection: 'column',
         gap: width * 0.02,
         zIndex: 2,
       }}>
-        <div style={{ fontSize: width * 0.07, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: 'white', lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
-          New {offer.year} {offer.make} {offer.model} {offer.trim}
+        <div style={{ textTransform: 'uppercase', fontSize: width * 0.05, fontFamily: "'BMW Type Next', Roboto, sans-serif", fontWeight: 700, color: 'white', lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+          {offer.offerTypes[0]?.type ?? 'Lease'} the new {offer.year} {offer.make} {offer.model} {offer.trim}
         </div>
-        <div style={{ fontSize: width * 0.05, fontFamily: 'Roboto, sans-serif', color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-          {offer.offerTypes[0]?.type ?? 'Lease'} for ${leaseData.monthlyPayment ?? 0}/month<br/>for {leaseData.term ?? 0} months
+        <div style={{
+          display: 'flex', flexDirection: 'row', alignItems: 'center',
+          gap: 8,
+        }}>
+          <div style={{ fontSize: width * 0.10, fontFamily: "'BMW Type Next', Roboto, sans-serif", fontWeight: 700,  color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+            ${leaseData.monthlyPayment ?? 0}
+          </div>
+          <div style={{ fontSize: width * 0.025, fontFamily: "'BMW Type Next', Roboto, sans-serif", color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+            Per month for {leaseData.term ?? 0} months with ${leaseData.downPayment ?? 0} due ast signing. Government and dealer fees not included.
+          </div>
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: '#473bab', borderRadius: 100,
+          background: '#1B69D5', borderRadius: 8,
           padding: `${width * 0.02}px ${width * 0.06}px`,
           width: 'fit-content',
           boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
         }}>
-          <span style={{ fontSize: width * 0.03, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: 'white', whiteSpace: 'nowrap' }}>
-            More Info
+          <span style={{ fontSize: width * 0.03, fontFamily: "'BMW Type Next', Roboto, sans-serif", fontWeight: 700, color: 'white', whiteSpace: 'nowrap' }}>
+            Shop Now
           </span>
         </div>
       </div>
@@ -157,8 +165,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       {/* Right: vehicle image */}
       <div style={{
         position: 'absolute',
-        right: '5%', top: '32%',
-        width: '65%',
+        right: '5%', bottom: 10,
+        width: '70%',
         zIndex: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -172,12 +180,29 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       {/* Top-right: BMW logo */}
       <div style={{
         position: 'absolute',
-        top: '10%', right: '5%',
+        top: '6%', right: '5%',
         zIndex: 3,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <BmwLogo size={width * 0.15} />
       </div>
+
+      {/* Bottom: fine-print disclosure */}
+      {offer.disclosure && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 10,
+          background: 'rgba(0,0,0,0.55)',
+          padding: `${width * 0.012}px ${width * 0.04}px`,
+          zIndex: 3,
+        }}>
+          <span style={{
+            fontSize: width * 0.014, fontFamily: "'BMW Type Next', Roboto, sans-serif", color: 'rgba(255,255,255,0.85)',
+            lineHeight: 1.4
+          }}>
+            {offer.disclosure}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

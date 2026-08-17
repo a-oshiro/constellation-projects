@@ -18,6 +18,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-1',
     vehicleName: '2026 BMW X1 xDrive28i',
+    disclosure: 'Sample STK: T9510061. Monthly lease payment of $429 per month plus tax for 36 months is based on an MSRP of $43,100. $3,299 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: 'X1',
@@ -108,6 +109,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-2',
     vehicleName: '2026 BMW X3 30 xDrive',
+    disclosure: 'Sample STK: T9510062. Monthly lease payment of $539 per month plus tax for 36 months is based on an MSRP of $52,650. $3,799 due at signing, including $3,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: 'X3',
@@ -198,6 +200,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-3',
     vehicleName: '2026 BMW X5 xDrive40i',
+    disclosure: 'Sample STK: T9510063. Monthly lease payment of $849 per month plus tax for 36 months is based on an MSRP of $83,220. $5,499 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: 'X5',
@@ -288,6 +291,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-4',
     vehicleName: '2027 BMW X6 xDrive40i AWD',
+    disclosure: 'Sample STK: T9510064. Monthly lease payment of $899 per month plus tax for 36 months is based on an MSRP of $86,650. $6,499 due at signing, including $5,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2027,
     make: 'BMW',
     model: 'X6',
@@ -377,6 +381,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-5',
     vehicleName: '2027 BMW X7 xDrive40i',
+    disclosure: 'Sample STK: T9510065. Monthly lease payment of $979 per month plus tax for 36 months is based on an MSRP of $91,850. $6,999 due at signing, including $5,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2027,
     make: 'BMW',
     model: 'X7',
@@ -467,6 +472,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-6',
     vehicleName: '2027 BMW i4 eDrive40',
+    disclosure: 'Sample STK: T9510066. Monthly lease payment of $499 per month plus tax for 36 months is based on an MSRP of $57,900. $3,499 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2027,
     make: 'BMW',
     model: 'i4',
@@ -557,6 +563,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-7',
     vehicleName: '2026 BMW 228i Gran Coupe',
+    disclosure: 'Sample STK: T9510067. Monthly lease payment of $389 per month plus tax for 36 months is based on an MSRP of $39,900. $2,999 due at signing, including $2,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: '228i',
@@ -645,6 +652,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-8',
     vehicleName: '2026 BMW 330i Sedan',
+    disclosure: 'Sample STK: T9510068. Monthly lease payment of $469 per month plus tax for 36 months is based on an MSRP of $48,675. $3,299 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: '330i',
@@ -734,6 +742,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-9',
     vehicleName: '2026 BMW iX xDrive45 AWD',
+    disclosure: 'Sample STK: T9510069. Monthly lease payment of $849 per month plus tax for 36 months is based on an MSRP of $86,820. $5,999 due at signing, including $4,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2026,
     make: 'BMW',
     model: 'iX',
@@ -824,6 +833,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-10',
     vehicleName: '2027 BMW i5 eDrive40',
+    disclosure: 'Sample STK: T9510070. Monthly lease payment of $679 per month plus tax for 36 months is based on an MSRP of $67,100. $4,499 due at signing, including $3,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 6/30/2026.',
     year: 2027,
     make: 'BMW',
     model: 'i5',
@@ -917,6 +927,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-11',
     vehicleName: '2026 BMW X3 30 xDrive',
+    disclosure: 'Sample STK: T9510071. Monthly lease payment of $519 per month plus tax for 36 months is based on an MSRP of $52,650. $3,299 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 7/31/2026.',
     year: 2026,
     make: 'BMW',
     model: 'X3',
@@ -1010,6 +1021,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-12',
     vehicleName: '2026 BMW XM',
+    disclosure: 'Sample STK: T9510072. Monthly lease payment of $1,799 per month plus tax for 36 months is based on an MSRP of $159,900. $7,499 due at signing, including $5,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 7/31/2026.',
     year: 2026,
     make: 'BMW',
     model: 'XM',
@@ -1103,6 +1115,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-13',
     vehicleName: '2026 BMW i7 xDrive60',
+    disclosure: 'Sample STK: T9510073. Monthly lease payment of $1,149 per month plus tax for 36 months is based on an MSRP of $106,700. $5,999 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 7/31/2026.',
     year: 2026,
     make: 'BMW',
     model: 'i7',
@@ -1193,6 +1206,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-14',
     vehicleName: '2026 BMW i4 M50',
+    disclosure: 'Sample STK: T9510074. Monthly lease payment of $749 per month plus tax for 36 months is based on an MSRP of $70,900. $4,499 due at signing, including $3,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 7/31/2026.',
     year: 2026,
     make: 'BMW',
     model: 'i4',
@@ -1283,6 +1297,7 @@ export const OFFERS: Offer[] = [
   {
     id: 'offer-15',
     vehicleName: '2026 BMW i5 M60',
+    disclosure: 'Sample STK: T9510075. Monthly lease payment of $949 per month plus tax for 36 months is based on an MSRP of $89,900. $5,499 due at signing, including $3,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 7/31/2026.',
     year: 2026,
     make: 'BMW',
     model: 'i5',

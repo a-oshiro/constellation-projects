@@ -139,15 +139,15 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         gap: isWide ? width * 0.015 : width * 0.02,
         zIndex: 2,
       }}>
-        <div style={{ fontSize: isWide ? width * 0.05 : width * 0.07, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: 'white', lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+        <div style={{ fontSize: isWide ? width * 0.05 : width * 0.07, fontFamily: "'BMW Type Next', Roboto, sans-serif", fontWeight: 700, color: 'white', lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
           New {offer.year} {offer.make} {offer.model} {offer.trim}
         </div>
-        <div style={{ fontSize: isWide ? width * 0.033 : width * 0.05, fontFamily: 'Roboto, sans-serif', color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+        <div style={{ fontSize: isWide ? width * 0.033 : width * 0.05, fontFamily: "'BMW Type Next', Roboto, sans-serif", color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
           {offer.offerTypes[0]?.type ?? 'Lease'} for ${leaseData.monthlyPayment ?? 0}/month<br/>for {leaseData.term ?? 0} months
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: '#473bab', borderRadius: 100,
+          background: '#1B69D5', borderRadius: 100,
           padding: isWide ? `${width * 0.01}px ${width * 0.03}px` : `${width * 0.02}px ${width * 0.06}px`,
           width: 'fit-content',
           boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
@@ -186,6 +186,24 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
       }}>
         <BmwLogo size={width * 0.058} />
       </div>
+
+      {/* Bottom: fine-print disclosure */}
+      {offer.disclosure && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.55)',
+          padding: `${width * 0.006}px ${width * 0.03}px`,
+          zIndex: 3,
+        }}>
+          <span style={{
+            fontSize: width * 0.014, fontFamily: 'Roboto, sans-serif', color: 'rgba(255,255,255,0.85)',
+            lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: isWide ? 2 : 3,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {offer.disclosure}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

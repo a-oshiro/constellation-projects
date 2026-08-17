@@ -21,6 +21,7 @@ export const SEATTLE_OFFERS: Offer[] = [
     condition: 'New',
     vin: '5UX53GP0T9513011',
     msrp: 53300,
+    disclosure: 'Sample STK: T9520001. Monthly lease payment of $569 per month plus tax for 36 months is based on an MSRP of $53,300. $3,799 due at signing, including $3,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     imageUrl: bmwX3,
     offerTypes: [
       {
@@ -49,6 +50,7 @@ export const SEATTLE_OFFERS: Offer[] = [
     condition: 'New',
     vin: 'WBX73EF08T5548316',
     msrp: 47215,
+    disclosure: 'Sample STK: T9520002. Monthly lease payment of $499 per month plus tax for 36 months is based on an MSRP of $47,215. $3,299 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     imageUrl: bmwX1,
     offerTypes: [
       {
@@ -76,6 +78,7 @@ export const SEATTLE_OFFERS: Offer[] = [
     inStock: 8,
     condition: 'New',
     imageUrl: bmw330i,
+    disclosure: 'Sample STK: T9520003. Monthly lease payment of $479 per month plus tax for 36 months is based on an MSRP of $45,900. $3,199 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     offerTypes: [
       {
         id: 'sea-330i-lease',
@@ -93,6 +96,7 @@ export const SEATTLE_OFFERS: Offer[] = [
   },
   {
     id: 'sea-offer-x5-xdrive40i',
+    disclosure: 'Sample STK: T9520004. Monthly lease payment of $869 per month plus tax for 36 months is based on an MSRP of $76,900. $4,899 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     vehicleName: '2026 BMW X5 xDrive40i',
     year: 2026,
     make: 'BMW',
@@ -118,6 +122,7 @@ export const SEATTLE_OFFERS: Offer[] = [
   },
   {
     id: 'sea-offer-x5-xdrive50e',
+    disclosure: 'Sample STK: T9520005. Monthly lease payment of $899 per month plus tax for 36 months is based on an MSRP of $79,900. $4,999 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     vehicleName: '2026 BMW X5 xDrive50e',
     year: 2026,
     make: 'BMW',
@@ -143,6 +148,7 @@ export const SEATTLE_OFFERS: Offer[] = [
   },
   {
     id: 'sea-offer-x5-sdrive40i',
+    disclosure: 'Sample STK: T9520006. Monthly lease payment of $839 per month plus tax for 36 months is based on an MSRP of $72,400. $4,699 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     vehicleName: '2026 BMW X5 sDrive40i',
     year: 2026,
     make: 'BMW',
@@ -168,6 +174,7 @@ export const SEATTLE_OFFERS: Offer[] = [
   },
   {
     id: 'sea-offer-m340i-sedan',
+    disclosure: 'Sample STK: T9520007. Monthly lease payment of $619 per month plus tax for 36 months is based on an MSRP of $58,900. $3,899 due at signing, including $3,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     vehicleName: '2026 BMW 3 Series M340i Sedan',
     year: 2026,
     make: 'BMW',
