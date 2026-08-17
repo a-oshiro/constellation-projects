@@ -136,8 +136,8 @@ export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert, onArchive }:
                 </TableCell>
                 <TableCell sx={{ ...BODY_CELL_SX, minWidth: 200 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} />
-                    <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} />
+                    <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor />
+                    <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor />
                   </div>
                 </TableCell>
                 <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap' }}>

@@ -63,8 +63,8 @@ const ArchivedAlertCard = ({ alert, assets, onOpen }: ArchivedAlertCardProps) =>
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} />
-          <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} />
+          <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor />
+          <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor />
         </div>
       </div>
     </div>

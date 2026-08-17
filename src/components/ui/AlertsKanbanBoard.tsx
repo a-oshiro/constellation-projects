@@ -117,6 +117,12 @@ const COLUMN_ACTIONS: Partial<Record<AlertStatus, ColumnAction[]>> = {
   ],
 };
 
+/** Labels for the Rejected/Approved cards' quick actions when surfaced in the card's three-dot menu. */
+const CARD_MENU_ACTION_LABEL: Partial<Record<AlertStatus, string>> = {
+  rejected: 'Rebuild Alert',
+  approved: 'Send Alert',
+};
+
 /** Most recent activity entry for a given review track, used to attribute its row on the card. */
 export function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | undefined {
   const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
@@ -134,9 +140,11 @@ interface ReviewRowProps {
   label: string;
   status: ReviewStatus;
   actorName?: string;
+  revealActor: boolean;
+  showPendingLabel?: boolean;
 }
 
-export const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
+export const ReviewRow = ({ label, status, actorName, revealActor, showPendingLabel = true }: ReviewRowProps) => {
   const { Icon, color } = REVIEW_ROW_STYLE[status];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -145,7 +153,7 @@ export const ReviewRow = ({ label, status, actorName }: ReviewRowProps) => {
         {label}
       </span>
       <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px', whiteSpace: 'nowrap', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {status === 'pending' ? 'Pending' : formatReviewerName(actorName ?? '')}
+        {status === 'pending' ? (showPendingLabel ? 'Pending' : '') : revealActor ? formatReviewerName(actorName ?? '') : ''}
       </span>
     </div>
   );
@@ -236,7 +244,7 @@ const AlertCard = ({
   const categoryStyle = CATEGORY_STYLE[alert.category];
   const actions = COLUMN_ACTIONS[alert.status] ?? [];
   const highlighted = hovered || selected;
-  const showActions = hovered && !bulkActive && actions.length > 0 && alert.status !== 'generated';
+  const showCardMenuActions = actions.length > 0 && alert.status !== 'generated';
   const showArchiveButton = (hovered || !!menuAnchor) && !bulkActive;
 
   return (
@@ -296,28 +304,9 @@ const AlertCard = ({
             Created {formatRelativeTime(alert.createdAt)}
           </span>
         )}
-        <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} />
-        <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} />
+        <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor={hovered} showPendingLabel={false} />
+        <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor={hovered} showPendingLabel={false} />
       </div>
-
-      {showActions && (
-        <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              title={action.label}
-              onClick={(e) => { e.stopPropagation(); onMove(action.targetStatus); }}
-              style={{
-                width: 28, height: 28, borderRadius: '50%', padding: 0,
-                background: '#ffffff', border: `1px solid ${action.borderColor}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              }}
-            >
-              <action.icon style={{ fontSize: 16, color: action.color }} />
-            </button>
-          ))}
-        </div>
-      )}
 
       {showArchiveButton && (
         <IconButton
@@ -333,6 +322,12 @@ const AlertCard = ({
         </IconButton>
       )}
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        {showCardMenuActions && actions.map((action) => (
+          <MenuItem key={action.label} onClick={(e) => { e.stopPropagation(); setMenuAnchor(null); onMove(action.targetStatus); }}>
+            <ListItemIcon><action.icon fontSize="small" /></ListItemIcon>
+            {CARD_MENU_ACTION_LABEL[alert.status] ?? action.label}
+          </MenuItem>
+        ))}
         <MenuItem onClick={(e) => { e.stopPropagation(); setMenuAnchor(null); onArchive(); }}>
           <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
           Archive Alert
