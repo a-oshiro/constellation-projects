@@ -21,6 +21,21 @@ export const CURRENT_USER = {
   avatarUrl: 'https://i.pravatar.cc/40?img=12',
 };
 
+export interface Teammate {
+  name: string;
+  avatarUrl: string;
+}
+
+/** Mock roster for the alert-comment Assignee/Mentioned Teammates pickers. */
+export const MOCK_TEAMMATES: Teammate[] = [
+  { name: 'John Doe', avatarUrl: CURRENT_USER.avatarUrl },
+  { name: 'Michael Stuart', avatarUrl: 'https://i.pravatar.cc/40?img=52' },
+  { name: 'Maite Espino', avatarUrl: 'https://i.pravatar.cc/40?img=47' },
+  { name: 'Chloe Sinclair', avatarUrl: 'https://i.pravatar.cc/40?img=45' },
+  { name: 'Henry Nova', avatarUrl: 'https://i.pravatar.cc/40?img=11' },
+  { name: 'Felix Orbit', avatarUrl: 'https://i.pravatar.cc/40?img=33' },
+];
+
 export const PROJECT_INFO = {
   accountName: 'BMW Seattle',
   accountCode: 'WASEABMW',

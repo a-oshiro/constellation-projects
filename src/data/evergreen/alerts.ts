@@ -1,5 +1,5 @@
-import type { Alert, AlertActivityEntry, AlertCategory, AlertStatus, ReviewStatus } from '../types';
-import { CURRENT_USER } from '../mockData';
+import type { Alert, AlertActivityEntry, AlertComment, AlertCategory, AlertStatus, ReviewStatus } from '../types';
+import { CURRENT_USER, MOCK_TEAMMATES } from '../mockData';
 import constellationLogo from '../../assets/constellation-logo.png'
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -30,6 +30,21 @@ const ALL_OFFER_IDS = [
 ];
 
 const othersExcept = (featuredId: string) => ALL_OFFER_IDS.filter((id) => id !== featuredId);
+
+const teammate = (name: string) => MOCK_TEAMMATES.find((t) => t.name === name)!;
+
+/** Demo comment shown on 'sea-alert-competition-beating-x3-lease' — matches the Figma "Add Comment" mockup. */
+const DEMO_EMAIL_REJECTION_COMMENT: AlertComment = {
+  id: 'comment-2-email-1',
+  track: 'email',
+  text: "Couldn't find this VIN in inventory, maybe this is outdated.",
+  assigneeName: teammate('Chloe Sinclair').name,
+  assigneeAvatar: teammate('Chloe Sinclair').avatarUrl,
+  mentionedNames: ['Henry Nova', 'Maite Espino', 'Felix Orbit'],
+  authorName: MICHAEL_STUART.actorName,
+  authorAvatar: MICHAEL_STUART.actorAvatar,
+  timestamp: now - 3 * DAY,
+};
 
 interface ArchivedMockSpec {
   id: string;
@@ -169,6 +184,7 @@ export const SEATTLE_ALERTS: Alert[] = [
       { id: 'act-2-generated', action: 'generated', timestamp: now - 14 * DAY, ...AI_AGENT },
       { id: 'act-2-email-rejected', action: 'email_rejected', timestamp: now - 3 * DAY, ...MICHAEL_STUART },
     ],
+    comments: [DEMO_EMAIL_REJECTION_COMMENT],
   },
   {
     id: 'sea-alert-irvine-beating-x1',

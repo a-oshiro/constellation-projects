@@ -248,6 +248,21 @@ export interface AlertActivityEntry {
   actorAvatar?: string;
 }
 
+/** A comment left on one review track (email or assets), optionally assigning a single owner and mentioning other teammates. */
+export interface AlertComment {
+  id: string;
+  track: 'email' | 'assets';
+  text: string;
+  assigneeName?: string;
+  assigneeAvatar?: string;
+  mentionedNames: string[];
+  authorName: string;
+  authorAvatar: string;
+  timestamp: number;
+  /** Set when the comment is edited after posting — drives the "Edited" indicator. */
+  editedAt?: number;
+}
+
 /** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */
 export interface Alert {
   id: string;
@@ -268,6 +283,8 @@ export interface Alert {
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];
+  /** Comments left per review track (email/assets), ordered oldest -> newest. Defaults to empty when omitted. */
+  comments?: AlertComment[];
   /** Set once the alert is manually archived — removed from the Kanban/Table and shown in the Archived Alerts dialog instead. */
   archivedAt?: number;
 }

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, ReviewStatus } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, ReviewStatus } from '../data/types';
 
 /** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
@@ -89,6 +89,12 @@ interface ProjectContextValue {
   sendAlert: (id: string) => void;
   /** Manually removes an alert from the Kanban/Table into the Archived Alerts dialog. No-ops if already archived. */
   archiveAlert: (id: string) => void;
+  /**
+   * Combined review action: approves or rejects one track and saves whatever Assignee/Mentioned
+   * Teammates/Comment the reviewer entered alongside the decision — all three are optional. No-ops
+   * once the alert has been sent.
+   */
+  reviewAlertTrack: (id: string, track: 'email' | 'assets', decision: Exclude<ReviewStatus, 'pending'>, input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -277,6 +283,55 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || a.status !== 'approved') return a;
       return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', Date.now())] };
+    }));
+  }, []);
+
+  /**
+   * Combined review action: approves/rejects one track and, in the same update, saves whatever
+   * Assignee/Mentioned Teammates/Comment the reviewer entered alongside the decision — all three
+   * fields are optional. Undoing the decision (via setEmailReview/setAssetsReview back to 'pending')
+   * leaves the saved comment in place so the fields re-populate for editing.
+   */
+  const reviewAlertTrack = useCallback((id: string, track: 'email' | 'assets', decision: Exclude<ReviewStatus, 'pending'>, input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const timestamp = Date.now();
+
+      const existing = a.comments ?? [];
+      const existingComment = existing.find((c) => c.track === track);
+      const hasContent = input.text.trim().length > 0 || !!input.assigneeName || input.mentionedNames.length > 0;
+      let comments = existing;
+      if (existingComment) {
+        comments = existing.map((c) => c.id !== existingComment.id ? c : {
+          ...c,
+          text: input.text,
+          assigneeName: input.assigneeName,
+          assigneeAvatar: input.assigneeAvatar,
+          mentionedNames: input.mentionedNames,
+          editedAt: timestamp,
+        });
+      } else if (hasContent) {
+        const comment: AlertComment = {
+          id: `alert-comment-${id}-${track}-${timestamp}`,
+          track,
+          text: input.text,
+          assigneeName: input.assigneeName,
+          assigneeAvatar: input.assigneeAvatar,
+          mentionedNames: input.mentionedNames,
+          authorName: CURRENT_USER.name,
+          authorAvatar: CURRENT_USER.avatarUrl,
+          timestamp,
+        };
+        comments = [...existing, comment];
+      }
+
+      const activity = [...a.activity, makeActivityEntry(id, track === 'email'
+        ? (decision === 'approved' ? 'email_approved' : 'email_rejected')
+        : (decision === 'approved' ? 'assets_approved' : 'assets_rejected'), timestamp)];
+
+      return track === 'email'
+        ? { ...a, emailStatus: decision, status: deriveAlertStatus(decision, a.assetsStatus), activity, comments }
+        : { ...a, assetsStatus: decision, status: deriveAlertStatus(a.emailStatus, decision), activity, comments };
     }));
   }, []);
 
@@ -601,7 +656,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert,
+      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack,
     }}>
       {children}
     </ProjectContext.Provider>
