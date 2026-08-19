@@ -13,6 +13,7 @@ import { backgroundForOffer } from '../../utils/overviewAssets';
 import { formatReviewerName } from '../../utils/alertReview';
 import { MOCK_TEAMMATES } from '../../data/mockData';
 import type { Teammate } from '../../data/mockData';
+import { FooterReviewControls } from './AlertReviewFooterFlow';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
@@ -344,6 +345,48 @@ const ReviewPanel = ({ trackLabel, status, comment, actorName, timestamp, locked
   );
 };
 
+interface ReviewModeToggleProps {
+  mode: 'panel' | 'footer';
+  onChange: (mode: 'panel' | 'footer') => void;
+}
+
+/** Floating widget (bottom-left of the viewport) for A/B-ing the two review UIs — the existing right side panel vs. the newer main-pane footer flow. */
+const ReviewModeToggle = ({ mode, onChange }: ReviewModeToggleProps) => {
+  const segmentBase: React.CSSProperties = {
+    border: 'none', cursor: 'pointer', borderRadius: 100, padding: '6px 12px', fontSize: 12,
+    fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.4px', whiteSpace: 'nowrap',
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', left: 24, bottom: 24, zIndex: 100010,
+        background: '#ffffff', borderRadius: 12, padding: 8,
+        boxShadow: '0px 8px 24px rgba(0,0,0,0.18), 0px 2px 8px rgba(0,0,0,0.12)',
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }}
+    >
+      <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#9c99a9', letterSpacing: '0.6px', paddingLeft: 4 }}>
+        REVIEW LAYOUT
+      </span>
+      <div style={{ display: 'flex', background: '#f0f2f4', borderRadius: 100, padding: 3, gap: 2 }}>
+        <button
+          onClick={() => onChange('panel')}
+          style={{ ...segmentBase, background: mode === 'panel' ? '#473bab' : 'transparent', color: mode === 'panel' ? '#ffffff' : '#686576' }}
+        >
+          Side Panel
+        </button>
+        <button
+          onClick={() => onChange('footer')}
+          style={{ ...segmentBase, background: mode === 'footer' ? '#473bab' : 'transparent', color: mode === 'footer' ? '#ffffff' : '#686576' }}
+        >
+          Footer
+        </button>
+      </div>
+    </div>
+  );
+};
+
 interface AlertDialogProps {
   alert: Alert;
   onClose: () => void;
@@ -354,6 +397,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [activeTab, setActiveTab] = useState<'email' | 'assets'>('email');
   const [showHistory, setShowHistory] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
+  /** Lets the two review UIs (right panel vs. main-pane footer) be toggled and compared side by side. */
+  const [reviewMode, setReviewMode] = useState<'panel' | 'footer'>('panel');
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -563,25 +608,27 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   <AssetToolbarRow />
                 </div>
               )}
+
+              {reviewMode === 'footer' && (
+                <FooterReviewControls
+                  key={activeTab}
+                  trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
+                  status={activeStatus}
+                  comment={activeComment}
+                  actorName={activeActivity?.actorName}
+                  timestamp={activeActivity?.timestamp}
+                  locked={isSent}
+                  disabled={isArchived}
+                  onApprove={(input) => reviewAlertTrack(alert.id, activeTab, 'approved', input)}
+                  onReject={(input) => reviewAlertTrack(alert.id, activeTab, 'rejected', input)}
+                  onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
+                  onRebuild={handleRebuild}
+                />
+              )}
             </div>
 
-            {/* Right panel — the active track's Review panel, or Activity History, mutually exclusive */}
-            {!showHistory ? (
-              <ReviewPanel
-                key={activeTab}
-                trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
-                status={activeStatus}
-                comment={activeComment}
-                actorName={activeActivity?.actorName}
-                timestamp={activeActivity?.timestamp}
-                locked={isSent}
-                disabled={isArchived}
-                onApprove={(input) => reviewAlertTrack(alert.id, activeTab, 'approved', input)}
-                onReject={(input) => reviewAlertTrack(alert.id, activeTab, 'rejected', input)}
-                onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
-                onRebuild={handleRebuild}
-              />
-            ) : (
+            {/* Right panel — the active track's Review panel (panel mode only), or Activity History, mutually exclusive */}
+            {showHistory ? (
               <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Alert Activity History</span>
@@ -610,7 +657,22 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   ))}
                 </div>
               </div>
-            )}
+            ) : reviewMode === 'panel' ? (
+              <ReviewPanel
+                key={activeTab}
+                trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
+                status={activeStatus}
+                comment={activeComment}
+                actorName={activeActivity?.actorName}
+                timestamp={activeActivity?.timestamp}
+                locked={isSent}
+                disabled={isArchived}
+                onApprove={(input) => reviewAlertTrack(alert.id, activeTab, 'approved', input)}
+                onReject={(input) => reviewAlertTrack(alert.id, activeTab, 'rejected', input)}
+                onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
+                onRebuild={handleRebuild}
+              />
+            ) : null}
           </div>
 
           {/* Combined footer — appears once both halves are approved, offering the final Send action */}
@@ -640,6 +702,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           )}
         </div>
       </div>
+
+      <ReviewModeToggle mode={reviewMode} onChange={setReviewMode} />
     </>,
     document.body,
   );
