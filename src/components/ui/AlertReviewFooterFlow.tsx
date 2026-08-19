@@ -47,11 +47,12 @@ const MentionText = ({ text, mentionedNames }: { text: string; mentionedNames: s
   </>
 );
 
-interface MentionCommentComposerProps {
+export interface MentionCommentComposerProps {
   initialText?: string;
   initialMentionedNames?: string[];
   onChange: (text: string, mentionedNames: string[]) => void;
-  onClose: () => void;
+  /** Omit to render the field without a dismiss affordance — e.g. when it's a persistent part of a panel rather than a toggleable composer. */
+  onClose?: () => void;
   disabled?: boolean;
 }
 
@@ -85,7 +86,7 @@ const EditableArea = memo(function EditableArea({
 });
 
 /** Free-text comment box with Figma-style "@" tagging: typing @ opens a teammate picker; picking one inserts a non-editable purple mention chip. */
-const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled }: MentionCommentComposerProps) => {
+export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled }: MentionCommentComposerProps) => {
   const editableRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(!initialText);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -226,9 +227,11 @@ const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, 
           </div>
         )}
       </div>
-      <IconButton size="small" onClick={onClose} disabled={disabled} sx={{ padding: '5px', flexShrink: 0 }}>
-        <Close style={{ fontSize: 20, color: '#1f1d25' }} />
-      </IconButton>
+      {onClose && (
+        <IconButton size="small" onClick={onClose} disabled={disabled} sx={{ padding: '5px', flexShrink: 0 }}>
+          <Close style={{ fontSize: 20, color: '#1f1d25' }} />
+        </IconButton>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { IconButton, Autocomplete, TextField, Chip, Avatar } from '@mui/material';
+import { IconButton } from '@mui/material';
 import {
   Close, HistoryOutlined, PictureAsPdfOutlined, Check, Replay, Send, ChevronLeft, ChevronRight,
   Lock, Remove, Add, CheckCircle, Cancel, RadioButtonUnchecked,
@@ -11,9 +11,7 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { formatReviewerName } from '../../utils/alertReview';
-import { MOCK_TEAMMATES } from '../../data/mockData';
-import type { Teammate } from '../../data/mockData';
-import { FooterReviewControls } from './AlertReviewFooterFlow';
+import { FooterReviewControls, MentionCommentComposer } from './AlertReviewFooterFlow';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
@@ -192,49 +190,37 @@ const AssetToolbarRow = () => (
   </div>
 );
 
-const inputLabelStyle: React.CSSProperties = { margin: '0 0 4px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.15px' };
 const inputHelperStyle: React.CSSProperties = { margin: '4px 0 0', fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', lineHeight: 1.5 };
-
-/** The dialog's own backdrop/panel sit at z-index 100000/100001, above MUI's default popper z-index — without this, an open Autocomplete's option list renders behind the dialog and is unclickable. */
-const autocompletePopperProps = { slotProps: { popper: { style: { zIndex: 100002 } } } };
-
-/** Reconstructs a Teammate for a stored comment field — falls back gracefully if the name no longer matches a roster entry. */
-const teammateFor = (name: string, avatarUrl?: string): Teammate => MOCK_TEAMMATES.find((t) => t.name === name) ?? { name, avatarUrl: avatarUrl ?? '' };
 
 interface ReviewPanelProps {
   trackLabel: string;
   status: ReviewStatus;
-  /** The existing comment for this track, if any Assignee/Mentions/Comment were saved with a prior decision. */
+  /** The existing comment for this track, if one was saved with a prior decision. */
   comment?: AlertComment;
   actorName?: string;
   timestamp?: number;
   locked?: boolean;
   disabled?: boolean;
-  onApprove: (input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => void;
-  onReject: (input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => void;
+  onApprove: (input: { text: string; mentionedNames: string[] }) => void;
+  onReject: (input: { text: string; mentionedNames: string[] }) => void;
   onUndo: () => void;
   onRebuild: () => void;
 }
 
 /**
- * Combined right-side review panel for one track: optional Assignee/Mentioned Teammates/Comment
- * fields plus the Approve/Reject decision. Submitting a decision saves the fields alongside it and
- * disables them; undoing the decision (via the compact banner that replaces the buttons) re-enables
- * the fields without losing what was entered.
+ * Combined right-side review panel for one track: a single @mention-capable comment field (the same
+ * one used by the footer flow) plus the Approve/Reject decision. Submitting a decision saves the
+ * comment alongside it and disables the field; undoing the decision (via the compact banner that
+ * replaces the buttons) re-enables it without losing what was entered.
  */
 const ReviewPanel = ({ trackLabel, status, comment, actorName, timestamp, locked, disabled, onApprove, onReject, onUndo, onRebuild }: ReviewPanelProps) => {
-  const [assignee, setAssignee] = useState<Teammate | null>(comment?.assigneeName ? teammateFor(comment.assigneeName, comment.assigneeAvatar) : null);
-  const [mentioned, setMentioned] = useState<Teammate[]>((comment?.mentionedNames ?? []).map((n) => teammateFor(n)));
-  const [text, setText] = useState(comment?.text ?? '');
   const isPending = status === 'pending';
-  const fieldsDisabled = !!disabled || !isPending;
-
-  const buildInput = () => ({
-    text: text.trim(),
-    assigneeName: assignee?.name,
-    assigneeAvatar: assignee?.avatarUrl,
-    mentionedNames: mentioned.map((m) => m.name),
+  const draftRef = useRef<{ text: string; mentionedNames: string[] }>({
+    text: comment?.text ?? '',
+    mentionedNames: comment?.mentionedNames ?? [],
   });
+
+  const buildInput = () => ({ text: draftRef.current.text.trim(), mentionedNames: draftRef.current.mentionedNames });
 
   return (
     <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -243,70 +229,15 @@ const ReviewPanel = ({ trackLabel, status, comment, actorName, timestamp, locked
       </div>
       <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
-          <p style={inputLabelStyle}>Assignee</p>
-          <Autocomplete
-            {...autocompletePopperProps}
-            size="small"
-            options={MOCK_TEAMMATES}
-            getOptionLabel={(o) => o.name}
-            value={assignee}
-            onChange={(_, v) => setAssignee(v)}
-            disabled={fieldsDisabled}
-            renderOption={(props, option) => (
-              <li {...props} key={option.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar src={option.avatarUrl} sx={{ width: 20, height: 20 }} />
-                {option.name}
-              </li>
-            )}
-            renderInput={(params) => <TextField {...params} placeholder="Select a teammate" />}
+          {/* Keyed by status so the field remounts (re-seeding from `comment`) exactly on pending<->reviewed transitions — never mid-typing, where a remount would wipe the user's native contentEditable input. */}
+          <MentionCommentComposer
+            key={status}
+            initialText={comment?.text}
+            initialMentionedNames={comment?.mentionedNames}
+            disabled={!!disabled || !isPending}
+            onChange={(text, mentionedNames) => { draftRef.current = { text, mentionedNames }; }}
           />
-          <p style={inputHelperStyle}>One person is responsible for completing the task.</p>
-        </div>
-
-        <div>
-          <p style={inputLabelStyle}>Mentioned Teammates</p>
-          <Autocomplete
-            {...autocompletePopperProps}
-            multiple
-            size="small"
-            options={MOCK_TEAMMATES}
-            getOptionLabel={(o) => o.name}
-            value={mentioned}
-            onChange={(_, v) => setMentioned(v)}
-            disabled={fieldsDisabled}
-            renderOption={(props, option) => (
-              <li {...props} key={option.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar src={option.avatarUrl} sx={{ width: 20, height: 20 }} />
-                {option.name}
-              </li>
-            )}
-            renderTags={(value, getTagProps) => value.map((option, index) => (
-              <Chip
-                {...getTagProps({ index })}
-                key={option.name}
-                size="small"
-                avatar={<Avatar src={option.avatarUrl} />}
-                label={option.name}
-              />
-            ))}
-            renderInput={(params) => <TextField {...params} placeholder="Mention teammates" />}
-          />
-          <p style={inputHelperStyle}>Mentioned teammates can follow the task, but they are not responsible for completing it.</p>
-        </div>
-
-        <div>
-          <p style={inputLabelStyle}>Comment</p>
-          <TextField
-            multiline
-            minRows={3}
-            fullWidth
-            size="small"
-            placeholder="Write a comment…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={fieldsDisabled}
-          />
-          <p style={inputHelperStyle}>Your comment is included in the notification the assignee receives.</p>
+          <p style={inputHelperStyle}>Use @ to tag teammates in comment. All tagged users will be notified once the review is complete.</p>
         </div>
 
         {isPending ? (
