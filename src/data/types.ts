@@ -248,6 +248,27 @@ export interface AlertActivityEntry {
   actorAvatar?: string;
 }
 
+/** Character range inside one paragraph of Alert.bodyParagraphs, anchoring a comment to highlighted email text. */
+export interface EmailCommentAnchor {
+  kind: 'email';
+  paragraphIndex: number;
+  startOffset: number;
+  endOffset: number;
+  /** The literal substring at anchor time — used to re-render the highlight and to detect stale offsets if the paragraph text ever changes. */
+  quotedText: string;
+}
+
+/** Percentage-based point on one asset's preview image, anchoring a comment to a pin. */
+export interface AssetCommentAnchor {
+  kind: 'asset';
+  /** The offer whose creative this pin belongs to — pins only render while that offer is the active carousel item. */
+  offerId: string;
+  xPct: number;
+  yPct: number;
+}
+
+export type AlertCommentAnchor = EmailCommentAnchor | AssetCommentAnchor;
+
 /** A comment left on one review track (email or assets), optionally assigning a single owner and mentioning other teammates. */
 export interface AlertComment {
   id: string;
@@ -261,6 +282,8 @@ export interface AlertComment {
   timestamp: number;
   /** Set when the comment is edited after posting — drives the "Edited" indicator. */
   editedAt?: number;
+  /** Present only for comments created via highlight-to-comment (email) or pin-to-comment (assets); absent for plain composer comments. */
+  anchor?: AlertCommentAnchor;
 }
 
 /** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */

@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton } from '@mui/material';
 import {
-  Close, HistoryOutlined, PictureAsPdfOutlined, Check, Replay, Send, ChevronLeft, ChevronRight,
+  Close, HistoryOutlined, PictureAsPdfOutlined, Replay, Send, ChevronLeft, ChevronRight,
   Lock, Remove, Add, CheckCircle, Cancel, RadioButtonUnchecked,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertComment, Offer, Template, ReviewStatus } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, EmailCommentAnchor, AssetCommentAnchor, Offer, Template, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { formatReviewerName } from '../../utils/alertReview';
-import { FooterReviewControls, MentionCommentComposer } from './AlertReviewFooterFlow';
+import { FooterReviewControls } from './AlertReviewFooterFlow';
+import { ReviewPanel, HighlightableParagraph, FloatingCommentButton, AssetPinOverlay } from './AlertReviewPanel';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
@@ -34,13 +35,6 @@ const footerButtonBase: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
   borderRadius: 100, padding: '6px 16px', fontSize: 14, fontFamily: 'Roboto, sans-serif',
   fontWeight: 500, letterSpacing: '0.4px', lineHeight: '24px', flexShrink: 0,
-};
-
-/** Small pill buttons used next to the pane title (Approve/Reject/Add Comment) and inline in the review banner (Rebuild). */
-const actionPillBase: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', cursor: 'pointer',
-  borderRadius: 100, padding: '4px 10px', fontSize: 13, fontFamily: 'Roboto, sans-serif',
-  fontWeight: 500, letterSpacing: '0.46px', lineHeight: '22px', flexShrink: 0, whiteSpace: 'nowrap',
 };
 
 interface EmailAssetPreviewProps {
@@ -105,62 +99,6 @@ const ApprovalListItem = ({ label, status, actorName, timestamp, active, onClick
   );
 };
 
-interface CompactReviewBannerProps {
-  status: Exclude<ReviewStatus, 'pending'>;
-  nounLabel: string;
-  actorName?: string;
-  timestamp?: number;
-  /** Once the alert has been sent, the decision is final — hide Undo/Rebuild. */
-  locked?: boolean;
-  /** Archived alerts are read-only — every CTA stays visible but disabled. */
-  disabled?: boolean;
-  onUndo: () => void;
-  onRebuild: () => void;
-}
-
-/** Compact vertical banner shown inside the review panel once a track has been approved or rejected. */
-const CompactReviewBanner = ({ status, nounLabel, actorName, timestamp, locked, disabled, onUndo, onRebuild }: CompactReviewBannerProps) => {
-  const isApproved = status === 'approved';
-  const accentColor = isApproved ? '#1b5e20' : '#d2323f';
-
-  return (
-    <div style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 8, background: isApproved ? '#e8f5e9' : '#fce8ea' }}>
-      {isApproved
-        ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-        : <Cancel style={{ fontSize: 18, color: '#d2323f', flexShrink: 0 }} />}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-        <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: accentColor }}>
-          {nounLabel} {isApproved ? 'approved' : 'rejected'}
-        </span>
-        <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>
-          by {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
-        </span>
-        {!locked && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
-            <button
-              disabled={disabled}
-              onClick={onUndo}
-              style={{
-                background: 'none', border: 'none', padding: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif',
-                fontWeight: 500, color: accentColor, textDecoration: 'underline',
-                opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
-              }}
-            >
-              Undo {isApproved ? 'Approval' : 'Rejection'}
-            </button>
-            {!isApproved && (
-              <button disabled={disabled} onClick={onRebuild} style={{ ...actionPillBase, background: '#473bab', color: '#ffffff', padding: '4px 12px', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
-                <Replay style={{ fontSize: 14 }} />
-                Rebuild
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 const zoomButtonStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 28,
   background: 'transparent', border: 'none', cursor: 'default', color: '#473bab', padding: 0,
@@ -189,92 +127,6 @@ const AssetToolbarRow = () => (
     </button>
   </div>
 );
-
-const inputHelperStyle: React.CSSProperties = { margin: '4px 0 0', fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', lineHeight: 1.5 };
-
-interface ReviewPanelProps {
-  trackLabel: string;
-  status: ReviewStatus;
-  /** The existing comment for this track, if one was saved with a prior decision. */
-  comment?: AlertComment;
-  actorName?: string;
-  timestamp?: number;
-  locked?: boolean;
-  disabled?: boolean;
-  onApprove: (input: { text: string; mentionedNames: string[] }) => void;
-  onReject: (input: { text: string; mentionedNames: string[] }) => void;
-  onUndo: () => void;
-  onRebuild: () => void;
-}
-
-/**
- * Combined right-side review panel for one track: a single @mention-capable comment field (the same
- * one used by the footer flow) plus the Approve/Reject decision. Submitting a decision saves the
- * comment alongside it and disables the field; undoing the decision (via the compact banner that
- * replaces the buttons) re-enables it without losing what was entered.
- */
-const ReviewPanel = ({ trackLabel, status, comment, actorName, timestamp, locked, disabled, onApprove, onReject, onUndo, onRebuild }: ReviewPanelProps) => {
-  const isPending = status === 'pending';
-  const draftRef = useRef<{ text: string; mentionedNames: string[] }>({
-    text: comment?.text ?? '',
-    mentionedNames: comment?.mentionedNames ?? [],
-  });
-
-  const buildInput = () => ({ text: draftRef.current.text.trim(), mentionedNames: draftRef.current.mentionedNames });
-
-  return (
-    <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-      <div style={{ padding: '12px 16px', flexShrink: 0 }}>
-        <span style={{ fontSize: 16, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px' }}>{trackLabel} Review</span>
-      </div>
-      <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          {/* Keyed by status so the field remounts (re-seeding from `comment`) exactly on pending<->reviewed transitions — never mid-typing, where a remount would wipe the user's native contentEditable input. */}
-          <MentionCommentComposer
-            key={status}
-            initialText={comment?.text}
-            initialMentionedNames={comment?.mentionedNames}
-            disabled={!!disabled || !isPending}
-            onChange={(text, mentionedNames) => { draftRef.current = { text, mentionedNames }; }}
-          />
-          <p style={inputHelperStyle}>Use @ to tag teammates in comment. All tagged users will be notified once the review is complete.</p>
-        </div>
-
-        {isPending ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button
-              disabled={disabled}
-              onClick={() => onReject(buildInput())}
-              style={{ ...actionPillBase, background: '#ffffff', border: '1px solid rgba(210,50,63,0.5)', color: '#d2323f', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-            >
-              <Close style={{ fontSize: 16 }} />
-              Reject
-            </button>
-            <button
-              disabled={disabled}
-              onClick={() => onApprove(buildInput())}
-              style={{ ...actionPillBase, background: '#4caf50', color: '#ffffff', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-            >
-              <Check style={{ fontSize: 16 }} />
-              Approve {trackLabel}
-            </button>
-          </div>
-        ) : (
-          <CompactReviewBanner
-            status={status as Exclude<ReviewStatus, 'pending'>}
-            nounLabel={trackLabel === 'Email' ? 'Email content' : 'Assets'}
-            actorName={actorName}
-            timestamp={timestamp}
-            locked={locked}
-            disabled={disabled}
-            onUndo={onUndo}
-            onRebuild={onRebuild}
-          />
-        )}
-      </div>
-    </div>
-  );
-};
 
 interface ReviewModeToggleProps {
   mode: 'panel' | 'footer';
@@ -324,18 +176,56 @@ interface AlertDialogProps {
 }
 
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
-  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, reviewAlertTrack } = useProject();
+  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, reviewAlertTrack, addAlertComment } = useProject();
   const [activeTab, setActiveTab] = useState<'email' | 'assets'>('email');
   const [showHistory, setShowHistory] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   /** Lets the two review UIs (right panel vs. main-pane footer) be toggled and compared side by side. */
   const [reviewMode, setReviewMode] = useState<'panel' | 'footer'>('panel');
 
+  // Side Panel commenting: a highlight/pin the user just created but hasn't sent a comment for yet,
+  // and the id of a comment whose highlight/pin was just clicked (or vice versa) for a brief jump/emphasis.
+  const [pendingAnchor, setPendingAnchor] = useState<AlertCommentAnchor | undefined>(undefined);
+  const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
+  const [floatingSelection, setFloatingSelection] = useState<{ top: number; left: number; anchor: EmailCommentAnchor } | null>(null);
+  const emailBodyRef = useRef<HTMLDivElement>(null);
+  const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const anchorRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const registerCommentRef = (id: string, el: HTMLDivElement | null) => {
+    if (el) commentRefs.current.set(id, el); else commentRefs.current.delete(id);
+  };
+  const registerAnchorRef = (id: string, el: HTMLElement | null) => {
+    if (el) anchorRefs.current.set(id, el); else anchorRefs.current.delete(id);
+  };
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  // Switching tabs or the asset carousel invalidates an in-progress (unsent) anchor — simplest to
+  // drop it rather than persist a draft across a context it no longer applies to. Adjusted during
+  // render (React's recommended "reset on prop/state change" pattern) rather than in an effect, to
+  // avoid an extra cascading render.
+  const [prevTab, setPrevTab] = useState(activeTab);
+  const [prevPreviewIndex, setPrevPreviewIndex] = useState(previewIndex);
+  if (activeTab !== prevTab || previewIndex !== prevPreviewIndex) {
+    setPrevTab(activeTab);
+    setPrevPreviewIndex(previewIndex);
+    setPendingAnchor(undefined);
+    setFloatingSelection(null);
+  }
+
+  // Bidirectional jump/emphasis: scroll both the comment row and its highlight/pin into view, then
+  // clear the emphasis after a beat — no new dependency, just scrollIntoView + a timed state reset.
+  useEffect(() => {
+    if (!activeAnchorId) return;
+    commentRefs.current.get(activeAnchorId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    anchorRefs.current.get(activeAnchorId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const t = setTimeout(() => setActiveAnchorId(null), 1500);
+    return () => clearTimeout(t);
+  }, [activeAnchorId]);
 
   const findOffer = (id: string) => offers.find((o) => o.id === id);
   const featuredOffer = findOffer(alert.featuredOfferId);
@@ -365,7 +255,94 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const activeStatus = activeTab === 'email' ? alert.emailStatus : alert.assetsStatus;
   const activeActivity = activeTab === 'email' ? emailActivity : assetsActivity;
+  // Old-shape single-comment lookup, kept only to feed the untouched Footer flow (`FooterReviewControls`).
   const activeComment = (alert.comments ?? []).find((c) => c.track === activeTab);
+  // New multi-comment list (oldest -> newest) powering the Side Panel's comment thread.
+  const activeComments = (alert.comments ?? []).filter((c) => c.track === activeTab);
+
+  const headerStatusText = activeStatus === 'pending' || !activeActivity
+    ? `Generated ${formatRelativeTime(alert.createdAt)} by AI AutoAgent`
+    : `${activeTab === 'email' ? 'Email' : 'Assets'} ${activeStatus === 'approved' ? 'approved' : 'rejected'} ${formatRelativeTime(activeActivity.timestamp)} by ${formatReviewerName(activeActivity.actorName)}`;
+
+  const emailAnchors = (alert.comments ?? [])
+    .filter((c): c is AlertComment & { anchor: EmailCommentAnchor } => c.track === 'email' && c.anchor?.kind === 'email')
+    .map((c) => ({ anchor: c.anchor, commentId: c.id }));
+  const anchorsForParagraph = (index: number) => emailAnchors.filter((a) => a.anchor.paragraphIndex === index);
+
+  const assetAnchors = previewOffer
+    ? (alert.comments ?? [])
+        .filter((c): c is AlertComment & { anchor: AssetCommentAnchor } => c.track === 'assets' && c.anchor?.kind === 'asset' && c.anchor.offerId === previewOffer.id)
+        .map((c) => ({ anchor: c.anchor, commentId: c.id }))
+    : [];
+  const pendingAssetPin = pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === previewOffer?.id ? pendingAnchor : undefined;
+
+  const handleAnchorClick = (commentId: string) => setActiveAnchorId(commentId);
+
+  const jumpToAnchorFromComment = (comment: AlertComment) => {
+    if (!comment.anchor) return;
+    if (comment.anchor.kind === 'asset') {
+      const offerId = comment.anchor.offerId;
+      const idx = rowOffers.findIndex((o) => o.id === offerId);
+      if (idx !== -1) setPreviewIndex(idx);
+    }
+    setActiveAnchorId(comment.id);
+  };
+
+  const handleEmailMouseUp = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.toString().trim().length === 0 || !emailBodyRef.current) {
+      setFloatingSelection(null);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (!emailBodyRef.current.contains(range.startContainer)) { setFloatingSelection(null); return; }
+
+    let node: Node | null = range.startContainer;
+    let paragraphEl: HTMLElement | null = null;
+    while (node && node !== emailBodyRef.current) {
+      if (node instanceof HTMLElement && node.dataset.paragraphIndex !== undefined) { paragraphEl = node; break; }
+      node = node.parentNode;
+    }
+    if (!paragraphEl) { setFloatingSelection(null); return; }
+
+    const paragraphIndex = Number(paragraphEl.dataset.paragraphIndex);
+    const preRange = document.createRange();
+    preRange.selectNodeContents(paragraphEl);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preRange.toString().length;
+    const quotedText = range.toString();
+    const endOffset = startOffset + quotedText.length;
+
+    const rect = range.getBoundingClientRect();
+    setFloatingSelection({
+      top: rect.top - 6,
+      left: rect.right + 8,
+      anchor: { kind: 'email', paragraphIndex, startOffset, endOffset, quotedText },
+    });
+  };
+
+  const handleStartEmailComment = () => {
+    if (!floatingSelection) return;
+    setPendingAnchor(floatingSelection.anchor);
+    setFloatingSelection(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const handleAssetClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!previewOffer) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    setPendingAnchor({ kind: 'asset', offerId: previewOffer.id, xPct, yPct });
+  };
+
+  const handleSendComment = (text: string, mentionedNames: string[]) => {
+    addAlertComment(alert.id, activeTab, { text, mentionedNames, anchor: pendingAnchor });
+    setPendingAnchor(undefined);
+  };
+
+  const handleApprove = () => (activeTab === 'email' ? setEmailReview(alert.id, 'approved') : setAssetsReview(alert.id, 'approved'));
+  const handleReject = () => (activeTab === 'email' ? setEmailReview(alert.id, 'rejected') : setAssetsReview(alert.id, 'rejected'));
 
   return ReactDOM.createPortal(
     <>
@@ -387,7 +364,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             {alert.subject}
           </span>
           <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
-            Generated {formatRelativeTime(alert.createdAt)} by AI AutoAgent
+            {headerStatusText}
           </span>
           <IconButton size="small" onClick={toggleHistory} sx={{ padding: '5px', background: showHistory ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
             <HistoryOutlined style={{ fontSize: 20, color: showHistory ? '#473bab' : '#1f1d25' }} />
@@ -434,7 +411,11 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
               {activeTab === 'email' ? (
                 <div style={{ flex: 1, overflowY: 'auto', background: '#F4F5F6', padding: 16, justifyContent: 'center', display: 'flex' }}>
-                  <div style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 440, maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
+                  <div
+                    ref={emailBodyRef}
+                    onMouseUp={handleEmailMouseUp}
+                    style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 440, maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}
+                  >
                     <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
                       {alert.preheader}
                     </p>
@@ -452,13 +433,26 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     </div>
 
                     {alert.bodyParagraphs.map((p, i) => (
-                      <p key={i} style={{ margin: '0 0 12px', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.5 }}>
-                        {p}
-                      </p>
+                      <HighlightableParagraph
+                        key={i}
+                        text={p}
+                        paragraphIndex={i}
+                        anchors={anchorsForParagraph(i)}
+                        activeAnchorId={activeAnchorId}
+                        onHighlightClick={handleAnchorClick}
+                        registerAnchorRef={registerAnchorRef}
+                        style={{ margin: '0 0 12px', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.5 }}
+                      />
                     ))}
-                    <p style={{ margin: '0 0 20px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1f1d25', letterSpacing: '0.17px' }}>
-                      {alert.vin}
-                    </p>
+                    <HighlightableParagraph
+                      text={alert.vin}
+                      paragraphIndex={alert.bodyParagraphs.length}
+                      anchors={anchorsForParagraph(alert.bodyParagraphs.length)}
+                      activeAnchorId={activeAnchorId}
+                      onHighlightClick={handleAnchorClick}
+                      registerAnchorRef={registerAnchorRef}
+                      style={{ margin: '0 0 20px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1f1d25', letterSpacing: '0.17px' }}
+                    />
 
                     {featuredOffer && template && hasBackgrounds && (
                       <div style={{ marginBottom: 16 }}>
@@ -512,11 +506,21 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     )}
 
                     {previewOffer && template && hasBackgrounds ? (
-                      <div style={{
-                        width: '100%', height: '100%', maxWidth: 575, maxHeight: 575,
-                        position: 'relative', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
-                      }}>
+                      <div
+                        onClick={handleAssetClick}
+                        style={{
+                          width: '100%', height: '100%', maxWidth: 575, maxHeight: 575, cursor: 'crosshair',
+                          position: 'relative', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
+                        }}
+                      >
                         <FilledTemplatePreview template={template} offer={previewOffer} backgroundUrl={bgFor(previewOffer)!.url} />
+                        <AssetPinOverlay
+                          pins={assetAnchors}
+                          pendingPin={pendingAssetPin}
+                          activeAnchorId={activeAnchorId}
+                          onPinClick={handleAnchorClick}
+                          registerAnchorRef={registerAnchorRef}
+                        />
                       </div>
                     ) : (
                       <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>No assets to preview.</span>
@@ -593,13 +597,19 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 key={activeTab}
                 trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
                 status={activeStatus}
-                comment={activeComment}
+                comments={activeComments}
                 actorName={activeActivity?.actorName}
                 timestamp={activeActivity?.timestamp}
                 locked={isSent}
                 disabled={isArchived}
-                onApprove={(input) => reviewAlertTrack(alert.id, activeTab, 'approved', input)}
-                onReject={(input) => reviewAlertTrack(alert.id, activeTab, 'rejected', input)}
+                activeAnchorId={activeAnchorId}
+                pendingAnchor={pendingAnchor}
+                onCancelAnchor={() => setPendingAnchor(undefined)}
+                registerCommentRef={registerCommentRef}
+                onJumpToAnchor={jumpToAnchorFromComment}
+                onSendComment={handleSendComment}
+                onApprove={handleApprove}
+                onReject={handleReject}
                 onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
                 onRebuild={handleRebuild}
               />
@@ -633,6 +643,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           )}
         </div>
       </div>
+
+      {floatingSelection && (
+        <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartEmailComment} />
+      )}
 
       <ReviewModeToggle mode={reviewMode} onChange={setReviewMode} />
     </>,

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, ReviewStatus } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, ReviewStatus } from '../data/types';
 
 /** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
@@ -95,6 +95,13 @@ interface ProjectContextValue {
    * once the alert has been sent.
    */
   reviewAlertTrack: (id: string, track: 'email' | 'assets', decision: Exclude<ReviewStatus, 'pending'>, input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => void;
+  /**
+   * Freeform, standalone commenting: always appends a new comment to the track's list — never
+   * finds-and-overwrites like `reviewAlertTrack` — so comments can accumulate independently of
+   * (and freely after) an Approve/Request Changes decision. Optionally anchored to a highlighted
+   * range of email text or a pinned point on an asset creative.
+   */
+  addAlertComment: (id: string, track: 'email' | 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor }) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -332,6 +339,28 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return track === 'email'
         ? { ...a, emailStatus: decision, status: deriveAlertStatus(decision, a.assetsStatus), activity, comments }
         : { ...a, assetsStatus: decision, status: deriveAlertStatus(a.emailStatus, decision), activity, comments };
+    }));
+  }, []);
+
+  const addAlertComment = useCallback((
+    id: string,
+    track: 'email' | 'assets',
+    input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor },
+  ) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent' || !input.text.trim()) return a;
+      const timestamp = Date.now();
+      const comment: AlertComment = {
+        id: `alert-comment-${id}-${track}-${timestamp}`,
+        track,
+        text: input.text.trim(),
+        mentionedNames: input.mentionedNames,
+        authorName: CURRENT_USER.name,
+        authorAvatar: CURRENT_USER.avatarUrl,
+        timestamp,
+        anchor: input.anchor,
+      };
+      return { ...a, comments: [...(a.comments ?? []), comment] };
     }));
   }, []);
 
@@ -656,7 +685,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack,
+      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment,
     }}>
       {children}
     </ProjectContext.Provider>

@@ -37,7 +37,7 @@ function splitMentionText(text: string, mentionedNames: string[]): { text: strin
   }));
 }
 
-const MentionText = ({ text, mentionedNames }: { text: string; mentionedNames: string[] }) => (
+export const MentionText = ({ text, mentionedNames }: { text: string; mentionedNames: string[] }) => (
   <>
     {splitMentionText(text, mentionedNames).map((part, i) => (
       part.isMention
@@ -54,6 +54,8 @@ export interface MentionCommentComposerProps {
   /** Omit to render the field without a dismiss affordance — e.g. when it's a persistent part of a panel rather than a toggleable composer. */
   onClose?: () => void;
   disabled?: boolean;
+  /** Focuses the field on mount — used when a highlight/pin interaction opens this composer for a new anchored comment. */
+  autoFocus?: boolean;
 }
 
 /**
@@ -86,7 +88,7 @@ const EditableArea = memo(function EditableArea({
 });
 
 /** Free-text comment box with Figma-style "@" tagging: typing @ opens a teammate picker; picking one inserts a non-editable purple mention chip. */
-export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled }: MentionCommentComposerProps) => {
+export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled, autoFocus }: MentionCommentComposerProps) => {
   const editableRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(!initialText);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -118,6 +120,10 @@ export const MentionCommentComposer = ({ initialText, initialMentionedNames, onC
   };
 
   useEffect(() => { emitChange(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- report the seeded value once on mount
+
+  useEffect(() => {
+    if (autoFocus) editableRef.current?.focus();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- focus once on mount only
 
   const getCaretTextBefore = (): string | null => {
     const sel = window.getSelection();
