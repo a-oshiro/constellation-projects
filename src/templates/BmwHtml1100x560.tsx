@@ -5,7 +5,7 @@ import { getPrimaryLeaseData } from '../data/types';
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 const BmwLogo = ({ size }: { size: number }) => (
-  <img src={bmwLogoSrc} alt="BMW" width={size} height={size} style={{ objectFit: 'contain' }} />
+  <img src={bmwLogoSrc} alt="BMW" width={size} height={size} draggable={false} style={{ objectFit: 'contain', userSelect: 'none' }} />
 );
 
 // ── Template constants ────────────────────────────────────────────────────────
@@ -193,7 +193,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
         <img
           src={backgroundUrl}
           alt=""
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          draggable={false}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', userSelect: 'none' }}
         />
 
         {/* Vehicle title — top left */}
@@ -230,7 +231,8 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
           <img
             src={offer.imageUrl}
             alt={offer.vehicleName}
-            style={{ width: '100%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.35))' }}
+            draggable={false}
+            style={{ width: '100%', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.35))', userSelect: 'none' }}
           />
         </div>
 

@@ -22,6 +22,8 @@ interface OfferDetailsProps {
   offerType: OfferTypeData;
   onClose: () => void;
   onSave: (offerId: string, offerTypeId: string, draft: Record<string, unknown>) => void;
+  /** Suppresses the built-in title row (offer type name) — for callers that provide their own outer title/close affordance. */
+  hideHeader?: boolean;
 }
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
@@ -542,7 +544,7 @@ function CustomForm({ data, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const OfferDetails = ({ offer, offerType, onClose, onSave }: OfferDetailsProps) => {
+export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: OfferDetailsProps) => {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
@@ -575,17 +577,19 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave }: OfferDetails
       }}
     >
       {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-          {offerType.type}
-        </span>
-        <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>
-          <Close style={{ fontSize: 18, color: '#686576' }} />
-        </IconButton>
-      </div>
+      {!hideHeader && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+            {offerType.type}
+          </span>
+          <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>
+            <Close style={{ fontSize: 18, color: '#686576' }} />
+          </IconButton>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '16px 16px 8px' }}>

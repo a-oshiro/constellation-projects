@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, ReviewStatus } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
 
 /** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
@@ -17,6 +17,19 @@ function deriveAlertStatus(emailStatus: ReviewStatus, assetsStatus: ReviewStatus
   if (emailStatus === 'rejected' || assetsStatus === 'rejected') return 'rejected';
   if (emailStatus === 'approved' && assetsStatus === 'approved') return 'approved';
   return 'generated';
+}
+
+/** The offers whose assets an alert covers — the featured offer plus every "other" offer shown in the secondary grid. */
+function offerIdsFor(alert: Alert): string[] {
+  return [alert.featuredOfferId, ...alert.otherOfferIds];
+}
+
+/** Rolls up per-offer asset review state into the single `assetsStatus` scalar every other reader (Kanban, table, filters) still consumes: any rejection wins, else approved once every offer is approved, else pending. */
+function computeAssetsRollup(offerIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
+  const resolved = offerIds.map((id) => reviews?.[id]?.status ?? 'pending');
+  if (resolved.some((s) => s === 'rejected')) return 'rejected';
+  if (resolved.length > 0 && resolved.every((s) => s === 'approved')) return 'approved';
+  return 'pending';
 }
 
 export interface PendingOfferChange {
@@ -83,6 +96,8 @@ interface ProjectContextValue {
   setEmailReview: (id: string, status: ReviewStatus) => void;
   /** Sets the assets track's review state independently, recomputing the overall status. No-ops once the alert has been sent. */
   setAssetsReview: (id: string, status: ReviewStatus) => void;
+  /** Sets one offer's asset review state independently of the others, recomputing the `assetsStatus` rollup. No-ops once the alert has been sent. */
+  setOfferAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
   /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Rejected. */
   rebuildAlert: (id: string) => void;
   /** Marks a fully-approved alert as Sent. Only valid while the alert is Approved. */
@@ -101,9 +116,13 @@ interface ProjectContextValue {
    * (and freely after) an Approve/Request Changes decision. Optionally anchored to a highlighted
    * range of email text or a pinned point on an asset creative.
    */
-  addAlertComment: (id: string, track: 'email' | 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor }) => void;
+  addAlertComment: (id: string, track: 'email' | 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor; parentCommentId?: string }) => void;
   /** Toggles one comment's resolved state. */
   toggleAlertCommentResolved: (id: string, commentId: string) => void;
+  /** Permanently removes one comment (and any replies left on it). */
+  deleteAlertComment: (id: string, commentId: string) => void;
+  /** Toggles the current user's reaction with the given emoji on one comment. */
+  toggleAlertCommentReaction: (id: string, commentId: string, emoji: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -228,6 +247,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           status: 'generated',
           emailStatus: 'pending',
           assetsStatus: 'pending',
+          offerReviews: {},
           createdAt: timestamp, // Regenerating refreshes the "Created ... ago" clock.
           activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
         };
@@ -245,6 +265,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ...a,
         emailStatus: reviewStatus,
         assetsStatus: reviewStatus,
+        offerReviews: Object.fromEntries(offerIdsFor(a).map((oid) => [oid, { status: reviewStatus, actorName: CURRENT_USER.name, timestamp }])),
         status: newStatus,
         activity: [...a.activity, ...entries],
       };
@@ -273,6 +294,25 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  /** Sets one offer's asset review state independently of the others, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
+  const setOfferAssetReview = useCallback((id: string, offerId: string, reviewStatus: ReviewStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const timestamp = Date.now();
+      const offerReviews = { ...(a.offerReviews ?? {}) };
+      if (reviewStatus === 'pending') {
+        delete offerReviews[offerId];
+      } else {
+        offerReviews[offerId] = { status: reviewStatus, actorName: CURRENT_USER.name, timestamp };
+      }
+      const assetsStatus = computeAssetsRollup(offerIdsFor(a), offerReviews);
+      const activity = reviewStatus === 'pending'
+        ? a.activity
+        : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp)];
+      return { ...a, offerReviews, assetsStatus, status: deriveAlertStatus(a.emailStatus, assetsStatus), activity };
+    }));
+  }, []);
+
   const rebuildAlert = useCallback((id: string) => {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || a.status !== 'rejected') return a;
@@ -282,6 +322,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         status: 'generated',
         emailStatus: 'pending',
         assetsStatus: 'pending',
+        offerReviews: {},
         createdAt: timestamp,
         activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
       };
@@ -347,7 +388,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const addAlertComment = useCallback((
     id: string,
     track: 'email' | 'assets',
-    input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor },
+    input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor; parentCommentId?: string },
   ) => {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || a.status === 'sent' || !input.text.trim()) return a;
@@ -361,6 +402,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         authorAvatar: CURRENT_USER.avatarUrl,
         timestamp,
         anchor: input.anchor,
+        parentCommentId: input.parentCommentId,
       };
       return { ...a, comments: [...(a.comments ?? []), comment] };
     }));
@@ -372,6 +414,34 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return {
         ...a,
         comments: (a.comments ?? []).map((c) => (c.id === commentId ? { ...c, resolved: !c.resolved } : c)),
+      };
+    }));
+  }, []);
+
+  const deleteAlertComment = useCallback((id: string, commentId: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      // Deleting a top-level comment also removes any replies left on it.
+      return { ...a, comments: (a.comments ?? []).filter((c) => c.id !== commentId && c.parentCommentId !== commentId) };
+    }));
+  }, []);
+
+  const toggleAlertCommentReaction = useCallback((id: string, commentId: string, emoji: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      return {
+        ...a,
+        comments: (a.comments ?? []).map((c) => {
+          if (c.id !== commentId) return c;
+          const reactors = c.reactions?.[emoji] ?? [];
+          const alreadyReacted = reactors.includes(CURRENT_USER.name);
+          const nextReactors = alreadyReacted
+            ? reactors.filter((name) => name !== CURRENT_USER.name)
+            : [...reactors, CURRENT_USER.name];
+          const nextReactions = { ...c.reactions };
+          if (nextReactors.length > 0) nextReactions[emoji] = nextReactors; else delete nextReactions[emoji];
+          return { ...c, reactions: nextReactions };
+        }),
       };
     }));
   }, []);
@@ -697,7 +767,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved,
+      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>

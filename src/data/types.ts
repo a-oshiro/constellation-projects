@@ -261,10 +261,16 @@ export interface EmailCommentAnchor {
 /** Percentage-based point on one asset's preview image, anchoring a comment to a pin. */
 export interface AssetCommentAnchor {
   kind: 'asset';
-  /** The offer whose creative this pin belongs to — pins only render while that offer is the active carousel item. */
+  /** The offer whose creative this pin/highlight belongs to. */
   offerId: string;
+  /** Pin center (no width/height) or the highlighted rect's top-left corner (with width/height). */
   xPct: number;
   yPct: number;
+  /** Present only for a highlighted region (vs. a pinned point): rect size as % of the asset's rendered box. */
+  widthPct?: number;
+  heightPct?: number;
+  /** Selected text, captured only for highlighted-region anchors. */
+  quotedText?: string;
 }
 
 export type AlertCommentAnchor = EmailCommentAnchor | AssetCommentAnchor;
@@ -286,6 +292,17 @@ export interface AlertComment {
   anchor?: AlertCommentAnchor;
   /** Set once a reviewer marks the comment resolved — dims/strikes its text and hides it from the list unless "Show Resolved" is on. */
   resolved?: boolean;
+  /** Present only on a reply — the id of the top-level comment it replies to. Replies aren't independently anchored or resolvable; they inherit their parent's visibility. */
+  parentCommentId?: string;
+  /** Emoji reactions, keyed by emoji, each holding the names of everyone who reacted with it. */
+  reactions?: Record<string, string[]>;
+}
+
+/** One offer's individual asset-approval decision — who made it and when, so the asset approval widget and per-asset status card can show "by {actorName} • {relative time}". Absence from `Alert.offerReviews` means the offer hasn't been reviewed yet ('pending'). */
+export interface OfferReviewEntry {
+  status: Exclude<ReviewStatus, 'pending'>;
+  actorName: string;
+  timestamp: number;
 }
 
 /** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */
@@ -303,8 +320,10 @@ export interface Alert {
   status: AlertStatus;
   /** Independent review state of the email content — approved/rejected in parallel with `assetsStatus`. */
   emailStatus: ReviewStatus;
-  /** Independent review state of the assets — approved/rejected in parallel with `emailStatus`. */
+  /** Rollup of `offerReviews` — any rejection wins, else approved once every offer is approved, else pending. Kept as a stored field (recomputed whenever `offerReviews` changes) so existing readers (Kanban, table, filters) don't need to know about per-offer status. */
   assetsStatus: ReviewStatus;
+  /** Per-offer (featuredOfferId + otherOfferIds) review state, keyed by offer id. Absent entries default to 'pending'. */
+  offerReviews?: Record<string, OfferReviewEntry>;
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];

@@ -19,6 +19,8 @@ interface VehicleInfoProps {
   offer: Offer;
   onClose: () => void;
   onSave: (id: string, updated: Partial<Offer>) => void;
+  /** Suppresses the built-in "Vehicle Info" title row — for callers (e.g. the alert dialog's tabbed offer editor) that provide their own outer title/close affordance. */
+  hideHeader?: boolean;
 }
 
 const autocompleteSx = {
@@ -42,7 +44,7 @@ const SectionLabel = ({ text }: { text: string }) => (
   </div>
 );
 
-export const VehicleInfo = ({ offer, onClose, onSave }: VehicleInfoProps) => {
+export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoProps) => {
   const [draft, setDraft] = useState<Partial<Offer>>({});
 
   useEffect(() => {
@@ -79,23 +81,25 @@ export const VehicleInfo = ({ offer, onClose, onSave }: VehicleInfoProps) => {
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: '1px solid #f0f0f0',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-          Vehicle Info
-        </span>
-        <IconButton size="small" onClick={onClose}>
-          <Close style={{ fontSize: 18 }} />
-        </IconButton>
-      </div>
+      {!hideHeader && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            borderBottom: '1px solid #f0f0f0',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+            Vehicle Info
+          </span>
+          <IconButton size="small" onClick={onClose}>
+            <Close style={{ fontSize: 18 }} />
+          </IconButton>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: 16 }}>

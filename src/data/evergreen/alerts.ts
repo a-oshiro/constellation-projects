@@ -31,6 +31,10 @@ const ALL_OFFER_IDS = [
 
 const othersExcept = (featuredId: string) => ALL_OFFER_IDS.filter((id) => id !== featuredId);
 
+/** Fills every given offer id with the same reviewer/timestamp — mirrors the pre-per-asset mock data's single `assetsStatus` scalar so the new AssetApprovalWidget has approver names/timestamps to show. */
+const allOffersReviewed = (offerIds: string[], status: Exclude<ReviewStatus, 'pending'>, actor: { actorName: string }, timestamp: number) =>
+  Object.fromEntries(offerIds.map((id) => [id, { status, actorName: actor.actorName, timestamp }]));
+
 const teammate = (name: string) => MOCK_TEAMMATES.find((t) => t.name === name)!;
 
 /** Demo comment shown on 'sea-alert-competition-beating-x3-lease' — matches the Figma "Add Comment" mockup. */
@@ -102,6 +106,9 @@ function makeArchivedAlert(spec: ArchivedMockSpec): Alert {
     status: spec.status,
     emailStatus: spec.emailStatus,
     assetsStatus: spec.assetsStatus,
+    offerReviews: spec.assetsStatus === 'pending'
+      ? undefined
+      : allOffersReviewed([spec.featuredOfferId, ...othersExcept(spec.featuredOfferId)], spec.assetsStatus, JOHN_DOE, createdAt + 2 * DAY),
     createdAt,
     activity,
     archivedAt,
@@ -202,6 +209,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'approved',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed([...OTHER_YMMT_IDS, 'sea-offer-x3-30xdrive', 'sea-offer-x1-xdrive28i'], 'approved', JOHN_DOE, now - 4 * DAY),
     createdAt: now - 10 * DAY,
     activity: [
       { id: 'act-3-generated', action: 'generated', timestamp: now - 10 * DAY, ...AI_AGENT },
@@ -225,6 +233,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'sent',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed([...OTHER_YMMT_IDS, 'sea-offer-x3-30xdrive', 'sea-offer-x1-xdrive28i'], 'approved', JOHN_DOE, now - 5 * DAY),
     createdAt: now - 16 * DAY,
     activity: [
       { id: 'act-4-generated', action: 'generated', timestamp: now - 16 * DAY, ...AI_AGENT },
@@ -253,6 +262,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'generated',
     emailStatus: 'pending',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed(ALL_OFFER_IDS, 'approved', JOHN_DOE, now - 1 * DAY),
     createdAt: now - 3 * DAY,
     activity: [
       { id: 'act-5-generated', action: 'generated', timestamp: now - 3 * DAY, ...AI_AGENT },
@@ -320,6 +330,12 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'rejected',
     emailStatus: 'approved',
     assetsStatus: 'rejected',
+    // Mixed per-offer outcome (one rejected, the rest approved) so the AssetApprovalWidget's
+    // "Changes requested for 1 asset" / scroll-to-first-rejected / "Approve Changes" paths have something to show.
+    offerReviews: {
+      ...allOffersReviewed(othersExcept('sea-offer-m340i-sedan'), 'approved', JOHN_DOE, now - 6 * DAY),
+      ...allOffersReviewed(['sea-offer-m340i-sedan'], 'rejected', JOHN_DOE, now - 6 * DAY),
+    },
     createdAt: now - 20 * DAY,
     activity: [
       { id: 'act-8-generated', action: 'generated', timestamp: now - 20 * DAY, ...AI_AGENT },
@@ -344,6 +360,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'approved',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed(['sea-offer-x5-xdrive50e'], 'approved', JOHN_DOE, now - 2 * DAY),
     createdAt: now - 12 * DAY,
     activity: [
       { id: 'act-9-generated', action: 'generated', timestamp: now - 12 * DAY, ...AI_AGENT },
@@ -368,6 +385,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'approved',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed(ALL_OFFER_IDS, 'approved', JOHN_DOE, now - 8 * DAY),
     createdAt: now - 25 * DAY,
     activity: [
       { id: 'act-10-generated', action: 'generated', timestamp: now - 25 * DAY, ...AI_AGENT },
@@ -392,6 +410,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'sent',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed(ALL_OFFER_IDS, 'approved', JOHN_DOE, now - 11 * DAY),
     createdAt: now - 28 * DAY,
     activity: [
       { id: 'act-11-generated', action: 'generated', timestamp: now - 28 * DAY, ...AI_AGENT },
@@ -417,6 +436,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     status: 'sent',
     emailStatus: 'approved',
     assetsStatus: 'approved',
+    offerReviews: allOffersReviewed(['sea-offer-m340i-sedan'], 'approved', JOHN_DOE, now - 9 * DAY),
     createdAt: now - 22 * DAY,
     activity: [
       { id: 'act-12-generated', action: 'generated', timestamp: now - 22 * DAY, ...AI_AGENT },
