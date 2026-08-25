@@ -22,9 +22,11 @@ interface AlertElementAccordionProps {
   children: React.ReactNode;
 }
 
+/** Body renders above the header (rather than below) so the accordion expands upward, toward the top of the panel, instead of pushing content below it further down. */
 const AlertElementAccordion = ({ title, expanded, onToggle, onViewTask, children }: AlertElementAccordionProps) => (
-  <div style={{ background: '#f4f5f6', borderRadius: 8, overflow: 'hidden' }}>
-    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
+  <div style={{ background: '#f4f5f6', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    {expanded && <div style={{ padding: '12px 12px 0' }}>{children}</div>}
+    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', flexShrink: 0 }}>
       <span style={{ flex: 1, fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.17px' }}>
         {title}
       </span>
@@ -38,7 +40,6 @@ const AlertElementAccordion = ({ title, expanded, onToggle, onViewTask, children
         {expanded ? <ExpandLess style={{ fontSize: 20, color: '#686576' }} /> : <ExpandMore style={{ fontSize: 20, color: '#686576' }} />}
       </IconButton>
     </div>
-    {expanded && <div style={{ padding: '0 12px 12px' }}>{children}</div>}
   </div>
 );
 
@@ -89,9 +90,9 @@ export interface AlertElementsSectionProps {
 
 export const AlertElementsSection = ({ rowOffers, templates, styleBackgrounds, onClose }: AlertElementsSectionProps) => {
   const navigate = useNavigate();
-  const [expanded, setExpanded] = useState<Record<AccordionKey, boolean>>({ offers: false, templates: false, styles: false });
+  const [openKey, setOpenKey] = useState<AccordionKey | null>(null);
 
-  const toggle = (key: AccordionKey) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggle = (key: AccordionKey) => setOpenKey((prev) => (prev === key ? null : key));
 
   const handleViewTask = (route: string) => { navigate(route); onClose(); };
   const handleOfferLinkOut = (offer: Offer) => {
@@ -107,7 +108,7 @@ export const AlertElementsSection = ({ rowOffers, templates, styleBackgrounds, o
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <AlertElementAccordion
         title="Offers"
-        expanded={expanded.offers}
+        expanded={openKey === 'offers'}
         onToggle={() => toggle('offers')}
         onViewTask={() => handleViewTask('/offers')}
       >
@@ -125,7 +126,7 @@ export const AlertElementsSection = ({ rowOffers, templates, styleBackgrounds, o
 
       <AlertElementAccordion
         title="Templates"
-        expanded={expanded.templates}
+        expanded={openKey === 'templates'}
         onToggle={() => toggle('templates')}
         onViewTask={() => handleViewTask('/templates')}
       >
@@ -146,7 +147,7 @@ export const AlertElementsSection = ({ rowOffers, templates, styleBackgrounds, o
 
       <AlertElementAccordion
         title="Styles"
-        expanded={expanded.styles}
+        expanded={openKey === 'styles'}
         onToggle={() => toggle('styles')}
         onViewTask={() => handleViewTask('/theme-and-logos')}
       >

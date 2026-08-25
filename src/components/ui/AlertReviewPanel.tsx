@@ -4,7 +4,7 @@ import { Close, Check, Replay, Cancel, CheckCircle, CheckCircleOutlineOutlined, 
 import type { AlertComment, AlertCommentAnchor, EmailCommentAnchor, AssetCommentAnchor, ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
-import { MentionCommentComposer, MentionText } from './AlertReviewFooterFlow';
+import { MentionCommentComposer, MentionText } from './AlertCommentComposer';
 
 /**
  * Side Panel review UI: a per-track list of freeform and anchored (highlighted-text / pinned-asset)

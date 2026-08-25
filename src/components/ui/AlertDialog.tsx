@@ -11,7 +11,6 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { formatReviewerName } from '../../utils/alertReview';
-import { FooterReviewControls } from './AlertReviewFooterFlow';
 import { ReviewPanel, HighlightableParagraph, FloatingCommentButton, AssetPinOverlay, PENDING_ANCHOR_ID } from './AlertReviewPanel';
 import { AlertElementsSection } from './AlertElementsSidebar';
 
@@ -129,60 +128,16 @@ const AssetToolbarRow = () => (
   </div>
 );
 
-interface ReviewModeToggleProps {
-  mode: 'panel' | 'footer';
-  onChange: (mode: 'panel' | 'footer') => void;
-}
-
-/** Floating widget (bottom-left of the viewport) for A/B-ing the two review UIs — the existing right side panel vs. the newer main-pane footer flow. */
-const ReviewModeToggle = ({ mode, onChange }: ReviewModeToggleProps) => {
-  const segmentBase: React.CSSProperties = {
-    border: 'none', cursor: 'pointer', borderRadius: 100, padding: '6px 12px', fontSize: 12,
-    fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.4px', whiteSpace: 'nowrap',
-  };
-
-  return (
-    <div
-      style={{
-        position: 'fixed', left: 24, bottom: 24, zIndex: 100010,
-        background: '#ffffff', borderRadius: 12, padding: 8,
-        boxShadow: '0px 8px 24px rgba(0,0,0,0.18), 0px 2px 8px rgba(0,0,0,0.12)',
-        display: 'flex', flexDirection: 'column', gap: 6,
-      }}
-    >
-      <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#9c99a9', letterSpacing: '0.6px', paddingLeft: 4 }}>
-        REVIEW LAYOUT
-      </span>
-      <div style={{ display: 'flex', background: '#f0f2f4', borderRadius: 100, padding: 3, gap: 2 }}>
-        <button
-          onClick={() => onChange('panel')}
-          style={{ ...segmentBase, background: mode === 'panel' ? '#473bab' : 'transparent', color: mode === 'panel' ? '#ffffff' : '#686576' }}
-        >
-          Side Panel
-        </button>
-        <button
-          onClick={() => onChange('footer')}
-          style={{ ...segmentBase, background: mode === 'footer' ? '#473bab' : 'transparent', color: mode === 'footer' ? '#ffffff' : '#686576' }}
-        >
-          Footer
-        </button>
-      </div>
-    </div>
-  );
-};
-
 interface AlertDialogProps {
   alert: Alert;
   onClose: () => void;
 }
 
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
-  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved } = useProject();
+  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, addAlertComment, toggleAlertCommentResolved } = useProject();
   const [activeTab, setActiveTab] = useState<'email' | 'assets'>('email');
   const [showHistory, setShowHistory] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
-  /** Lets the two review UIs (right panel vs. main-pane footer) be toggled and compared side by side. */
-  const [reviewMode, setReviewMode] = useState<'panel' | 'footer'>('panel');
 
   // Side Panel commenting: a highlight/pin the user just created but hasn't sent a comment for yet,
   // and the id of a comment whose highlight/pin was just clicked (or vice versa) for a brief jump/emphasis.
@@ -264,9 +219,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const activeStatus = activeTab === 'email' ? alert.emailStatus : alert.assetsStatus;
   const activeActivity = activeTab === 'email' ? emailActivity : assetsActivity;
-  // Old-shape single-comment lookup, kept only to feed the untouched Footer flow (`FooterReviewControls`).
-  const activeComment = (alert.comments ?? []).find((c) => c.track === activeTab);
-  // New multi-comment list (oldest -> newest) powering the Side Panel's comment thread.
+  // Multi-comment list (oldest -> newest) powering the Side Panel's comment thread.
   const activeComments = (alert.comments ?? []).filter((c) => c.track === activeTab);
 
   const headerStatusText = activeStatus === 'pending' || !activeActivity
@@ -397,9 +350,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
             {/* Approvals sidebar */}
-            <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box', overflowY: 'auto' }}>
-              <span style={{ margin: '0 0 8px', padding: '0 8px', fontSize: 16, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px' }}>Approvals</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box', minHeight: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
                 <ApprovalListItem
                   label="Email Content"
                   status={alert.emailStatus}
@@ -418,8 +370,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 />
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <span style={{ display: 'block', margin: '0 0 8px', padding: '0 8px', fontSize: 10, fontWeight: 700, color: '#9c99a9', letterSpacing: '0.6px', fontFamily: 'Roboto, sans-serif' }}>
+              {/* Spacer: keeps the Alert Elements accordions anchored to the bottom edge when collapsed,
+                  and guarantees at least 40px of clearance above as they expand upward. */}
+              <div style={{ flex: '1 1 0%', minHeight: 40 }} />
+
+              <div style={{ flexShrink: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <span style={{ display: 'block', flexShrink: 0, margin: '0 0 8px', padding: '0 8px', fontSize: 10, fontWeight: 700, color: '#9c99a9', letterSpacing: '0.6px', fontFamily: 'Roboto, sans-serif' }}>
                   ALERT ELEMENTS
                 </span>
                 <AlertElementsSection
@@ -573,26 +529,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   <AssetToolbarRow />
                 </div>
               )}
-
-              {reviewMode === 'footer' && (
-                <FooterReviewControls
-                  key={activeTab}
-                  trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
-                  status={activeStatus}
-                  comment={activeComment}
-                  actorName={activeActivity?.actorName}
-                  timestamp={activeActivity?.timestamp}
-                  locked={isSent}
-                  disabled={isArchived}
-                  onApprove={(input) => reviewAlertTrack(alert.id, activeTab, 'approved', input)}
-                  onReject={(input) => reviewAlertTrack(alert.id, activeTab, 'rejected', input)}
-                  onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
-                  onRebuild={handleRebuild}
-                />
-              )}
             </div>
 
-            {/* Right panel — the active track's Review panel (panel mode only), or Activity History, mutually exclusive */}
+            {/* Right panel — the active track's Review panel, or Activity History, mutually exclusive */}
             {showHistory ? (
               <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -622,7 +561,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   ))}
                 </div>
               </div>
-            ) : reviewMode === 'panel' ? (
+            ) : (
               <ReviewPanel
                 key={activeTab}
                 trackLabel={activeTab === 'email' ? 'Email' : 'Assets'}
@@ -644,7 +583,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 onUndo={() => (activeTab === 'email' ? setEmailReview(alert.id, 'pending') : setAssetsReview(alert.id, 'pending'))}
                 onRebuild={handleRebuild}
               />
-            ) : null}
+            )}
           </div>
 
           {/* Combined footer — appears once both halves are approved, offering the final Send action */}
@@ -678,8 +617,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       {floatingSelection && (
         <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartEmailComment} />
       )}
-
-      <ReviewModeToggle mode={reviewMode} onChange={setReviewMode} />
     </>,
     document.body,
   );
