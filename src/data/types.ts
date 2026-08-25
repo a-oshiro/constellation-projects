@@ -284,6 +284,8 @@ export interface AlertComment {
   editedAt?: number;
   /** Present only for comments created via highlight-to-comment (email) or pin-to-comment (assets); absent for plain composer comments. */
   anchor?: AlertCommentAnchor;
+  /** Set once a reviewer marks the comment resolved — dims/strikes its text and hides it from the list unless "Show Resolved" is on. */
+  resolved?: boolean;
 }
 
 /** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */

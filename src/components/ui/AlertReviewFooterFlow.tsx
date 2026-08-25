@@ -56,6 +56,8 @@ export interface MentionCommentComposerProps {
   disabled?: boolean;
   /** Focuses the field on mount — used when a highlight/pin interaction opens this composer for a new anchored comment. */
   autoFocus?: boolean;
+  /** Initial height of the editable area in px — grows with content beyond that, same as today. Defaults to a single line. */
+  minHeight?: number;
 }
 
 /**
@@ -66,13 +68,14 @@ export interface MentionCommentComposerProps {
  * cause this component to re-render.
  */
 const EditableArea = memo(function EditableArea({
-  editableRef, initialHtml, disabled, onInput, onKeyDown,
+  editableRef, initialHtml, disabled, onInput, onKeyDown, minHeight,
 }: {
   editableRef: React.RefObject<HTMLDivElement | null>;
   initialHtml: string;
   disabled?: boolean;
   onInput: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  minHeight?: number;
 }) {
   return (
     <div
@@ -82,13 +85,13 @@ const EditableArea = memo(function EditableArea({
       onInput={onInput}
       onKeyDown={onKeyDown}
       dangerouslySetInnerHTML={{ __html: initialHtml }}
-      style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5, outline: 'none', minHeight: 21, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+      style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5, outline: 'none', minHeight: minHeight ?? 21, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
     />
   );
 });
 
 /** Free-text comment box with Figma-style "@" tagging: typing @ opens a teammate picker; picking one inserts a non-editable purple mention chip. */
-export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled, autoFocus }: MentionCommentComposerProps) => {
+export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled, autoFocus, minHeight }: MentionCommentComposerProps) => {
   const editableRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(!initialText);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -217,6 +220,7 @@ export const MentionCommentComposer = ({ initialText, initialMentionedNames, onC
           disabled={disabled}
           onInput={stableOnInput}
           onKeyDown={stableOnKeyDown}
+          minHeight={minHeight}
         />
         {mentionQuery !== null && filteredTeammates.length > 0 && (
           <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, boxShadow: '0px 4px 16px rgba(0,0,0,0.16)', zIndex: 10, minWidth: 200, overflow: 'hidden' }}>

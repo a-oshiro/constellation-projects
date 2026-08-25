@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Avatar } from '@mui/material';
-import { Close, Check, Replay, Cancel, CheckCircle, AddComment, ArrowUpward } from '@mui/icons-material';
+import { Close, Check, Replay, Cancel, CheckCircle, CheckCircleOutlineOutlined, AddComment, ArrowUpward, Visibility, VisibilityOff } from '@mui/icons-material';
 import type { AlertComment, AlertCommentAnchor, EmailCommentAnchor, AssetCommentAnchor, ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
@@ -24,29 +24,45 @@ interface CommentListItemProps {
   comment: AlertComment;
   isActive: boolean;
   onJumpToAnchor?: () => void;
+  onToggleResolved: () => void;
   registerRef: (el: HTMLDivElement | null) => void;
 }
 
-/** One posted comment: avatar, author, relative time, @mention-highlighted body. Clickable (and briefly emphasized) when it's anchored to a highlight or pin. */
-const CommentListItem = ({ comment, isActive, onJumpToAnchor, registerRef }: CommentListItemProps) => {
+/** One posted comment: avatar, author, relative time, @mention-highlighted body, and a resolve toggle in the top-right corner. Clickable (and briefly emphasized) when it's anchored to a highlight or pin. */
+const CommentListItem = ({ comment, isActive, onJumpToAnchor, onToggleResolved, registerRef }: CommentListItemProps) => {
   const clickable = !!onJumpToAnchor;
+  const resolved = !!comment.resolved;
   return (
     <div
       ref={registerRef}
       onClick={onJumpToAnchor}
       style={{
-        display: 'flex', flexDirection: 'column', gap: 4, padding: 8, borderRadius: 8,
+        position: 'relative', display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 32px 8px 8px', borderRadius: 8,
         cursor: clickable ? 'pointer' : 'default',
         background: isActive ? 'rgba(99,86,225,0.08)' : 'transparent',
         transition: 'background 0.3s',
       }}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleResolved(); }}
+        title={resolved ? 'Mark as unresolved' : 'Mark as resolved'}
+        style={{
+          position: 'absolute', top: 6, right: 6, display: 'flex', border: 'none', background: 'none',
+          padding: 2, cursor: 'pointer', color: resolved ? '#4caf50' : '#9c99a9',
+        }}
+      >
+        {resolved ? <CheckCircle style={{ fontSize: 18 }} /> : <CheckCircleOutlineOutlined style={{ fontSize: 18 }} />}
+      </button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Avatar src={comment.authorAvatar} sx={{ width: 24, height: 24 }} />
         <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>{comment.authorName}</span>
         <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9' }}>{formatRelativeTime(comment.timestamp)}</span>
       </div>
-      <p style={{ margin: 0, paddingLeft: 32, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43, whiteSpace: 'pre-wrap' }}>
+      <p style={{
+        margin: 0, paddingLeft: 32, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25',
+        letterSpacing: '0.17px', lineHeight: 1.43, whiteSpace: 'pre-wrap',
+        opacity: resolved ? 0.5 : 1, textDecoration: resolved ? 'line-through' : 'none',
+      }}>
         <MentionText text={comment.text} mentionedNames={comment.mentionedNames} />
       </p>
     </div>
@@ -73,12 +89,18 @@ const CommentComposerBox = ({ onSend, disabled, autoFocus }: CommentComposerBoxP
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div
+      style={{ position: 'relative' }}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSend(); }
+      }}
+    >
       <div style={{ paddingRight: 36 }}>
         <MentionCommentComposer
           key={sendCounter}
           disabled={disabled}
           autoFocus={autoFocus}
+          minHeight={90}
           onChange={(text, mentionedNames) => { draftRef.current = { text, mentionedNames }; }}
         />
       </div>
@@ -140,22 +162,21 @@ interface ApprovedBannerProps {
   onUndo: () => void;
 }
 
-/** Approved-state banner — unchanged styling from the prior single-comment panel; the Figma redesign only covers the rejected state. */
+/** Approved-state banner — Undo shares the top row with the title, mirroring the Changes Requested banner's layout. */
 const ApprovedBanner = ({ actorName, timestamp, locked, disabled, onUndo }: ApprovedBannerProps) => (
-  <div style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 8, background: '#e8f5e9' }}>
-    <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1b5e20' }}>Approved</span>
-      <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>
-        by {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
-      </span>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 12, borderRadius: 8, background: '#e8f5e9' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1b5e20' }}>Approved</span>
+      </div>
       {!locked && (
         <button
           disabled={disabled}
           onClick={onUndo}
           style={{
             background: 'none', border: 'none', padding: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif',
-            fontWeight: 500, color: '#1b5e20', textDecoration: 'underline', marginTop: 2, alignSelf: 'flex-start',
+            fontWeight: 500, color: '#1b5e20', textDecoration: 'underline', flexShrink: 0,
             opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >
@@ -163,6 +184,9 @@ const ApprovedBanner = ({ actorName, timestamp, locked, disabled, onUndo }: Appr
         </button>
       )}
     </div>
+    <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', paddingLeft: 26 }}>
+      by {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
+    </span>
   </div>
 );
 
@@ -181,6 +205,7 @@ export interface ReviewPanelProps {
   onCancelAnchor: () => void;
   registerCommentRef: (id: string, el: HTMLDivElement | null) => void;
   onJumpToAnchor: (comment: AlertComment) => void;
+  onToggleCommentResolved: (commentId: string) => void;
   onSendComment: (text: string, mentionedNames: string[]) => void;
   onApprove: () => void;
   onReject: () => void;
@@ -191,11 +216,19 @@ export interface ReviewPanelProps {
 /** Combined right-side review panel for one track: comment thread (freeform + anchored), a standalone composer, and decoupled Approve/Request Changes/Rebuild actions. */
 export const ReviewPanel = ({
   trackLabel, status, comments, actorName, timestamp, locked, disabled,
-  activeAnchorId, pendingAnchor, onCancelAnchor, registerCommentRef, onJumpToAnchor,
+  activeAnchorId, pendingAnchor, onCancelAnchor, registerCommentRef, onJumpToAnchor, onToggleCommentResolved,
   onSendComment, onApprove, onReject, onUndo, onRebuild,
 }: ReviewPanelProps) => {
   const isPending = status === 'pending';
   const isRejected = status === 'rejected';
+
+  const [showResolved, setShowResolved] = useState(false);
+  // If the comment being jumped to (from its highlight/pin) is resolved and currently hidden, reveal it —
+  // otherwise the jump would land on nothing. Adjusted during render rather than an effect since it only
+  // ever needs one extra render to converge.
+  const activeComment = comments.find((c) => c.id === activeAnchorId);
+  if (activeComment?.resolved && !showResolved) setShowResolved(true);
+  const visibleComments = showResolved ? comments : comments.filter((c) => !c.resolved);
 
   return (
     <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -211,12 +244,26 @@ export const ReviewPanel = ({
 
         {comments.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {comments.map((c) => (
+            <button
+              onClick={() => setShowResolved((v) => !v)}
+              title={showResolved ? 'Hide resolved comments' : 'Show resolved comments'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, alignSelf: 'flex-end', border: 'none',
+                background: showResolved ? 'rgba(99,86,225,0.12)' : 'transparent', borderRadius: 100,
+                padding: '4px 8px', cursor: 'pointer', color: showResolved ? '#473bab' : '#686576',
+                fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+              }}
+            >
+              {showResolved ? <Visibility style={{ fontSize: 16 }} /> : <VisibilityOff style={{ fontSize: 16 }} />}
+              Show Resolved
+            </button>
+            {visibleComments.map((c) => (
               <CommentListItem
                 key={c.id}
                 comment={c}
                 isActive={activeAnchorId === c.id}
                 onJumpToAnchor={c.anchor ? () => onJumpToAnchor(c) : undefined}
+                onToggleResolved={() => onToggleCommentResolved(c.id)}
                 registerRef={(el) => registerCommentRef(c.id, el)}
               />
             ))}
@@ -243,7 +290,6 @@ export const ReviewPanel = ({
             disabled={disabled || locked}
             autoFocus={!!pendingAnchor}
           />
-          <p style={inputHelperStyle}>Use @ to tag teammates in comment. All tagged users will be notified once the review is complete.</p>
         </div>
 
         {isPending && (
@@ -274,16 +320,16 @@ export const ReviewPanel = ({
               onClick={onRebuild}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                border: 'none', borderRadius: 100, padding: '8px 16px', background: '#473bab', color: '#ffffff',
+                borderRadius: 100, padding: '8px 16px', background: '#ffffff', border: '1px solid rgba(71,59,171,0.5)', color: '#473bab',
                 fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.4px',
                 opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
               }}
             >
               <Replay style={{ fontSize: 16 }} />
-              Rebuild {trackLabel} W/ Comments
+              {trackLabel === 'Email' ? 'Refresh Email' : 'Refresh Assets'}
             </button>
             <p style={inputHelperStyle}>
-              The AI Agent will utilize the comments above to rebuild the {trackLabel === 'Email' ? 'email body' : 'assets'}.
+              If any change is not applied automatically, refresh above.
             </p>
           </div>
         )}
@@ -302,6 +348,9 @@ interface HighlightableParagraphProps {
   style?: React.CSSProperties;
 }
 
+/** Sentinel commentId for a highlight the user just made but hasn't sent a comment for yet — rendered highlighted but non-interactive, and removed the moment the pending anchor is cancelled or sent. */
+export const PENDING_ANCHOR_ID = '__pending__';
+
 /** Renders one email-body block (a paragraph or the VIN line) as plain text interleaved with clickable highlighted spans for each comment anchored to it. Tags the element with `data-paragraph-index` so mouseup selection handling can identify which block was selected. */
 export const HighlightableParagraph = ({ text, paragraphIndex, anchors, activeAnchorId, onHighlightClick, registerAnchorRef, style }: HighlightableParagraphProps) => {
   const sorted = [...anchors].sort((a, b) => a.anchor.startOffset - b.anchor.startOffset);
@@ -313,15 +362,16 @@ export const HighlightableParagraph = ({ text, paragraphIndex, anchors, activeAn
     // Skip anchors that no longer line up with the current text (stale offsets) or overlap an already-rendered one.
     if (startOffset < cursor || endOffset > text.length || text.slice(startOffset, endOffset) !== quotedText) return;
     if (startOffset > cursor) nodes.push(text.slice(cursor, startOffset));
-    const isActive = activeAnchorId === commentId;
+    const isPending = commentId === PENDING_ANCHOR_ID;
+    const isActive = !isPending && activeAnchorId === commentId;
     nodes.push(
       <span
         key={commentId}
-        ref={(el) => registerAnchorRef(commentId, el)}
-        onClick={(e) => { e.stopPropagation(); onHighlightClick(commentId); }}
+        ref={isPending ? undefined : (el) => registerAnchorRef(commentId, el)}
+        onClick={isPending ? undefined : (e) => { e.stopPropagation(); onHighlightClick(commentId); }}
         style={{
           background: isActive ? 'rgba(99,86,225,0.32)' : 'rgba(99,86,225,0.16)',
-          cursor: 'pointer', borderRadius: 2, transition: 'background 0.3s',
+          cursor: isPending ? 'default' : 'pointer', borderRadius: 2, transition: 'background 0.3s',
         }}
       >
         {text.slice(startOffset, endOffset)}

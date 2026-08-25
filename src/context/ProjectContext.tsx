@@ -102,6 +102,8 @@ interface ProjectContextValue {
    * range of email text or a pinned point on an asset creative.
    */
   addAlertComment: (id: string, track: 'email' | 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor }) => void;
+  /** Toggles one comment's resolved state. */
+  toggleAlertCommentResolved: (id: string, commentId: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -361,6 +363,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         anchor: input.anchor,
       };
       return { ...a, comments: [...(a.comments ?? []), comment] };
+    }));
+  }, []);
+
+  const toggleAlertCommentResolved = useCallback((id: string, commentId: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      return {
+        ...a,
+        comments: (a.comments ?? []).map((c) => (c.id === commentId ? { ...c, resolved: !c.resolved } : c)),
+      };
     }));
   }, []);
 
@@ -685,7 +697,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment,
+      alerts, moveAlert, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved,
     }}>
       {children}
     </ProjectContext.Provider>

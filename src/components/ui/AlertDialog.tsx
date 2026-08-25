@@ -5,14 +5,15 @@ import {
   Close, HistoryOutlined, PictureAsPdfOutlined, Replay, Send, ChevronLeft, ChevronRight,
   Lock, Remove, Add, CheckCircle, Cancel, RadioButtonUnchecked,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, EmailCommentAnchor, AssetCommentAnchor, Offer, Template, ReviewStatus } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, EmailCommentAnchor, AssetCommentAnchor, Background, Offer, Template, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { formatReviewerName } from '../../utils/alertReview';
 import { FooterReviewControls } from './AlertReviewFooterFlow';
-import { ReviewPanel, HighlightableParagraph, FloatingCommentButton, AssetPinOverlay } from './AlertReviewPanel';
+import { ReviewPanel, HighlightableParagraph, FloatingCommentButton, AssetPinOverlay, PENDING_ANCHOR_ID } from './AlertReviewPanel';
+import { AlertElementsSection } from './AlertElementsSidebar';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
@@ -176,7 +177,7 @@ interface AlertDialogProps {
 }
 
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
-  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, reviewAlertTrack, addAlertComment } = useProject();
+  const { offers, currentProject, setEmailReview, setAssetsReview, rebuildAlert, sendAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved } = useProject();
   const [activeTab, setActiveTab] = useState<'email' | 'assets'>('email');
   const [showHistory, setShowHistory] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -236,6 +237,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const hasBackgrounds = currentProject.backgrounds.length > 0;
   const bgFor = (o: Offer) => backgroundForOffer(o, offers, currentProject.backgrounds);
 
+  // Backgrounds actually utilized by this alert's assets, deduped — powers the Styles accordion grid.
+  const styleBackgrounds: Background[] = [];
+  const seenBgIds = new Set<string>();
+  for (const o of rowOffers) {
+    const bg = bgFor(o);
+    if (bg && !seenBgIds.has(bg.id)) { seenBgIds.add(bg.id); styleBackgrounds.push(bg); }
+  }
+
   const previewCount = rowOffers.length;
   const previewOffer = rowOffers[Math.min(previewIndex, Math.max(previewCount - 1, 0))];
   const showPreviewNav = previewCount > 1;
@@ -267,7 +276,16 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const emailAnchors = (alert.comments ?? [])
     .filter((c): c is AlertComment & { anchor: EmailCommentAnchor } => c.track === 'email' && c.anchor?.kind === 'email')
     .map((c) => ({ anchor: c.anchor, commentId: c.id }));
-  const anchorsForParagraph = (index: number) => emailAnchors.filter((a) => a.anchor.paragraphIndex === index);
+  // A highlight the user just made but hasn't sent a comment for yet — shown immediately, non-interactive,
+  // and removed the moment it's cancelled or sent (since it then either disappears or is replaced by the
+  // real, now-committed anchor above).
+  const anchorsForParagraph = (index: number) => {
+    const committed = emailAnchors.filter((a) => a.anchor.paragraphIndex === index);
+    if (pendingAnchor?.kind === 'email' && pendingAnchor.paragraphIndex === index) {
+      return [...committed, { anchor: pendingAnchor, commentId: PENDING_ANCHOR_ID }];
+    }
+    return committed;
+  };
 
   const assetAnchors = previewOffer
     ? (alert.comments ?? [])
@@ -379,7 +397,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
             {/* Approvals sidebar */}
-            <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box', overflowY: 'auto' }}>
+            <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box', overflowY: 'auto' }}>
               <span style={{ margin: '0 0 8px', padding: '0 8px', fontSize: 16, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px' }}>Approvals</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <ApprovalListItem
@@ -397,6 +415,18 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   timestamp={assetsActivity?.timestamp}
                   active={activeTab === 'assets'}
                   onClick={() => setActiveTab('assets')}
+                />
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <span style={{ display: 'block', margin: '0 0 8px', padding: '0 8px', fontSize: 10, fontWeight: 700, color: '#9c99a9', letterSpacing: '0.6px', fontFamily: 'Roboto, sans-serif' }}>
+                  ALERT ELEMENTS
+                </span>
+                <AlertElementsSection
+                  rowOffers={rowOffers}
+                  templates={currentProject.templates}
+                  styleBackgrounds={styleBackgrounds}
+                  onClose={onClose}
                 />
               </div>
             </div>
@@ -607,6 +637,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 onCancelAnchor={() => setPendingAnchor(undefined)}
                 registerCommentRef={registerCommentRef}
                 onJumpToAnchor={jumpToAnchorFromComment}
+                onToggleCommentResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
                 onSendComment={handleSendComment}
                 onApprove={handleApprove}
                 onReject={handleReject}

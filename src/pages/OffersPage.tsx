@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, IconButton, TextField } from '@mui/material';
 import { SwapOffersDialog } from '../components/ui/SwapOffersDialog';
 import { MoreVert, Search, AutoAwesome, TravelExplore, History } from '@mui/icons-material';
@@ -32,8 +33,22 @@ export const OffersPage = () => {
   const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => () => closeOffersPanel(), []);
+
+  // Arriving here via a deep link (e.g. the alert-approval dialog's Offers accordion) opens that
+  // offer's info panel on landing. Cleared from history state immediately so it doesn't re-fire on
+  // back/forward navigation.
+  useEffect(() => {
+    const openOfferId = (location.state as { openOfferId?: string } | null)?.openOfferId;
+    if (openOfferId) {
+      openOffersPanel('vehicle-info', openOfferId);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to consume the deep-link state
+  }, []);
 
   const filteredOffers = offers.filter((o) =>
     !o.swapOnly && o.vehicleName.toLowerCase().includes(search.toLowerCase())
