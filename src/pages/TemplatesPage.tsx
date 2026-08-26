@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Button, IconButton, TextField } from '@mui/material';
 import { Add, MoreVert, Search } from '@mui/icons-material';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -13,7 +14,14 @@ interface TemplatesPageProps {
 }
 
 export const TemplatesPage = ({}: TemplatesPageProps) => {
-  const { templates, removedTemplateIds, removeTemplate, currentProject, locked } = useProject();
+  const { templates, removedTemplateIds, removeTemplate, currentProject, locked, selectedProjectId, selectProject } = useProject();
+  const { projectId } = useParams<{ projectId: string }>();
+
+  // When reached via a project-scoped URL (e.g. a new tab opened from an alert), sync context to it.
+  useEffect(() => {
+    if (projectId && projectId !== selectedProjectId) selectProject(projectId);
+  }, [projectId, selectedProjectId, selectProject]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);

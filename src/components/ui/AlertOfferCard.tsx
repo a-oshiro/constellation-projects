@@ -15,6 +15,8 @@ interface AlertOfferCardProps {
   offer: Offer;
   template: Template;
   background?: Background;
+  /** The Evergreen project this alert belongs to — used to scope the Offer/Template/Styles link-out buttons to it. */
+  projectId: string;
   /** True while the project is Evergreen-locked — disables Edit Offer with an explanatory tooltip. */
   locked: boolean;
   onEditOffer: () => void;
@@ -39,7 +41,7 @@ const linkStyle: React.CSSProperties = {
 /** Opens a task page in a new browser tab — used by the Template/Styles section link-out buttons. */
 const openTaskPage = (path: string) => window.open(path, '_blank', 'noopener,noreferrer');
 
-export const AlertOfferCard = ({ offer, template, background, locked, onEditOffer }: AlertOfferCardProps) => (
+export const AlertOfferCard = ({ offer, template, background, projectId, locked, onEditOffer }: AlertOfferCardProps) => (
   <div
     style={{
       position: 'absolute', top: 0, right: '100%', marginRight: 24, width: 240, flexShrink: 0,
@@ -49,7 +51,12 @@ export const AlertOfferCard = ({ offer, template, background, locked, onEditOffe
   >
     {/* Offer */}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={sectionTitleStyle}>Offer</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={sectionTitleStyle}>Offer</span>
+        <IconButton size="small" onClick={() => openTaskPage(`/projects/${projectId}/offers`)} sx={{ padding: '2px' }} title="Open Offers">
+          <OpenInNew style={{ fontSize: 13, color: '#686576' }} />
+        </IconButton>
+      </div>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
         <img src={offer.imageUrl} alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: '#f0f2f4' }} />
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -83,7 +90,7 @@ export const AlertOfferCard = ({ offer, template, background, locked, onEditOffe
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={sectionTitleStyle}>Template</span>
-        <IconButton size="small" onClick={() => openTaskPage('/templates')} sx={{ padding: '2px' }} title="Open Templates">
+        <IconButton size="small" onClick={() => openTaskPage(`/projects/${projectId}/templates`)} sx={{ padding: '2px' }} title="Open Templates">
           <OpenInNew style={{ fontSize: 13, color: '#686576' }} />
         </IconButton>
       </div>
@@ -95,7 +102,7 @@ export const AlertOfferCard = ({ offer, template, background, locked, onEditOffe
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={sectionTitleStyle}>Styles</span>
-        <IconButton size="small" onClick={() => openTaskPage('/theme-and-logos')} sx={{ padding: '2px' }} title="Open Theme and Logos">
+        <IconButton size="small" onClick={() => openTaskPage(`/projects/${projectId}/theme-and-logos`)} sx={{ padding: '2px' }} title="Open Theme and Logos">
           <OpenInNew style={{ fontSize: 13, color: '#686576' }} />
         </IconButton>
       </div>

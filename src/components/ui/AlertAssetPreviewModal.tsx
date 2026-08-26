@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton } from '@mui/material';
-import { Check, Sync, Close } from '@mui/icons-material';
+import { Check, ChevronLeft, ChevronRight, Sync, Close } from '@mui/icons-material';
 import type { AlertComment, AssetCommentAnchor, Background, Offer, ReviewStatus, Template } from '../../data/types';
 import { CommentableAssetPreview, type AssetTextSelection } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
@@ -22,6 +22,7 @@ interface AlertAssetPreviewModalProps {
   template: Template;
   backgroundUrl: string;
   background: Background;
+  projectId: string;
   locked: boolean;
   comments: AlertComment[];
   activeAnchorId: string | null;
@@ -41,12 +42,19 @@ interface AlertAssetPreviewModalProps {
   onApprove: () => void;
   onReject: () => void;
   onUndo: () => void;
+  /** Zero-based position of `offer` within the alert's full asset list, and that list's length — powers
+   * the carousel control that lets the user step through every asset without leaving the enlarged view. */
+  currentIndex: number;
+  totalCount: number;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
 export const AlertAssetPreviewModal = ({
-  offer, template, backgroundUrl, background, locked, comments, activeAnchorId, onClose,
+  offer, template, backgroundUrl, background, projectId, locked, comments, activeAnchorId, onClose,
   onAddComment, onToggleResolved, onDeleteComment, onAnchorClick, onEditOffer, onReply, onToggleReaction,
   approvalStatus, approvalDisabled, reviewActorName, reviewTimestamp, onApprove, onReject, onUndo,
+  currentIndex, totalCount, onPrev, onNext,
 }: AlertAssetPreviewModalProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const anchorRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -117,54 +125,77 @@ export const AlertAssetPreviewModal = ({
           />
         </div>
 
-        {approvalStatus === 'pending' ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-            <button
-              disabled={approvalDisabled}
-              onClick={onReject}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid rgba(71,59,171,0.6)', borderRadius: 100,
-                padding: '8px 18px', background: '#ffffff', color: '#473bab', fontSize: 13, fontFamily: 'Roboto, sans-serif',
-                fontWeight: 500, letterSpacing: '0.46px',
-                cursor: approvalDisabled ? 'not-allowed' : 'pointer',
-                opacity: approvalDisabled ? 0.5 : 1,
-              }}
-            >
-              <Sync style={{ fontSize: 16 }} />
-              Request Asset Changes
-            </button>
-            <button
-              disabled={approvalDisabled}
-              onClick={onApprove}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', borderRadius: 100,
-                padding: '8px 18px', background: '#4caf50', color: '#ffffff', fontSize: 13, fontFamily: 'Roboto, sans-serif',
-                fontWeight: 500, letterSpacing: '0.46px',
-                cursor: approvalDisabled ? 'not-allowed' : 'pointer',
-                opacity: approvalDisabled ? 0.5 : 1,
-              }}
-            >
-              <Check style={{ fontSize: 16 }} />
-              Approve Asset
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', width: boxWidth, marginTop: 16 }}>
-            <AssetStatusBadge
-              label={approvalStatus === 'approved' ? 'Asset Approved' : 'Changes Requested'}
-              actorName={reviewActorName ?? ''}
-              timestamp={reviewTimestamp ?? 0}
-              onUndo={onUndo}
-              onApproveChanges={approvalStatus === 'rejected' ? onApprove : undefined}
-              layout="static"
-            />
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: boxWidth, marginTop: 16 }}>
+          {totalCount > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <IconButton
+                onClick={onPrev}
+                sx={{ padding: '4px', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(0,0,0,0.12)', boxShadow: '0px 1px 4px rgba(0,0,0,0.12)' }}
+              >
+                <ChevronLeft style={{ fontSize: 20, color: '#ffffff' }} />
+              </IconButton>
+              <span style={{ minWidth: 36, textAlign: 'center', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#ffffff' }}>
+                {currentIndex + 1}/{totalCount}
+              </span>
+              <IconButton
+                onClick={onNext}
+                sx={{ padding: '4px', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(0,0,0,0.12)', boxShadow: '0px 1px 4px rgba(0,0,0,0.12)' }}
+              >
+                <ChevronRight style={{ fontSize: 20, color: '#ffffff' }} />
+              </IconButton>
+            </div>
+          )}
+
+          {approvalStatus === 'pending' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+              <button
+                disabled={approvalDisabled}
+                onClick={onReject}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #E17613', borderRadius: 100,
+                  padding: '8px 18px', background: '#ffffff', color: '#E17613', fontSize: 13, fontFamily: 'Roboto, sans-serif',
+                  fontWeight: 500, letterSpacing: '0.46px',
+                  cursor: approvalDisabled ? 'not-allowed' : 'pointer',
+                  opacity: approvalDisabled ? 0.5 : 1,
+                }}
+              >
+                <Sync style={{ fontSize: 16 }} />
+                Request Asset Changes
+              </button>
+              <button
+                disabled={approvalDisabled}
+                onClick={onApprove}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', borderRadius: 100,
+                  padding: '8px 18px', background: '#4caf50', color: '#ffffff', fontSize: 13, fontFamily: 'Roboto, sans-serif',
+                  fontWeight: 500, letterSpacing: '0.46px',
+                  cursor: approvalDisabled ? 'not-allowed' : 'pointer',
+                  opacity: approvalDisabled ? 0.5 : 1,
+                }}
+              >
+                <Check style={{ fontSize: 16 }} />
+                Approve Asset
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginLeft: 'auto' }}>
+              <AssetStatusBadge
+                label={approvalStatus === 'approved' ? 'Asset Approved' : 'Changes Requested'}
+                actorName={reviewActorName ?? ''}
+                timestamp={reviewTimestamp ?? 0}
+                onUndo={onUndo}
+                onApproveChanges={approvalStatus === 'rejected' ? onApprove : undefined}
+                layout="static"
+              />
+            </div>
+          )}
+        </div>
 
         <AlertOfferCard
           offer={offer}
           template={template}
           background={background}
+          projectId={projectId}
           locked={locked}
           onEditOffer={onEditOffer}
         />

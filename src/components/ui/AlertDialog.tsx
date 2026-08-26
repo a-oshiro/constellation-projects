@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton, Menu, Switch } from '@mui/material';
 import {
-  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send,
+  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Refresh, Send,
 } from '@mui/icons-material';
 import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -60,6 +60,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [previewOfferId, setPreviewOfferId] = useState<string | null>(null);
   const [activeOfferCardOfferId, setActiveOfferCardOfferId] = useState<string | null>(null);
@@ -106,9 +107,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); }, []);
 
-  // Cursor-following hint: shown only for the first 5s of a hover session over the email content —
-  // moving the mouse doesn't extend it, only re-entering after leaving does.
+  // Cursor-following hint: shown for 5s on the very first hover of the email content this dialog session
+  // (a fresh useRef per mount, so closing and reopening the dialog resets it) — never again after that,
+  // even if the user leaves and re-enters. Only offered for alerts still awaiting a decision.
+  const hintShownRef = useRef(false);
+  const canShowCursorHint = alert.status === 'generated' || alert.status === 'rejected';
   const handleContentMouseEnter = (e: React.MouseEvent) => {
+    if (!canShowCursorHint || hintShownRef.current) return;
+    hintShownRef.current = true;
     setCursorHint({ x: e.clientX, y: e.clientY });
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
     hintTimerRef.current = setTimeout(() => setCursorHint(null), 5000);
@@ -138,6 +144,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const handleSend = () => { sendAlert(alert.id); onClose(); };
   const toggleHistory = () => setShowHistory((v) => !v);
+  // Manual "refresh" of the email canvas — a visual reassurance for the user that everything reflects
+  // their latest edits, since this view is already always in sync with local state.
+  const handleRefreshEmail = () => {
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 700);
+  };
 
   const allComments = alert.comments ?? [];
   // A resolved comment's highlight/pin is hidden from the email/asset unless "Show Resolved" is on — the
@@ -261,7 +273,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
             onTextSelected={setFloatingSelection}
             onRequestPreview={() => setPreviewOfferId(offer.id)}
-            onShowOfferCard={() => setActiveOfferCardOfferId(offer.id)}
+            onShowOfferCard={() => setActiveOfferCardOfferId((id) => (id === offer.id ? null : offer.id))}
             approvalStatus={approvalStatus}
             approvalDisabled={isArchived}
             onApprove={() => setOfferAssetReview(alert.id, offer.id, 'approved')}
@@ -283,6 +295,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               offer={offer}
               template={template}
               background={bg}
+              projectId={currentProject.id}
               locked={!!projectLocked}
               onEditOffer={() => setEditingOfferId(offer.id)}
             />
@@ -320,6 +333,25 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     const first = rejectedOffers[0];
     if (!first) return;
     anchorRefs.current.get(assetStatusAnchorId(first.id))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const handleUndoAllApprovals = () => {
+    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
+  };
+  const handleApproveAllAssets = () => {
+    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'approved'));
+  };
+
+  // Carousel within the enlarged asset preview — steps through allAlertOffers in order, wrapping at the ends.
+  const previewIndex = previewOffer ? allAlertOffers.findIndex((o) => o.id === previewOffer.id) : -1;
+  const handlePreviewPrev = () => {
+    if (allAlertOffers.length === 0 || previewIndex === -1) return;
+    const nextIndex = (previewIndex - 1 + allAlertOffers.length) % allAlertOffers.length;
+    setPreviewOfferId(allAlertOffers[nextIndex].id);
+  };
+  const handlePreviewNext = () => {
+    if (allAlertOffers.length === 0 || previewIndex === -1) return;
+    const nextIndex = (previewIndex + 1) % allAlertOffers.length;
+    setPreviewOfferId(allAlertOffers[nextIndex].id);
   };
 
   const handleReply = (parentCommentId: string, text: string, mentionedNames: string[]) => {
@@ -375,49 +407,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               <div
                 style={{ flex: 1, overflow: 'auto', background: '#F4F5F6', padding: '24px 16px', position: 'relative' }}
               >
-                <div style={{
-                  position: 'absolute', top: 12, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 12,
-                  background: 'rgba(244,245,246,0.9)', backdropFilter: 'blur(4px)', borderRadius: 8, padding: '4px 8px',
-                }}>
-                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9' }}>
-                    Highlight text or click on an asset to add a comment
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Switch
-                      size="small"
-                      checked={showComments}
-                      onChange={() => setShowComments((v) => !v)}
-                      sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
-                    />
-                    <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: showComments ? '#473bab' : '#686576' }}>
-                      Show Comments
-                    </span>
-                  </div>
-                  <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ padding: '4px' }}>
-                    <MoreVert style={{ fontSize: 18, color: '#686576' }} />
-                  </IconButton>
-                  <Menu
-                    anchorEl={commentsMenuAnchor}
-                    open={!!commentsMenuAnchor}
-                    onClose={() => setCommentsMenuAnchor(null)}
-                    sx={{ zIndex: 100050 }}
-                  >
-                    <div
-                      onClick={() => setShowResolved((v) => !v)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', cursor: 'pointer' }}
-                    >
-                      <Switch
-                        size="small"
-                        checked={showResolved}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => setShowResolved((v) => !v)}
-                        sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
-                      />
-                      <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Show resolved comments</span>
-                    </div>
-                  </Menu>
-                </div>
-
                 <div ref={contentRef} style={{ position: 'relative', width: 520, margin: '0 auto' }}>
                   <div
                     ref={emailBodyRef}
@@ -520,6 +509,66 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 </div>
               </div>
 
+              {/* Manual refresh — pinned top-left of the canvas, a sibling of the scrollable div so it
+                  doesn't scroll with the content. */}
+              <IconButton
+                onClick={handleRefreshEmail}
+                title="Refresh email"
+                sx={{
+                  position: 'absolute', top: 12, left: 16, zIndex: 5, background: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.12)', padding: '6px',
+                  boxShadow: '0px 1px 4px rgba(0,0,0,0.12)', '&:hover': { background: '#ffffff' },
+                }}
+              >
+                <Refresh style={{ fontSize: 18, color: '#473bab', animation: isRefreshing ? 'spin 0.7s linear' : 'none' }} />
+              </IconButton>
+
+              {/* Comments visibility controls — pinned top-right of the canvas, a sibling of the scrollable
+                  div (not a descendant of it) so it stays fixed in the corner instead of scrolling with the
+                  canvas's content. */}
+              <div style={{
+                position: 'absolute', top: 12, right: 16, zIndex: 5, display: 'flex', alignItems: 'center', gap: 12,
+                background: 'rgba(244,245,246,0.9)', backdropFilter: 'blur(4px)', borderRadius: 8, padding: '4px 8px',
+              }}>
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9' }}>
+                  Highlight text or click anywhere on the assets to add comments.
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Switch
+                    size="small"
+                    checked={showComments}
+                    onChange={() => setShowComments((v) => !v)}
+                    sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
+                  />
+                  <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: showComments ? '#473bab' : '#686576' }}>
+                    Show Comments
+                  </span>
+                </div>
+                <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ padding: '4px' }}>
+                  <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+                </IconButton>
+                <Menu
+                  anchorEl={commentsMenuAnchor}
+                  open={!!commentsMenuAnchor}
+                  onClose={() => setCommentsMenuAnchor(null)}
+                  sx={{ zIndex: 100050 }}
+                >
+                  <div
+                    onClick={() => setShowResolved((v) => !v)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', cursor: 'pointer' }}
+                  >
+                    <Switch
+                      size="small"
+                      checked={showResolved}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => setShowResolved((v) => !v)}
+                      sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
+                    />
+                    <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Show resolved comments</span>
+                  </div>
+                </Menu>
+              </div>
+
               {/* Floating approval widgets — pinned bottom-right of the canvas, stacked: email (alert-wide)
                   above assets (per-offer, individually approved) — same pinned-overlay pattern as Show Resolved.
                   A sibling of the scrollable canvas div above (not a descendant of it), so it stays fixed in the
@@ -537,7 +586,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   approverNames={approverNames}
                   lastApprovedTimestamp={lastApprovedTimestamp}
                   rejectedCount={rejectedOffers.length}
+                  disabled={isArchived || isSent}
                   onScrollToFirstRejected={handleScrollToFirstRejectedAsset}
+                  onUndoAllApprovals={handleUndoAllApprovals}
+                  onApproveAllAssets={handleApproveAllAssets}
                 />
                 <EmailApprovalWidget
                   status={alert.emailStatus}
@@ -633,10 +685,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
       {previewOffer && template && previewBg && (
         <AlertAssetPreviewModal
+          key={previewOffer.id}
           offer={previewOffer}
           template={template}
           backgroundUrl={previewBg.url}
           background={previewBg}
+          projectId={currentProject.id}
           locked={!!projectLocked}
           comments={commentsForOffer(previewOffer.id)}
           activeAnchorId={activeAnchorId}
@@ -655,6 +709,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           onApprove={() => setOfferAssetReview(alert.id, previewOffer.id, 'approved')}
           onReject={() => setOfferAssetReview(alert.id, previewOffer.id, 'rejected')}
           onUndo={() => setOfferAssetReview(alert.id, previewOffer.id, 'pending')}
+          currentIndex={previewIndex}
+          totalCount={allAlertOffers.length}
+          onPrev={handlePreviewPrev}
+          onNext={handlePreviewNext}
         />
       )}
     </>,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Checkbox, IconButton, Chip, Menu, MenuItem, ListItemIcon } from '@mui/material';
 import {
-  Close, Check, Replay, Send, CheckCircle, Cancel, CheckCircleOutlined, MoreVert, Inventory2Outlined,
+  Close, Check, Replay, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -90,7 +90,7 @@ export const KanbanViewIcon = () => (
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
-  { key: 'rejected', label: 'Rejected' },
+  { key: 'rejected', label: 'Changes Requested' },
   { key: 'approved', label: 'Approved' },
   { key: 'sent', label: 'Sent' },
 ];
@@ -133,7 +133,7 @@ export function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | 
 const REVIEW_ROW_STYLE: Record<ReviewStatus, { Icon: React.ElementType; color: string }> = {
   pending: { Icon: CheckCircleOutlined, color: '#9c99a9' },
   approved: { Icon: CheckCircle, color: '#4caf50' },
-  rejected: { Icon: Cancel, color: '#d2323f' },
+  rejected: { Icon: Sync, color: '#d2323f' },
 };
 
 interface ReviewRowProps {

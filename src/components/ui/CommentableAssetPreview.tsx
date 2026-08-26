@@ -209,20 +209,20 @@ export const CommentableAssetPreview = ({
       )}
       {onApprove && onReject && hovered && approvalStatus === 'pending' && (
         <div style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 7, display: 'flex', gap: 6 }}>
-          <Tooltip title="Request changes" slotProps={tooltipPopperProps}>
+          <Tooltip title="Request Asset Changes" slotProps={tooltipPopperProps}>
             <IconButton
               disabled={approvalDisabled}
               onClick={(e) => { e.stopPropagation(); onReject(); }}
               sx={{
-                background: '#ffffff', border: '1px solid rgba(71,59,171,0.6)', padding: '5px', width: 36, height: 36,
+                background: '#E17613', padding: '5px', width: 36, height: 36,
                 boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
-                '&:hover': { background: '#ffffff' },
+                '&:hover': { background: '#d16d0f' },
               }}
             >
-              <Sync style={{ fontSize: 18, color: '#473bab' }} />
+              <Sync style={{ fontSize: 18, color: '#ffffff' }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Approve" slotProps={tooltipPopperProps}>
+          <Tooltip title="Approve Asset" slotProps={tooltipPopperProps}>
             <IconButton
               disabled={approvalDisabled}
               onClick={(e) => { e.stopPropagation(); onApprove(); }}

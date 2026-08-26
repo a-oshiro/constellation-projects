@@ -69,8 +69,11 @@ function App() {
                   <Route path="/projects" element={<ProjectIndexRedirect />} />
                   <Route path="/projects/:projectId" element={<ProjectOverviewPage />} />
                   <Route path="/offers" element={<OffersPage />} />
+                  <Route path="/projects/:projectId/offers" element={<OffersPage />} />
                   <Route path="/templates" element={<TemplatesPage />} />
+                  <Route path="/projects/:projectId/templates" element={<TemplatesPage />} />
                   <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />
+                  <Route path="/projects/:projectId/theme-and-logos" element={<ThemeAndLogosPage />} />
                   <Route path="/review" element={<ReviewPage />} />
                   <Route path="/approved" element={<ApprovedPage />} />
                   <Route path="/ads" element={<AdsPage />} />

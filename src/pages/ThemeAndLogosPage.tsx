@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import { IconButton } from '@mui/material';
 import { Add, Delete, MoreVert, Settings, ViewComfy } from '@mui/icons-material';
@@ -215,7 +216,16 @@ function LogoCard() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export const ThemeAndLogosPage = ({}: ThemeAndLogosPageProps) => {
-  const { backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds, currentProject, locked } = useProject();
+  const {
+    backgrounds, removedBgIds, removeBackground, templates, removedTemplateIds, currentProject, locked,
+    selectedProjectId, selectProject,
+  } = useProject();
+  const { projectId } = useParams<{ projectId: string }>();
+
+  // When reached via a project-scoped URL (e.g. a new tab opened from an alert), sync context to it.
+  useEffect(() => {
+    if (projectId && projectId !== selectedProjectId) selectProject(projectId);
+  }, [projectId, selectedProjectId, selectProject]);
 
   const visibleBackgrounds = backgrounds.filter((b) => !removedBgIds.has(b.id));
   const visibleTemplates = templates.filter((t) => !removedTemplateIds.has(t.id));
