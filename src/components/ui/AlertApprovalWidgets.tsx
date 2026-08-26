@@ -1,4 +1,4 @@
-import { Check, CheckCircle, Cancel, Close } from '@mui/icons-material';
+import { Check, CheckCircle, Sync } from '@mui/icons-material';
 import type { ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
@@ -17,7 +17,7 @@ const widgetBase: React.CSSProperties = {
 };
 
 const eyebrowStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600, color: '#686576', fontFamily: 'Roboto, sans-serif', letterSpacing: '0.4px',
+  fontSize: 14, fontWeight: 400, color: '#686576', fontFamily: 'Roboto, sans-serif', letterSpacing: '0.4px',
 };
 
 const actionPillBase: React.CSSProperties = {
@@ -51,14 +51,14 @@ export const EmailApprovalWidget = ({
 }: EmailApprovalWidgetProps) => {
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
-  const background = isPending ? '#ffffff' : isApproved ? '#e8f5e9' : '#fce8ea';
+  const background = isApproved ? '#e8f5e9' : '#ffffff';
 
   return (
     <div style={{ ...widgetBase, background }}>
       {isPending && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={eyebrowStyle}>Email Approval</span>
-          <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', fontWeight: 500 }}>Pending</span>
+          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', fontWeight: 400 }}>Pending</span>
         </div>
       )}
       {isPending ? (
@@ -66,9 +66,9 @@ export const EmailApprovalWidget = ({
           <button
             disabled={disabled}
             onClick={onRequestChanges}
-            style={{ ...actionPillBase, background: '#ffffff', border: '1px solid rgba(210,50,63,0.5)', color: '#d2323f', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+            style={{ ...actionPillBase, background: '#ffffff', border: '1px solid rgba(71,59,171,0.6)', color: '#473bab', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
           >
-            <Close style={{ fontSize: 16 }} />
+            <Sync style={{ fontSize: 16 }} />
             Request Changes to Email
           </button>
           <button
@@ -85,21 +85,21 @@ export const EmailApprovalWidget = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isApproved
               ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-              : <Cancel style={{ fontSize: 18, color: '#d2323f', flexShrink: 0 }} />}
+              : <Sync style={{ fontSize: 18, color: '#473bab', flexShrink: 0 }} />}
             <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: isApproved ? '#1b5e20' : '#d2323f', fontFamily: 'Roboto, sans-serif' }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: isApproved ? '#1b5e20' : '#473bab', fontFamily: 'Roboto, sans-serif' }}>
                 {isApproved ? 'Email content approved' : 'Changes requested for the email content'}
               </span>
               <button
                 disabled={disabled}
                 onClick={onUndo}
-                style={{ ...undoLinkStyle, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer', color: isApproved ? '#1b5e20' : '#d2323f' }}
+                style={{ ...undoLinkStyle, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer', color: isApproved ? '#1b5e20' : '#473bab' }}
               >
                 Undo
               </button>
             </div>
           </div>
-          <span style={{ fontSize: 11, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
+          <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
             by {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, paddingLeft: 26 }}>
@@ -141,7 +141,7 @@ export const AssetApprovalWidget = ({
       {isComplete ? null : (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={eyebrowStyle}>Asset Approval</span>
-          <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', fontWeight: 500 }}>Pending</span>
+          <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', fontWeight: 400 }}>Pending</span>
         </div>
       )}
 
@@ -149,11 +149,11 @@ export const AssetApprovalWidget = ({
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#1b5e20', fontFamily: 'Roboto, sans-serif' }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#1b5e20', fontFamily: 'Roboto, sans-serif' }}>
               All assets approved
             </span>
           </div>
-          <span style={{ fontSize: 11, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
+          <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
             by {approverNames.map((n) => formatReviewerName(n)).join(', ')} • {lastApprovedTimestamp ? formatRelativeTime(lastApprovedTimestamp) : ''}
           </span>
         </div>
@@ -163,7 +163,7 @@ export const AssetApprovalWidget = ({
             <div style={{ flex: 1, height: 6, borderRadius: 100, background: '#e5e5ea', overflow: 'hidden' }}>
               <div style={{ width: `${pct}%`, height: '100%', background: '#473bab', borderRadius: 100, transition: 'width 0.3s' }} />
             </div>
-            <span style={{ fontSize: 11, color: '#686576', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
               {approvedCount} of {totalCount} approved
             </span>
           </div>
@@ -173,7 +173,7 @@ export const AssetApprovalWidget = ({
                 onClick={onScrollToFirstRejected}
                 style={{
                   background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'right',
-                  fontSize: 11, fontWeight: 500, color: '#d2323f', fontFamily: 'Roboto, sans-serif', textDecoration: 'underline', flexShrink: 0,
+                  fontSize: 12, fontWeight: 500, color: '#473bab', fontFamily: 'Roboto, sans-serif', textDecoration: 'underline', flexShrink: 0,
                 }}
               >
                 Changes requested for {rejectedCount} asset{rejectedCount > 1 ? 's' : ''}
@@ -192,37 +192,43 @@ interface AssetStatusBadgeProps {
   timestamp: number;
   onUndo: () => void;
   onApproveChanges?: () => void;
+  /** 'overlay' (default) pins the badge to the bottom-right corner of a position:relative asset wrapper.
+   * 'static' renders it in normal flow instead, for placement outside the asset box (e.g. below the
+   * enlarged preview, right-aligned by the parent). */
+  layout?: 'overlay' | 'static';
 }
 
 /** Per-asset approve/reject readout — a small footer badge pinned to the bottom-right corner of the asset
  * it belongs to (rather than living in the floating comment column), so the decision reads right where it
  * was made. */
-export const AssetStatusBadge = ({ label, actorName, timestamp, onUndo, onApproveChanges }: AssetStatusBadgeProps) => {
+export const AssetStatusBadge = ({ label, actorName, timestamp, onUndo, onApproveChanges, layout = 'overlay' }: AssetStatusBadgeProps) => {
   const isApproved = label === 'Asset Approved';
   return (
     <div
       style={{
-        position: 'absolute', bottom: 8, right: 8, zIndex: 8, maxWidth: 'calc(100% - 16px)',
+        ...(layout === 'overlay' ? { position: 'absolute' as const, bottom: 8, right: 8, zIndex: 8, maxWidth: 'calc(100% - 16px)' } : {}),
         boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 4,
-        padding: '8px 10px', borderRadius: 8, background: isApproved ? '#e8f5e9' : '#fce8ea',
-        boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
+        padding: '8px 10px', borderRadius: 8, background: isApproved ? '#e8f5e9' : '#ffffff',
+        boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)', width: 240,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {isApproved
           ? <CheckCircle style={{ fontSize: 16, color: '#4caf50', flexShrink: 0 }} />
-          : <Cancel style={{ fontSize: 16, color: '#d2323f', flexShrink: 0 }} />}
-        <span style={{ fontSize: 12, fontWeight: 500, color: isApproved ? '#1b5e20' : '#d2323f', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
-          {label}
-        </span>
+          : <Sync style={{ fontSize: 16, color: '#473bab', flexShrink: 0 }} />}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: isApproved ? '#1b5e20' : '#473bab', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
+            {label}
+          </span>
+          <button onClick={onUndo} style={{ ...undoLinkStyle, color: isApproved ? '#1b5e20' : '#473bab' }}>Undo</button>
+        </div>
       </div>
-      <span style={{ fontSize: 10, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         by {actorName} • {formatRelativeTime(timestamp)}
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 22 }}>
-        <button onClick={onUndo} style={undoLinkStyle}>Undo</button>
         {onApproveChanges && (
-          <button onClick={onApproveChanges} style={{ ...containedPurpleButton, padding: '2px 8px', fontSize: 11 }}>
+          <button onClick={onApproveChanges} style={{ ...containedPurpleButton, padding: '5px 12px', fontSize: 12 }}>
             Approve Changes
           </button>
         )}

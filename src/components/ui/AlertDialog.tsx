@@ -650,8 +650,11 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           onToggleReaction={handleToggleReaction}
           approvalStatus={alert.offerReviews?.[previewOffer.id]?.status ?? 'pending'}
           approvalDisabled={isArchived || isSent}
+          reviewActorName={alert.offerReviews?.[previewOffer.id]?.actorName}
+          reviewTimestamp={alert.offerReviews?.[previewOffer.id]?.timestamp}
           onApprove={() => setOfferAssetReview(alert.id, previewOffer.id, 'approved')}
           onReject={() => setOfferAssetReview(alert.id, previewOffer.id, 'rejected')}
+          onUndo={() => setOfferAssetReview(alert.id, previewOffer.id, 'pending')}
         />
       )}
     </>,
