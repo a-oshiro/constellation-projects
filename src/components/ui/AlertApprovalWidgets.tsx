@@ -1,23 +1,25 @@
-import { Check, CheckCircle, Sync } from '@mui/icons-material';
+import { useState } from 'react';
+import { IconButton, Menu } from '@mui/material';
+import { Check, CheckCircle, CheckCircleOutlined, MoreVert, Sync } from '@mui/icons-material';
 import type { ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
 
 /**
  * The two floating, bottom-right-pinned approval widgets — one for the email track (still a single
- * alert-wide decision), one for the assets track (individually decided per offer, so it shows a progress
- * bar instead of Approve/Request Changes buttons while pending, and never carries a whole-widget
- * "changes requested" state since a rejection is just an asset that hasn't reached "approved" yet). Both
- * always show a small label identifying which track they're for, in every state.
+ * alert-wide decision), one for the assets track (individually decided per offer, so it shows one small
+ * progress bar per asset instead of a single bar, and a title/icon that only shifts to "changes requested"
+ * once a rejection exists). Both always show a title identifying which track they're for, in every state.
  */
 
 const widgetBase: React.CSSProperties = {
-  width: 400, boxSizing: 'border-box', borderRadius: 12, padding: '16px',
-  boxShadow: '0px 4px 16px rgba(0,0,0,0.16)',
+  width: 360, boxSizing: 'border-box', borderRadius: 12, padding: 16,
+  boxShadow: '0px 3px 5px -1px rgba(0,0,0,0.2), 0px 6px 10px rgba(0,0,0,0.14), 0px 1px 18px rgba(0,0,0,0.12)',
 };
 
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: 14, fontWeight: 400, color: '#686576', fontFamily: 'Roboto, sans-serif', letterSpacing: '0.4px',
+const cardBase: React.CSSProperties = {
+  width: 240, boxSizing: 'border-box', borderRadius: 12, padding: 16,
+  boxShadow: '0px 3px 5px -1px rgba(0,0,0,0.2), 0px 6px 10px rgba(0,0,0,0.14), 0px 1px 18px rgba(0,0,0,0.12)',
 };
 
 const actionPillBase: React.CSSProperties = {
@@ -30,9 +32,49 @@ const containedGreenButton: React.CSSProperties = {
   ...actionPillBase, alignSelf: 'flex-start', background: '#4caf50', border: 'none', color: '#ffffff',
 };
 
-const undoLinkStyle: React.CSSProperties = {
-  background: 'none', border: 'none', padding: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif',
-  fontWeight: 500, color: '#473bab', textDecoration: 'underline', cursor: 'pointer', flexShrink: 0,
+const titleStyle: React.CSSProperties = {
+  fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.1px',
+};
+
+const captionStyle: React.CSSProperties = {
+  fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', flexShrink: 0, whiteSpace: 'nowrap',
+};
+
+const subtitleStyle: React.CSSProperties = {
+  fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px',
+};
+
+interface WidgetMenuItem {
+  label: string;
+  onClick: () => void;
+}
+
+/** The 3-dot menu shared by all three widgets/cards below — only rendered when there's at least one action to offer. */
+const WidgetMenuButton = ({ items, disabled }: { items: WidgetMenuItem[]; disabled?: boolean }) => {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  if (items.length === 0) return null;
+  return (
+    <>
+      <IconButton
+        disabled={disabled}
+        onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
+        sx={{ padding: '1px', width: 24, height: 24, flexShrink: 0 }}
+      >
+        <MoreVert style={{ fontSize: 20, color: '#686576' }} />
+      </IconButton>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} onClick={(e) => e.stopPropagation()} sx={{ zIndex: 100050 }}>
+        {items.map((item) => (
+          <button
+            key={item.label}
+            onClick={() => { setAnchor(null); item.onClick(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '6px 16px', fontSize: 14, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </Menu>
+    </>
+  );
 };
 
 interface EmailApprovalWidgetProps {
@@ -51,25 +93,43 @@ export const EmailApprovalWidget = ({
 }: EmailApprovalWidgetProps) => {
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
-  const background = isApproved ? '#e8f5e9' : isPending ? '#ffffff' : '#FFF4E5';
+  const background = isApproved ? '#edf7ed' : '#ffffff';
+  const menuItems: WidgetMenuItem[] = isApproved
+    ? [{ label: 'Undo Approval', onClick: onUndo }]
+    : !isPending
+      ? [{ label: 'Undo Changes Request', onClick: onUndo }]
+      : [];
 
   return (
-    <div style={{ ...widgetBase, background }}>
-      {isPending && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={eyebrowStyle}>Email Approval</span>
-          {/* <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', fontWeight: 400 }}>Pending</span> */}
-        </div>
+    <div style={{ ...widgetBase, background, display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
+        {isApproved
+          ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
+          : isPending
+            ? <CheckCircleOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />
+            : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
+        <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isApproved ? '#1b5e20' : '#1f1d25' }}>
+          {isApproved ? 'Email Approved' : isPending ? 'Email Approval' : 'Email Changes Requested'}
+        </span>
+        {isPending && <span style={captionStyle}>Pending review</span>}
+        <WidgetMenuButton items={menuItems} disabled={disabled} />
+      </div>
+
+      {!isPending && (
+        <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
+          By {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
+        </span>
       )}
+
       {isPending ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end', marginTop: 8 }}>
           <button
             disabled={disabled}
             onClick={onRequestChanges}
-            style={{ ...actionPillBase, background: '#ffffff', border: '1px solid #E17613', color: '#E17613', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+            style={{ ...actionPillBase, background: '#ffffff', color: 'rgb(71, 59, 171)', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
           >
             <Sync style={{ fontSize: 16 }} />
-            Request Changes to Email
+            Request Changes
           </button>
           <button
             disabled={disabled}
@@ -80,39 +140,16 @@ export const EmailApprovalWidget = ({
             Approve Email
           </button>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {isApproved
-              ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-              : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
-            <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, fontWeight: 500, color: isApproved ? '#1b5e20' : '#E17613', fontFamily: 'Roboto, sans-serif' }}>
-                {isApproved ? 'Email content approved' : 'Changes requested for the email content'}
-              </span>
-              <button
-                disabled={disabled}
-                onClick={onUndo}
-                style={{ ...undoLinkStyle, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer', color: isApproved ? '#1b5e20' : '#663C00' }}
-              >
-                Undo
-              </button>
-            </div>
-          </div>
-          <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
-            by {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, paddingLeft: 26 }}>
-            {!isApproved && (
-              <button
-                disabled={disabled}
-                onClick={onApproveChanges}
-                style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                Approve Changes
-              </button>
-            )}
-          </div>
+      ) : !isApproved && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end' }}>
+          <button
+            disabled={disabled}
+            onClick={onApproveChanges}
+            style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+          >
+            <Check style={{ fontSize: 16 }} />
+            Approve
+          </button>
         </div>
       )}
     </div>
@@ -120,107 +157,99 @@ export const EmailApprovalWidget = ({
 };
 
 interface AssetApprovalWidgetProps {
-  approvedCount: number;
-  totalCount: number;
-  /** True once every offer is approved — the only state that turns the whole widget green. A rejected
-   * offer just keeps this false (the progress bar doesn't count it), it never turns the widget red. */
-  isComplete: boolean;
+  /** One entry per offer in the alert, in the same order the assets appear in the email — drives both the
+   * per-asset progress bars and every derived count below. Each bar is clickable (via onSelectAsset) so the
+   * user can jump straight to the asset it represents. */
+  assets: { offerId: string; status: ReviewStatus }[];
   approverNames: string[];
   lastApprovedTimestamp?: number;
-  rejectedCount: number;
+  lastRejectedActorName?: string;
+  lastRejectedTimestamp?: number;
   disabled?: boolean;
-  onScrollToFirstRejected: () => void;
-  onUndoAllApprovals: () => void;
-  onApproveAllAssets: () => void;
+  /** Approves only the assets that haven't been reviewed at all yet — never touches ones already in
+   * Changes Requested, which the user has to resolve individually. */
+  onApproveRemaining: () => void;
+  onUndoAllReviews: () => void;
+  onSelectAsset: (offerId: string) => void;
 }
 
 export const AssetApprovalWidget = ({
-  approvedCount, totalCount, isComplete, approverNames, lastApprovedTimestamp, rejectedCount, disabled,
-  onScrollToFirstRejected, onUndoAllApprovals, onApproveAllAssets,
+  assets, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled,
+  onApproveRemaining, onUndoAllReviews, onSelectAsset,
 }: AssetApprovalWidgetProps) => {
-  const pct = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
+  const totalCount = assets.length;
+  const approvedCount = assets.filter((a) => a.status === 'approved').length;
+  const rejectedCount = assets.filter((a) => a.status === 'rejected').length;
+  const pendingCount = assets.filter((a) => a.status === 'pending').length;
+  const reviewedCount = approvedCount + rejectedCount;
+  const isComplete = totalCount > 0 && approvedCount === totalCount;
+  const hasRejected = rejectedCount > 0;
+  const menuItems: WidgetMenuItem[] = reviewedCount > 0 ? [{ label: 'Undo All Reviews', onClick: onUndoAllReviews }] : [];
 
   return (
-    <div style={{ ...widgetBase, background: isComplete ? '#e8f5e9' : '#ffffff' }}>
+    <div style={{ ...widgetBase, background: isComplete ? '#edf7ed' : '#ffffff', display: 'flex', flexDirection: 'column', gap: isComplete ? 4 : 12 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
+        {isComplete
+          ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
+          : hasRejected
+            ? <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />
+            : <CheckCircleOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />}
+        <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isComplete ? '#1b5e20' : '#1f1d25' }}>
+          {isComplete ? 'All Assets Approved' : hasRejected ? 'Assets Changes Requested' : 'Assets'}
+        </span>
+        {!isComplete && <span style={captionStyle}>{reviewedCount} of {totalCount} reviewed</span>}
+        <WidgetMenuButton items={menuItems} disabled={disabled} />
+      </div>
 
-      {isComplete ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <span style={{ fontSize: 14, fontWeight: 500, color: '#1b5e20', fontFamily: 'Roboto, sans-serif' }}>
-                All assets approved
-              </span>
+      {isComplete && (
+        <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
+          By {approverNames.map((n) => formatReviewerName(n)).join(', ')} • {lastApprovedTimestamp ? formatRelativeTime(lastApprovedTimestamp) : ''}
+        </span>
+      )}
+      {!isComplete && hasRejected && (
+        <span style={{ ...subtitleStyle, paddingLeft: 22, marginTop: -12 }}>
+          By {formatReviewerName(lastRejectedActorName ?? '')} • {lastRejectedTimestamp ? formatRelativeTime(lastRejectedTimestamp) : ''}
+        </span>
+      )}
+
+      {!isComplete && (
+        <>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%', paddingLeft: 22 }}>
+            {assets.map((a) => (
+              <button
+                key={a.offerId}
+                onClick={() => onSelectAsset(a.offerId)}
+                title="Jump to this asset"
+                style={{
+                  flex: 1, height: 4, borderRadius: 100, border: 'none', padding: 0, cursor: 'pointer',
+                  background: a.status === 'approved' ? '#4caf50' : a.status === 'rejected' ? '#E17613' : 'rgba(17,16,20,0.12)',
+                }}
+              />
+            ))}
+          </div>
+          {pendingCount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingLeft: 22 }}>
               <button
                 disabled={disabled}
-                onClick={onUndoAllApprovals}
-                style={{ ...undoLinkStyle, color: '#1b5e20', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                onClick={onApproveRemaining}
+                style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
               >
-                Undo All Approvals
+                <Check style={{ fontSize: 16 }} />
+                {reviewedCount === 0 ? 'Approve All' : `Approve ${pendingCount} remaining`}
               </button>
             </div>
-          </div>
-          <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 26 }}>
-            by {approverNames.map((n) => formatReviewerName(n)).join(', ')} • {lastApprovedTimestamp ? formatRelativeTime(lastApprovedTimestamp) : ''}
-          </span>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={eyebrowStyle}>Asset Approvals</span>
-            {isComplete ? (
-              <button
-                disabled={disabled}
-                onClick={onUndoAllApprovals}
-                style={{ ...undoLinkStyle, color: '#1b5e20', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                Undo All Approvals
-              </button>
-            ) : (
-              <div />
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, height: 6, borderRadius: 100, background: '#e5e5ea', overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: '#473bab', borderRadius: 100, transition: 'width 0.3s' }} />
-            </div>
-            <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
-              {approvedCount} of {totalCount} approved
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
-            <div>
-              {rejectedCount > 0 && (
-                <button
-                  onClick={onScrollToFirstRejected}
-                  style={{
-                    background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'right',
-                    fontSize: 12, fontWeight: 500, color: '#E17613', fontFamily: 'Roboto, sans-serif', textDecoration: 'underline', flexShrink: 0,
-                  }}
-                >
-                  Changes requested for {rejectedCount} asset{rejectedCount > 1 ? 's' : ''}
-                </button>
-              )}
-            </div>
-            <button
-              disabled={disabled}
-              onClick={onApproveAllAssets}
-              style={{ ...containedGreenButton }}
-            >
-              <Check style={{ fontSize: 16 }} />
-              Approve All Assets
-            </button>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
 };
 
 interface AssetStatusBadgeProps {
-  label: 'Asset Approved' | 'Changes Requested';
+  label: 'Approved' | 'Changes Requested';
   actorName: string;
   timestamp: number;
+  disabled?: boolean;
   onUndo: () => void;
   onApproveChanges?: () => void;
   /** 'overlay' (default) pins the badge to the bottom-right corner of a position:relative asset wrapper.
@@ -229,40 +258,38 @@ interface AssetStatusBadgeProps {
   layout?: 'overlay' | 'static';
 }
 
-/** Per-asset approve/reject readout — a small footer badge pinned to the bottom-right corner of the asset
+/** Per-asset approve/reject readout — a small footer card pinned to the bottom-right corner of the asset
  * it belongs to (rather than living in the floating comment column), so the decision reads right where it
- * was made. */
-export const AssetStatusBadge = ({ label, actorName, timestamp, onUndo, onApproveChanges, layout = 'overlay' }: AssetStatusBadgeProps) => {
-  const isApproved = label === 'Asset Approved';
+ * was made. No buttons live on the card itself — every action is tucked behind its 3-dot menu. */
+export const AssetStatusBadge = ({ label, actorName, timestamp, disabled, onUndo, onApproveChanges, layout = 'overlay' }: AssetStatusBadgeProps) => {
+  const isApproved = label === 'Approved';
+  const menuItems: WidgetMenuItem[] = isApproved
+    ? [{ label: 'Undo Approval', onClick: onUndo }]
+    : [
+        { label: 'Undo Changes Request', onClick: onUndo },
+        ...(onApproveChanges ? [{ label: 'Approve Changes', onClick: onApproveChanges }] : []),
+      ];
   return (
     <div
       style={{
+        ...cardBase,
         ...(layout === 'overlay' ? { position: 'absolute' as const, bottom: 8, right: 8, zIndex: 8, maxWidth: 'calc(100% - 16px)' } : {}),
-        boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 4,
-        padding: '12px', borderRadius: 8, background: isApproved ? '#e8f5e9' : '#FFF4E5',
-        boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)', width: 240,
+        background: isApproved ? '#edf7ed' : '#FFF4E5',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
         {isApproved
-          ? <CheckCircle style={{ fontSize: 16, color: '#4caf50', flexShrink: 0 }} />
-          : <Sync style={{ fontSize: 16, color: '#E17613', flexShrink: 0 }} />}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: isApproved ? '#1b5e20' : '#663C00', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
+          ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
+          : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <span style={{ ...titleStyle, color: isApproved ? '#1b5e20' : '#663C00', whiteSpace: 'nowrap' }}>
             {label}
           </span>
-          <button onClick={onUndo} style={{ ...undoLinkStyle, color: isApproved ? '#1b5e20' : '#663C00' }}>Undo</button>
+          <span style={{ ...subtitleStyle, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            By {actorName} • {formatRelativeTime(timestamp)}
+          </span>
         </div>
-      </div>
-      <span style={{ fontSize: 12, color: '#686576', fontFamily: 'Roboto, sans-serif', paddingLeft: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        by {actorName} • {formatRelativeTime(timestamp)}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 22 }}>
-        {onApproveChanges && (
-          <button onClick={onApproveChanges} style={{ ...containedGreenButton, padding: '5px 12px', fontSize: 12 }}>
-            Approve Changes
-          </button>
-        )}
+        <WidgetMenuButton items={menuItems} disabled={disabled} />
       </div>
     </div>
   );

@@ -180,9 +180,10 @@ export const AlertAssetPreviewModal = ({
           ) : (
             <div style={{ marginLeft: 'auto' }}>
               <AssetStatusBadge
-                label={approvalStatus === 'approved' ? 'Asset Approved' : 'Changes Requested'}
+                label={approvalStatus === 'approved' ? 'Approved' : 'Changes Requested'}
                 actorName={reviewActorName ?? ''}
                 timestamp={reviewTimestamp ?? 0}
+                disabled={approvalDisabled}
                 onUndo={onUndo}
                 onApproveChanges={approvalStatus === 'rejected' ? onApprove : undefined}
                 layout="static"

@@ -4,10 +4,11 @@ import { IconButton, Menu, Switch } from '@mui/material';
 import {
   Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Refresh, Send,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
+import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
 import { HighlightableParagraph, FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
 import { CommentableAssetPreview } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
@@ -75,6 +76,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [floatingSelection, setFloatingSelection] = useState<FloatingSelection | null>(null);
   const emailBodyRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const anchorRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerCommentRef = (id: string, el: HTMLDivElement | null) => {
@@ -281,9 +283,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           />
           {reviewEntry && (
             <AssetStatusBadge
-              label={reviewEntry.status === 'approved' ? 'Asset Approved' : 'Changes Requested'}
+              label={reviewEntry.status === 'approved' ? 'Approved' : 'Changes Requested'}
               actorName={reviewEntry.actorName}
               timestamp={reviewEntry.timestamp}
+              disabled={isArchived}
               onUndo={() => setOfferAssetReview(alert.id, offer.id, 'pending')}
               onApproveChanges={reviewEntry.status === 'rejected' ? () => setOfferAssetReview(alert.id, offer.id, 'approved') : undefined}
             />
@@ -320,25 +323,35 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       replies: allComments.filter((r) => r.parentCommentId === c.id),
     }));
 
+  const assetEntries: { offerId: string; status: ReviewStatus }[] = allAlertOffers.map((o) => ({ offerId: o.id, status: offerReviewFor(o.id)?.status ?? 'pending' }));
   const approvedOfferEntries = allAlertOffers
     .map((o) => offerReviewFor(o.id))
     .filter((e): e is OfferReviewEntry => !!e && e.status === 'approved');
-  const rejectedOffers = allAlertOffers.filter((o) => offerReviewFor(o.id)?.status === 'rejected');
+  const rejectedOfferEntries = allAlertOffers
+    .map((o) => offerReviewFor(o.id))
+    .filter((e): e is OfferReviewEntry => !!e && e.status === 'rejected');
   const approverNames = [...new Set(approvedOfferEntries.map((e) => e.actorName))];
   const lastApprovedTimestamp = approvedOfferEntries.length
     ? Math.max(...approvedOfferEntries.map((e) => e.timestamp))
     : undefined;
+  const lastRejectedEntry = rejectedOfferEntries.length
+    ? rejectedOfferEntries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest))
+    : undefined;
 
-  const handleScrollToFirstRejectedAsset = () => {
-    const first = rejectedOffers[0];
-    if (!first) return;
-    anchorRefs.current.get(assetStatusAnchorId(first.id))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-  const handleUndoAllApprovals = () => {
+  const handleUndoAllAssetReviews = () => {
     allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
   };
-  const handleApproveAllAssets = () => {
-    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'approved'));
+  // Only approves assets that haven't been reviewed at all — an asset already in Changes Requested is left
+  // alone, since that decision has to be resolved individually (Approve Changes / Undo on its own card).
+  const handleApproveRemainingAssets = () => {
+    allAlertOffers.forEach((o) => {
+      if (!offerReviewFor(o.id)) setOfferAssetReview(alert.id, o.id, 'approved');
+    });
+  };
+  const handleSelectAsset = (offerId: string) => {
+    const container = scrollContainerRef.current;
+    const target = anchorRefs.current.get(assetStatusAnchorId(offerId));
+    if (container && target) scrollElementIntoViewCentered(container, target);
   };
 
   // Carousel within the enlarged asset preview — steps through allAlertOffers in order, wrapping at the ends.
@@ -360,9 +373,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setShowComments(true);
   };
   const handleToggleReaction = (commentId: string, emoji: string) => toggleAlertCommentReaction(alert.id, commentId, emoji);
-
-  const totalAssetCount = allAlertOffers.length;
-  const isAssetsComplete = totalAssetCount > 0 && approvedOfferEntries.length === totalAssetCount;
 
   return ReactDOM.createPortal(
     <>
@@ -405,6 +415,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 scrolling with the canvas's content. */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
               <div
+                ref={scrollContainerRef}
                 style={{ flex: 1, overflow: 'auto', background: '#F4F5F6', padding: '24px 16px', position: 'relative' }}
               >
                 <div ref={contentRef} style={{ position: 'relative', width: 520, margin: '0 auto' }}>
@@ -580,16 +591,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 }}
               >
                 <AssetApprovalWidget
-                  approvedCount={approvedOfferEntries.length}
-                  totalCount={totalAssetCount}
-                  isComplete={isAssetsComplete}
+                  assets={assetEntries}
                   approverNames={approverNames}
                   lastApprovedTimestamp={lastApprovedTimestamp}
-                  rejectedCount={rejectedOffers.length}
+                  lastRejectedActorName={lastRejectedEntry?.actorName}
+                  lastRejectedTimestamp={lastRejectedEntry?.timestamp}
                   disabled={isArchived || isSent}
-                  onScrollToFirstRejected={handleScrollToFirstRejectedAsset}
-                  onUndoAllApprovals={handleUndoAllApprovals}
-                  onApproveAllAssets={handleApproveAllAssets}
+                  onApproveRemaining={handleApproveRemainingAssets}
+                  onUndoAllReviews={handleUndoAllAssetReviews}
+                  onSelectAsset={handleSelectAsset}
                 />
                 <EmailApprovalWidget
                   status={alert.emailStatus}
