@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { IconButton } from '@mui/material';
-import { Fullscreen, Check, Sync, DescriptionOutlined } from '@mui/icons-material';
+import { Fullscreen, Check, Sync, DescriptionOutlined, Palette, PaletteOutlined } from '@mui/icons-material';
 import type { AssetCommentAnchor, Offer, ReviewStatus, Template } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { PENDING_ANCHOR_ID } from './AlertHighlightableText';
@@ -184,27 +184,30 @@ export const CommentableAssetPreview = ({
         registerAnchorRef={registerAnchorRef}
       />
       {onShowOfferCard && hovered && (
-        <IconButton
+        <button
           onClick={(e) => { e.stopPropagation(); onShowOfferCard(); }}
-          sx={{
-            position: 'absolute', top: 6, right: 48, zIndex: 7, background: 'rgba(0,0,0,0.25)', padding: '5px',  width: 36, height: 36,
+          style={{
+            position: 'absolute', top: 6, right: 48, zIndex: 7, background: '#ffffff', height: 36,
+            display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
+            borderRadius: 100, padding: '6px 12px', fontSize: 14, fontFamily: 'Roboto, sans-serif',
+            fontWeight: 500, letterSpacing: '0.4px', lineHeight: '24px', flexShrink: 0,
             boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
-            '&:hover': { background: 'rgba(0,0,0,0.40)' },
           }}
         >
-          <DescriptionOutlined style={{ fontSize: 18, color: '#ffffff' }} />
-        </IconButton>
+          <PaletteOutlined style={{ fontSize: 18 }} />
+          Offer Info
+        </button>
       )}
       {onRequestPreview && hovered && (
         <IconButton
           onClick={(e) => { e.stopPropagation(); onRequestPreview(); }}
           sx={{
-            position: 'absolute', top: 6, right: 6, zIndex: 7, background: 'rgba(0,0,0,0.25)', padding: '5px',  width: 36, height: 36,
+            position: 'absolute', top: 6, right: 6, zIndex: 7, background: '#ffffff', padding: '5px', width: 36, height: 36,
             boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
-            '&:hover': { background: 'rgba(0,0,0,0.40)' },
+            '&:hover': { background: '#fafafa' },
           }}
         >
-          <Fullscreen style={{ fontSize: 18, color: '#ffffff' }} />
+          <Fullscreen style={{ fontSize: 18, color: '#222222' }} />
         </IconButton>
       )}
       {onApprove && onReject && hovered && approvalStatus === 'pending' && (
@@ -214,12 +217,12 @@ export const CommentableAssetPreview = ({
               disabled={approvalDisabled}
               onClick={(e) => { e.stopPropagation(); onReject(); }}
               sx={{
-                background: '#E17613', padding: '5px', width: 36, height: 36,
+                background: '#ffffff', padding: '5px', width: 36, height: 36, outline: '1px solid #473bab',
                 boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
-                '&:hover': { background: '#d16d0f' },
+                '&:hover': { background: '#fafafa' },
               }}
             >
-              <Sync style={{ fontSize: 18, color: '#ffffff' }} />
+              <Sync style={{ fontSize: 18, color: '#473bab' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Approve Asset" slotProps={tooltipPopperProps}>

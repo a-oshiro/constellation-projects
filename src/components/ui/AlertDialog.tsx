@@ -66,7 +66,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [previewOfferId, setPreviewOfferId] = useState<string | null>(null);
   const [activeOfferCardOfferId, setActiveOfferCardOfferId] = useState<string | null>(null);
   const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offerCardRef = useRef<HTMLDivElement>(null);
 
   // Margin commenting: a highlight/pin the user just created but hasn't sent a comment for yet, and the id
@@ -107,26 +106,23 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     return () => clearTimeout(t);
   }, [activeAnchorId]);
 
-  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); }, []);
-
-  // Cursor-following hint: shown for 5s on the very first hover of the email content this dialog session
-  // (a fresh useRef per mount, so closing and reopening the dialog resets it) — never again after that,
-  // even if the user leaves and re-enters. Only offered for alerts still awaiting a decision.
-  const hintShownRef = useRef(false);
+  // Cursor-following hint: active from the moment the dialog opens, tracking the cursor anywhere on
+  // screen, until the user clicks inside the email body content — no auto-hide timer, no re-arming on
+  // hover. Only offered for alerts still awaiting a decision.
   const canShowCursorHint = alert.status === 'generated' || alert.status === 'rejected';
-  const handleContentMouseEnter = (e: React.MouseEvent) => {
-    if (!canShowCursorHint || hintShownRef.current) return;
-    hintShownRef.current = true;
-    setCursorHint({ x: e.clientX, y: e.clientY });
-    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-    hintTimerRef.current = setTimeout(() => setCursorHint(null), 5000);
-  };
-  const handleContentMouseMove = (e: React.MouseEvent) => {
-    setCursorHint((prev) => (prev ? { x: e.clientX, y: e.clientY } : prev));
-  };
-  const handleContentMouseLeave = () => {
+  const hintDismissedRef = useRef(false);
+  useEffect(() => {
+    if (!canShowCursorHint) return;
+    const handleMove = (e: MouseEvent) => {
+      if (hintDismissedRef.current) return;
+      setCursorHint({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMove);
+    return () => window.removeEventListener('mousemove', handleMove);
+  }, [canShowCursorHint]);
+  const dismissCursorHint = () => {
+    hintDismissedRef.current = true;
     setCursorHint(null);
-    if (hintTimerRef.current) { clearTimeout(hintTimerRef.current); hintTimerRef.current = null; }
   };
 
   const findOffer = (id: string) => offers.find((o) => o.id === id);
@@ -422,9 +418,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   <div
                     ref={emailBodyRef}
                     onMouseUp={handleEmailMouseUp}
-                    onMouseEnter={handleContentMouseEnter}
-                    onMouseMove={handleContentMouseMove}
-                    onMouseLeave={handleContentMouseLeave}
+                    onClickCapture={dismissCursorHint}
                     style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 520, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}
                   >
                     <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
