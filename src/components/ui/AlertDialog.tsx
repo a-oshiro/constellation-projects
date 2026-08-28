@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton, Menu, Switch } from '@mui/material';
 import {
-  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Refresh, Send,
+  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Refresh, Send, AddComment,
 } from '@mui/icons-material';
 import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -681,11 +681,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <div
           style={{
             position: 'fixed', top: cursorHint.y + 16, left: cursorHint.x + 16, zIndex: 100025, pointerEvents: 'none',
-            background: 'rgba(31,29,37,0.92)', color: '#ffffff', padding: '6px 10px', borderRadius: 6,
-            fontSize: 12, fontFamily: 'Roboto, sans-serif', maxWidth: 240, boxShadow: '0px 2px 8px rgba(0,0,0,0.24)',
+            background: '#473bab', color: '#ffffff', padding: '6px 10px', borderRadius: 6,
+            fontSize: 12, fontFamily: 'Roboto, sans-serif', maxWidth: 240, display: 'flex', alignItems: 'top', gap: 6,
           }}
         >
-          Highlight text or click anywhere on the assets to add comments.
+          <AddComment style={{ fontSize: 16}} />
+          <span>Highlight text or click anywhere on the assets to add comments.</span>
         </div>
       )}
 

@@ -228,7 +228,14 @@ export const AssetApprovalWidget = ({
             ))}
           </div>
           {pendingCount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingLeft: 22 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end'}}>
+              {reviewedCount === 0 ? (
+              <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
+                Assets can be approved individually
+              </span>
+              ) : (
+              <div/>
+              )}
               <button
                 disabled={disabled}
                 onClick={onApproveRemaining}
