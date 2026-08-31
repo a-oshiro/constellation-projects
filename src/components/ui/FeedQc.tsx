@@ -30,9 +30,7 @@ export const FeedQc = () => {
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        background: '#f4f5f6',
         borderRadius: 12,
-        padding: '4px 8px',
       }}
     >
       <Button

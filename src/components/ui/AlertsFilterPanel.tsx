@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { IconButton, Select, MenuItem, Autocomplete, TextField, Chip } from '@mui/material';
-import { Close, CheckCircle, Cancel } from '@mui/icons-material';
+import { Close, CheckCircle, CheckCircleOutlined, Cancel } from '@mui/icons-material';
 import type { Alert, AlertStatus, Offer } from '../../data/types';
 import {
-  DATE_PRESETS, MODEL_TYPE_OPTIONS, LIFECYCLE_STEP_LABELS, APPROVAL_LABELS,
+  DATE_PRESETS, MODEL_TYPE_OPTIONS, LIFECYCLE_STEP_LABELS, APPROVAL_LABELS, APPROVAL_OPTIONS,
   buildAlertFilterOptions, hasActiveAlertFilters,
 } from '../../utils/alertFilters';
 import type { AlertFilterState, ApprovalFilterKey } from '../../utils/alertFilters';
@@ -49,7 +49,7 @@ const INPUT_SX = {
   },
 };
 
-const CHIP_SX = {
+export const CHIP_SX = {
   background: '#f0f2f4',
   borderRadius: '8px',
   height: 24,
@@ -114,13 +114,14 @@ function MultiSelectField<T>({ label, options, value, getLabel, onChange }: Fiel
   );
 }
 
-const APPROVAL_OPTIONS: ApprovalFilterKey[] = ['approved_email', 'approved_assets', 'rejected_email', 'rejected_assets'];
+export function approvalOptionIcon(key: ApprovalFilterKey, fontSize: number) {
+  if (key.startsWith('approved')) return <CheckCircle style={{ fontSize, color: '#4caf50' }} />;
+  if (key.startsWith('pending')) return <CheckCircleOutlined style={{ fontSize, color: '#9c99a9' }} />;
+  return <Cancel style={{ fontSize, color: '#d2323f' }} />;
+}
 
 function ApprovalsField({ value, onChange }: { value: ApprovalFilterKey[]; onChange: (v: ApprovalFilterKey[]) => void }) {
-  const icon = (key: ApprovalFilterKey, fontSize: number) =>
-    key.startsWith('approved')
-      ? <CheckCircle style={{ fontSize, color: '#4caf50' }} />
-      : <Cancel style={{ fontSize, color: '#d2323f' }} />;
+  const icon = approvalOptionIcon;
 
   return (
     <div>
