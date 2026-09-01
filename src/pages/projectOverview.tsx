@@ -218,59 +218,107 @@ export const ProjectOverviewPage = () => {
             <Breadcrumbs items={['Projects', project.projectName]} />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
-            {!tasksPanelOpen && (
+          {(() => {
+            const tasksToggle = !tasksPanelOpen && (
               <IconButton size="small" onClick={openTasksPanel} sx={{ flexShrink: 0, padding: '4px' }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <rect x="1.75" y="1.75" width="16.5" height="16.5" rx="1.25" stroke="#1f1d25" strokeWidth="1.5"/>
                   <line x1="7.25" y1="1.75" x2="7.25" y2="18.25" stroke="#1f1d25" strokeWidth="1.5"/>
                 </svg>
               </IconButton>
-            )}
+            );
 
-            <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
-              {project.projectName}
-            </h1>
+            const title = (
+              <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
+                {project.projectName}
+              </h1>
+            );
 
-            <IconButton size="small" sx={{ padding: '4px' }}>
-              <MoreVert style={{ fontSize: 18, color: '#686576' }} />
-            </IconButton>
+            const menuButton = (
+              <IconButton size="small" sx={{ padding: '4px' }}>
+                <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+              </IconButton>
+            );
 
-            <div style={{ flex: 1 }} />
+            const statusAndTags = (
+              <>
+                <ProjectStatusBadge status={project.workflowStatus} />
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                  {project.startDate} - {project.endDate}
+                </span>
+                <TagChip>{project.brandTag}</TagChip>
+                <TagChip>Used Offers</TagChip>
+              </>
+            );
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <img src={bmwLogoSrc} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'contain', background: '#ffffff', border: '1px solid #f0f0f0' }} />
-              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
-                {project.accountName}
-              </span>
-            </div>
+            const lastUpdatedAndCreated = (
+              <>
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                  Last Updated: {project.lastUpdated}
+                </span>
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                  Created: {project.created}
+                </span>
+              </>
+            );
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <img src={project.creatorAvatar} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} />
-              <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-                {project.creator}
-              </span>
-            </div>
-          </div>
+            const accountBlock = (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <img src={bmwLogoSrc} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'contain', background: '#ffffff', border: '1px solid #f0f0f0' }} />
+                <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
+                  {project.accountName}
+                </span>
+              </div>
+            );
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10, flexWrap: 'wrap' }}>
-            <ProjectStatusBadge status={project.workflowStatus} />
-            <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-              {project.startDate} - {project.endDate}
-            </span>
-            <TagChip>{project.brandTag}</TagChip>
-            <TagChip>Used Offers</TagChip>
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-              Last Updated: {project.lastUpdated}
-            </span>
-            <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-              Created: {project.created}
-            </span>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#473bab', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              Expand
-            </button>
-          </div>
+            const creatorBlock = (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <img src={project.creatorAvatar} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                  {project.creator}
+                </span>
+              </div>
+            );
+
+            // Evergreen projects have no second "expanded" state to reveal, so Expand is dropped and
+            // everything lives in one row alongside the title instead of spilling onto a second line.
+            if (project.isEvergreen) {
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 6, flexWrap: 'wrap' }}>
+                  {tasksToggle}
+                  {title}
+                  {menuButton}
+                  {statusAndTags}
+                  <div style={{ flex: 1 }} />
+                  {lastUpdatedAndCreated}
+                  {accountBlock}
+                  {creatorBlock}
+                </div>
+              );
+            }
+
+            return (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
+                  {tasksToggle}
+                  {title}
+                  {menuButton}
+                  <div style={{ flex: 1 }} />
+                  {accountBlock}
+                  {creatorBlock}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10, flexWrap: 'wrap' }}>
+                  {statusAndTags}
+                  <div style={{ flex: 1 }} />
+                  {lastUpdatedAndCreated}
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#473bab', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    Expand
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* ── Sections ───────────────────────────────────────── */}
