@@ -5,7 +5,7 @@ import type { Alert, AlertStatus, Offer } from '../../data/types';
 import {
   ALERT_FILTER_FIELD_ORDER, DATE_PRESETS, LIFECYCLE_STEP_LABELS, APPROVAL_LABELS, APPROVAL_OPTIONS, MODEL_TYPE_OPTIONS,
   buildAlertFilterOptions, hasActiveAlertFilters, getMustShowFilterFields,
-  getOptionalFilterFields, dateRangeLabel,
+  getOptionalFilterFields, dateRangeLabel, getAlertFilterFieldCount,
 } from '../../utils/alertFilters';
 import type { AlertFilterState, AlertFilterFieldKey, AlertsViewMode } from '../../utils/alertFilters';
 import { approvalOptionIcon } from './AlertsFilterPanel';
@@ -49,6 +49,7 @@ function renderFieldControl(
   options: AlertFilterOptionsLike,
 ): ReactNode {
   const label = getFieldLabel(key);
+  const count = getAlertFilterFieldCount(state, key);
 
   switch (key) {
     case 'sortOrder':
@@ -56,6 +57,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple={false}
+          count={count}
           options={['newest', 'oldest'] as const}
           value={[state.sortOrder]}
           getOptionKey={(v) => v}
@@ -68,6 +70,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={options.signalTypes}
           value={state.signalTypes}
           getOptionKey={(v) => v}
@@ -85,6 +88,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple={false}
+          count={count}
           options={dateOptions}
           value={dateOptions.filter((p) => p.key === state.datePreset)}
           getOptionKey={(p) => p.key}
@@ -101,6 +105,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={Object.keys(LIFECYCLE_STEP_LABELS) as AlertStatus[]}
           value={state.lifecycleSteps}
           getOptionKey={(v) => v}
@@ -113,6 +118,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={APPROVAL_OPTIONS}
           value={state.approvals}
           getOptionKey={(v) => v}
@@ -126,6 +132,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={MODEL_TYPE_OPTIONS}
           value={state.modelTypes}
           getOptionKey={(v) => v}
@@ -138,6 +145,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={options.years}
           value={state.years}
           getOptionKey={(v) => String(v)}
@@ -150,6 +158,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={options.makes}
           value={state.makes}
           getOptionKey={(v) => v}
@@ -162,6 +171,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={options.models}
           value={state.models}
           getOptionKey={(v) => v}
@@ -174,6 +184,7 @@ function renderFieldControl(
         <CompactFilterSelect
           label={label}
           multiple
+          count={count}
           options={options.trims}
           value={state.trims}
           getOptionKey={(v) => v}

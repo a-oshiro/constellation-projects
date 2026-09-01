@@ -223,6 +223,24 @@ export function isAlertFilterFieldActive(state: AlertFilterState, key: AlertFilt
   return FIELD_ACTIVE_PREDICATES[key](state);
 }
 
+/** Count shown in a Filter Row field's selection badge — mirrors FIELD_ACTIVE_PREDICATES, but as a count rather than a boolean. */
+const FIELD_COUNTS: Record<AlertFilterFieldKey, (s: AlertFilterState) => number> = {
+  sortOrder: () => 0,
+  signalTypes: (s) => s.signalTypes.length,
+  dateRange: (s) => (s.datePreset === 'all' ? 0 : 1),
+  lifecycleSteps: (s) => s.lifecycleSteps.length,
+  approvals: (s) => s.approvals.length,
+  modelTypes: (s) => s.modelTypes.length,
+  years: (s) => s.years.length,
+  makes: (s) => s.makes.length,
+  models: (s) => s.models.length,
+  trims: (s) => s.trims.length,
+};
+
+export function getAlertFilterFieldCount(state: AlertFilterState, key: AlertFilterFieldKey): number {
+  return FIELD_COUNTS[key](state);
+}
+
 export type AlertsViewMode = 'kanban' | 'table';
 
 /** Filters that are always shown in the Filter Row, regardless of viewport width — Lifecycle step only applies to List. */

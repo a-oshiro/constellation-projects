@@ -1,117 +1,53 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { Autocomplete, TextField, Chip } from '@mui/material';
+import { Autocomplete, TextField } from '@mui/material';
 import type { ReactNode } from 'react';
-import { CHIP_SX as PANEL_CHIP_SX } from './AlertsFilterPanel';
 
 export const FIELD_WIDTH = 140;
-const CHIP_GAP = 4;
 
-// Same chip look as the left panel's fields, plus fit-content sizing and ellipsis truncation for
-// when a chip's label doesn't fit. flexShrink must stay 1 (not 0) so the chip yields room to a
-// sibling "+N" badge instead of claiming the whole container via its own maxWidth:100%.
-const CHIP_SX = {
-  ...PANEL_CHIP_SX,
-  width: 'fit-content',
-  maxWidth: '100%',
-  minWidth: 0,
-  flexShrink: 1,
-  '& .MuiChip-label': {
-    ...PANEL_CHIP_SX['& .MuiChip-label'],
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  '& .MuiChip-deleteIcon': {
-    ...PANEL_CHIP_SX['& .MuiChip-deleteIcon'],
-    flexShrink: 0,
-  },
-};
+const ACTIVE_PURPLE = '#473bab';
 
-type GetItemProps = (args: { index: number }) => Record<string, unknown>;
-
-/**
- * Shows as many selected-value chips as fit the field's available width (measured against hidden
- * clones, same idiom as StrategySummary in ManageWorkflowDialog.tsx), falling back to a plain-text
- * "+N" for the rest.
- */
-function FittingChips<T>({
-  tagValue, getItemProps, getOptionLabel, renderOptionIcon,
-}: {
-  tagValue: T[];
-  getItemProps: GetItemProps;
-  getOptionLabel: (v: T) => string;
-  renderOptionIcon?: (v: T) => ReactNode;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const cloneRefs = useRef<Array<HTMLElement | null>>([]);
-  const moreRefs = useRef<Array<HTMLElement | null>>([]);
-  const [visibleCount, setVisibleCount] = useState(tagValue.length);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container || tagValue.length === 0) { setVisibleCount(0); return; }
-
-    const available = container.clientWidth;
-    const itemWidths = cloneRefs.current.slice(0, tagValue.length).map((el) => el?.offsetWidth ?? 0);
-
-    // prefixWidths[k] = rendered width of the first k chips, gaps included.
-    const prefixWidths = [0];
-    itemWidths.forEach((w, i) => {
-      prefixWidths.push(prefixWidths[i] + w + (i > 0 ? CHIP_GAP : 0));
-    });
-
-    if (prefixWidths[tagValue.length] <= available) {
-      setVisibleCount(tagValue.length);
-      return;
-    }
-
-    // At least one chip always shows (CSS-truncated if needed) — "+N" only covers items beyond it.
-    for (let k = tagValue.length - 1; k >= 1; k--) {
-      const remaining = tagValue.length - k;
-      const badgeWidth = moreRefs.current[remaining - 1]?.offsetWidth ?? 0;
-      if (prefixWidths[k] + CHIP_GAP + badgeWidth <= available) {
-        setVisibleCount(k);
-        return;
-      }
-    }
-    setVisibleCount(1);
-  }, [tagValue, getOptionLabel]);
-
-  const visible = tagValue.slice(0, visibleCount);
-  const remaining = tagValue.length - visibleCount;
-
+/** Selection-count badge, matching FiltersIconWithBadge's look (AlertsKanbanBoard.tsx). */
+function CountBadge({ count }: { count: number }) {
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: CHIP_GAP, flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}>
-      {visible.map((option, i) => {
-        const { key, ...itemProps } = getItemProps({ index: i });
-        return (
-          <Chip
-            key={key as string}
-            {...itemProps}
-            label={getOptionLabel(option)}
-            icon={renderOptionIcon ? renderOptionIcon(option) : undefined}
-            sx={CHIP_SX}
-          />
-        );
-      })}
-      {remaining > 0 && (
-        <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          +{remaining}
-        </span>
-      )}
+    <span
+      style={{
+        minWidth: 16,
+        height: 16,
+        padding: '0 4px',
+        borderRadius: 8,
+        background: ACTIVE_PURPLE,
+        color: '#ffffff',
+        fontSize: 10,
+        lineHeight: '16px',
+        fontFamily: 'Roboto, sans-serif',
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {count}
+    </span>
+  );
+}
 
-      {/* Hidden measurement clones — same chip markup, used to compute how many fit. */}
-      <div aria-hidden style={{ position: 'absolute', visibility: 'hidden', height: 0, overflow: 'hidden', pointerEvents: 'none', top: 0, left: 0, display: 'flex', gap: CHIP_GAP }}>
-        {tagValue.map((option, i) => (
-          <div key={i} ref={(el) => { cloneRefs.current[i] = el; }}>
-            <Chip label={getOptionLabel(option)} icon={renderOptionIcon ? renderOptionIcon(option) : undefined} sx={CHIP_SX} />
-          </div>
-        ))}
-        {tagValue.map((_, i) => (
-          <span key={i} ref={(el) => { moreRefs.current[i] = el; }} style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap' }}>
-            +{i + 1}
-          </span>
-        ))}
-      </div>
+/** Field content is always the label plus a count badge (when active) — never the selected values themselves. */
+function LabelWithCount({ label, count }: { label: string; count: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', flex: '1 1 auto', minWidth: 0 }}>
+      <span
+        style={{
+          fontSize: 13,
+          fontFamily: 'Roboto, sans-serif',
+          color: count > 0 ? ACTIVE_PURPLE : '#1f1d25',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {label}
+      </span>
+      {count > 0 && <CountBadge count={count} />}
     </div>
   );
 }
@@ -121,6 +57,8 @@ interface CompactFilterSelectProps<T> {
   options: T[];
   value: T[];
   multiple: boolean;
+  /** Number of selected items shown in the field's badge — computed by the caller so single-select "no selection" defaults (e.g. dateRange's "all") read as 0. */
+  count: number;
   getOptionKey: (v: T) => string;
   getOptionLabel: (v: T) => string;
   renderOptionIcon?: (v: T) => ReactNode;
@@ -128,26 +66,13 @@ interface CompactFilterSelectProps<T> {
 }
 
 export function CompactFilterSelect<T>({
-  label, options, value, multiple, getOptionKey, getOptionLabel, renderOptionIcon, onChange,
+  label, options, value, multiple, count, getOptionKey, getOptionLabel, renderOptionIcon, onChange,
 }: CompactFilterSelectProps<T>) {
-  // MUI v9 removed `renderTags` in favor of `renderValue` — same idea, but it also covers single-select.
-  const renderValue = (val: unknown, getItemProps: GetItemProps) => {
-    const tagValue = val as T[];
-    if (tagValue.length === 0) return null;
-    return (
-      <FittingChips
-        tagValue={tagValue}
-        getItemProps={getItemProps}
-        getOptionLabel={getOptionLabel}
-        renderOptionIcon={renderOptionIcon}
-      />
-    );
-  };
-
-  // With a multi-select value, FittingChips owns the row's flexible space — the native input
-  // collapses to ~0 so it doesn't compete for room. Otherwise (empty, or single-select) it's the
-  // only content and should fill the field normally.
-  const inputTakesSpace = !(multiple && value.length > 0);
+  const active = count > 0;
+  // MUI skips calling renderValue at all for an empty multi-select array (nothing to render as
+  // tags), so an unselected field falls back to the native input's placeholder for its label —
+  // renderValue only takes over once there's a count to badge.
+  const inputTakesSpace = count === 0;
 
   return (
     <Autocomplete
@@ -168,10 +93,10 @@ export function CompactFilterSelect<T>({
           </li>
         );
       } : undefined}
-      renderValue={multiple ? renderValue : undefined}
-      renderInput={(params) => (
-        <TextField {...params} placeholder={value.length === 0 ? label : undefined} size="small" />
-      )}
+      // MUI v9's renderValue (replacing renderTags) covers single-select too — used here to show
+      // the field's label + count badge instead of the selected values, once there's a count.
+      renderValue={count > 0 ? () => <LabelWithCount label={label} count={count} /> : undefined}
+      renderInput={(params) => <TextField {...params} placeholder={count === 0 ? label : undefined} size="small" />}
       size="small"
       // The field itself stays a fixed FIELD_WIDTH, but the dropdown shouldn't inherit that — size
       // it to its own content so option labels never wrap onto a second line.
@@ -182,7 +107,8 @@ export function CompactFilterSelect<T>({
       sx={{
         width: FIELD_WIDTH,
         flexShrink: 0,
-        // Same chrome (colors, radius, font) as the left panel's INPUT_SX.
+        // Same chrome (colors, radius, font) as the left panel's INPUT_SX, plus a purple highlight
+        // when the field has an active selection.
         '& .MuiOutlinedInput-root': {
           display: 'flex',
           alignItems: 'center',
@@ -193,16 +119,18 @@ export function CompactFilterSelect<T>({
           borderRadius: '4px',
           fontSize: 13,
           fontFamily: 'Roboto, sans-serif',
-          background: '#f9fafa',
-          '& fieldset': { borderColor: '#cac9cf' },
-          '&:hover fieldset': { borderColor: '#9b96b0' },
-          '&.Mui-focused fieldset': { borderColor: '#473bab' },
+          background: active ? '#f0eeff' : '#f9fafa',
+          '& fieldset': { borderColor: active ? ACTIVE_PURPLE : '#cac9cf' },
+          '&:hover fieldset': { borderColor: ACTIVE_PURPLE },
+          '&.Mui-focused fieldset': { borderColor: ACTIVE_PURPLE },
         },
         '& .MuiOutlinedInput-input': {
           padding: '0 !important',
           fontSize: 13,
           fontFamily: 'Roboto, sans-serif',
           textOverflow: 'ellipsis',
+          // Once there's a count, the label + badge (renderValue) owns the row's space — the native
+          // input collapses to 0 so it doesn't compete for room or duplicate the label as a placeholder.
           flex: inputTakesSpace ? '1 1 auto' : '0 0 0px',
           minWidth: inputTakesSpace ? 0 : '0px !important',
         },
