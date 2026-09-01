@@ -50,6 +50,9 @@ function renderFieldControl(
 ): ReactNode {
   const label = getFieldLabel(key);
   const count = getAlertFilterFieldCount(state, key);
+  // Date Range already shows its one selection as the field's own text, so a "Filtering by:" tooltip
+  // on top of that would be redundant — every other field keeps the tooltip.
+  const showFilterTooltip = key !== 'dateRange';
 
   switch (key) {
     case 'sortOrder':
@@ -58,6 +61,7 @@ function renderFieldControl(
           label={label}
           multiple={false}
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={['newest', 'oldest'] as const}
           value={[state.sortOrder]}
           getOptionKey={(v) => v}
@@ -71,6 +75,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={options.signalTypes}
           value={state.signalTypes}
           getOptionKey={(v) => v}
@@ -89,6 +94,7 @@ function renderFieldControl(
           label={label}
           multiple={false}
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={dateOptions}
           value={dateOptions.filter((p) => p.key === state.datePreset)}
           getOptionKey={(p) => p.key}
@@ -106,6 +112,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={Object.keys(LIFECYCLE_STEP_LABELS) as AlertStatus[]}
           value={state.lifecycleSteps}
           getOptionKey={(v) => v}
@@ -119,6 +126,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={APPROVAL_OPTIONS}
           value={state.approvals}
           getOptionKey={(v) => v}
@@ -133,6 +141,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={MODEL_TYPE_OPTIONS}
           value={state.modelTypes}
           getOptionKey={(v) => v}
@@ -146,6 +155,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={options.years}
           value={state.years}
           getOptionKey={(v) => String(v)}
@@ -159,6 +169,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={options.makes}
           value={state.makes}
           getOptionKey={(v) => v}
@@ -172,6 +183,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={options.models}
           value={state.models}
           getOptionKey={(v) => v}
@@ -185,6 +197,7 @@ function renderFieldControl(
           label={label}
           multiple
           count={count}
+          showFilterTooltip={showFilterTooltip}
           options={options.trims}
           value={state.trims}
           getOptionKey={(v) => v}
