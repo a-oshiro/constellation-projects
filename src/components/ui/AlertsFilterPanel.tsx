@@ -136,7 +136,7 @@ function ApprovalsField({ value, onChange }: { value: ApprovalFilterKey[]; onCha
         renderOption={(props, option) => {
           const { key, ...rest } = props;
           return (
-            <li key={key} {...rest} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <li key={key} {...rest} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               {icon(option, 16)}
               {APPROVAL_LABELS[option]}
             </li>
