@@ -1,19 +1,20 @@
-import { Autocomplete, TextField } from '@mui/material';
+import { Autocomplete, Checkbox, TextField } from '@mui/material';
 import type { ReactNode } from 'react';
 
 export const FIELD_WIDTH = 140;
 
 const ACTIVE_PURPLE = '#473bab';
 
-/** Selection-count badge, matching FiltersIconWithBadge's look (AlertsKanbanBoard.tsx). */
+/** Selection-count badge, a small rounded square (not a circle/pill). */
 function CountBadge({ count }: { count: number }) {
   return (
     <span
       style={{
+        boxSizing: 'border-box',
         minWidth: 16,
         height: 16,
-        padding: '0 4px',
-        borderRadius: 8,
+        padding: '0 3px',
+        borderRadius: 2,
         background: ACTIVE_PURPLE,
         color: '#ffffff',
         fontSize: 10,
@@ -31,23 +32,38 @@ function CountBadge({ count }: { count: number }) {
   );
 }
 
-/** Field content is always the label plus a count badge (when active) — never the selected values themselves. */
+function FieldText({ text, active }: { text: string; active: boolean }) {
+  return (
+    <span
+      style={{
+        fontSize: 13,
+        fontFamily: 'Roboto, sans-serif',
+        color: active ? ACTIVE_PURPLE : '#1f1d25',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** Multi-select field content, once active: the field's own label plus a count badge — never the selected values themselves. */
 function LabelWithCount({ label, count }: { label: string; count: number }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', flex: '1 1 auto', minWidth: 0 }}>
-      <span
-        style={{
-          fontSize: 13,
-          fontFamily: 'Roboto, sans-serif',
-          color: count > 0 ? ACTIVE_PURPLE : '#1f1d25',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {label}
-      </span>
-      {count > 0 && <CountBadge count={count} />}
+      <FieldText text={label} active={count > 0} />
+      <CountBadge count={count} />
+    </div>
+  );
+}
+
+/** Single-select field content: the current selection itself (e.g. "All Time") — a single-select field only ever holds one value, so a count badge would be redundant. */
+function SelectedValue({ text, active }: { text: string; active: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', flex: '1 1 auto', minWidth: 0 }}>
+      <FieldText text={text} active={active} />
     </div>
   );
 }
@@ -69,10 +85,11 @@ export function CompactFilterSelect<T>({
   label, options, value, multiple, count, getOptionKey, getOptionLabel, renderOptionIcon, onChange,
 }: CompactFilterSelectProps<T>) {
   const active = count > 0;
-  // MUI skips calling renderValue at all for an empty multi-select array (nothing to render as
-  // tags), so an unselected field falls back to the native input's placeholder for its label —
-  // renderValue only takes over once there's a count to badge.
-  const inputTakesSpace = count === 0;
+  // Multi-select fields fall back to the native input's placeholder for their label when nothing is
+  // selected (MUI skips calling renderValue for an empty array) — single-select fields always have a
+  // current selection to show via renderValue, so they never need the placeholder.
+  const inputTakesSpace = multiple && count === 0;
+  const selectedLabel = !multiple && value[0] !== undefined ? getOptionLabel(value[0]) : label;
 
   return (
     <Autocomplete
@@ -84,25 +101,34 @@ export function CompactFilterSelect<T>({
       getOptionLabel={(v) => getOptionLabel(v as T)}
       isOptionEqualToValue={(a, b) => getOptionKey(a) === getOptionKey(b)}
       onChange={(_, v) => onChange(multiple ? (v as T[]) : (v ? [v as T] : []))}
-      renderOption={renderOptionIcon ? (props, option) => {
+      renderOption={multiple ? (props, option, state) => {
         const { key, ...rest } = props;
         return (
           <li key={key} {...rest} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {renderOptionIcon(option)}
+            <Checkbox size="small" checked={state.selected} sx={{ padding: 0 }} />
+            {renderOptionIcon?.(option)}
             {getOptionLabel(option)}
           </li>
         );
       } : undefined}
       // MUI v9's renderValue (replacing renderTags) covers single-select too — used here to show
-      // the field's label + count badge instead of the selected values, once there's a count.
-      renderValue={count > 0 ? () => <LabelWithCount label={label} count={count} /> : undefined}
-      renderInput={(params) => <TextField {...params} placeholder={count === 0 ? label : undefined} size="small" />}
+      // either the field's label + count badge (multi-select, once active) or the current selection
+      // itself (single-select, which always has exactly one value, e.g. Date Range's "All Time").
+      renderValue={
+        !multiple
+          ? () => <SelectedValue text={selectedLabel} active={active} />
+          : count > 0
+            ? () => <LabelWithCount label={label} count={count} />
+            : undefined
+      }
+      renderInput={(params) => <TextField {...params} placeholder={inputTakesSpace ? label : undefined} size="small" />}
       size="small"
       // The field itself stays a fixed FIELD_WIDTH, but the dropdown shouldn't inherit that — size
-      // it to its own content so option labels never wrap onto a second line.
+      // it to its own content so option labels never wrap onto a second line. bottom-start keeps the
+      // menu's left edge flush with the field's left edge instead of centering under it.
       slotProps={{
-        popper: { style: { width: 'fit-content', minWidth: FIELD_WIDTH } },
-        paper: { sx: { '& .MuiAutocomplete-option': { whiteSpace: 'nowrap' } } },
+        popper: { placement: 'bottom-start', style: { width: 'fit-content', minWidth: FIELD_WIDTH } },
+        paper: { sx: { '& .MuiAutocomplete-option': { whiteSpace: 'nowrap', fontSize: 12, fontFamily: 'Roboto, sans-serif' } } },
       }}
       sx={{
         width: FIELD_WIDTH,
@@ -129,8 +155,9 @@ export function CompactFilterSelect<T>({
           fontSize: 13,
           fontFamily: 'Roboto, sans-serif',
           textOverflow: 'ellipsis',
-          // Once there's a count, the label + badge (renderValue) owns the row's space — the native
-          // input collapses to 0 so it doesn't compete for room or duplicate the label as a placeholder.
+          // Once there's field content to show (badge or selection), it owns the row's space via
+          // renderValue — the native input collapses to 0 so it doesn't compete for room or duplicate
+          // that content as a placeholder.
           flex: inputTakesSpace ? '1 1 auto' : '0 0 0px',
           minWidth: inputTakesSpace ? 0 : '0px !important',
         },

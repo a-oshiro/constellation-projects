@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Checkbox, IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
+  Close, Check, Replay, Search, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -352,6 +352,7 @@ export const AlertsKanbanBoard = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [archiveMenuAnchor, setArchiveMenuAnchor] = useState<HTMLElement | null>(null);
   const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // One representative preview asset per offer, used to build each alert card's thumbnail
   // from the offers its email actually references (featured + the secondary grid). Each offer's
@@ -388,13 +389,21 @@ export const AlertsKanbanBoard = () => {
     [activeAlerts, offers, alertFilterState],
   );
 
+  // Search narrows down within whatever the field filters already produced — it isn't itself part
+  // of the persisted filter state.
+  const searched = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return filtered;
+    return filtered.filter((a) => a.subject.toLowerCase().includes(query) || a.category.toLowerCase().includes(query));
+  }, [filtered, searchTerm]);
+
   const activeFilterFieldCount = useMemo(() => getActiveFilterFieldCount(alertFilterState), [alertFilterState]);
 
   const byColumn = useMemo(() => {
     const map: Record<AlertStatus, Alert[]> = { generated: [], rejected: [], approved: [], sent: [] };
-    filtered.forEach((a) => map[a.status].push(a));
+    searched.forEach((a) => map[a.status].push(a));
     return map;
-  }, [filtered]);
+  }, [searched]);
 
   const openAlert = alerts.find((a) => a.id === openAlertId) ?? null;
 
@@ -467,6 +476,30 @@ export const AlertsKanbanBoard = () => {
                 View archived alerts
               </MenuItem>
             </Menu>
+            <TextField
+              size="small"
+              placeholder="Search alerts"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              slotProps={{
+                input: { startAdornment: <InputAdornment position="start"><Search style={{ fontSize: 18, color: '#9c99a9' }} /></InputAdornment> },
+              }}
+              sx={{
+                width: 200,
+                flexShrink: 0,
+                '& .MuiOutlinedInput-root': {
+                  background: '#f9fafa',
+                  borderRadius: '4px',
+                  minHeight: 36,
+                  fontSize: 13,
+                  fontFamily: 'Roboto, sans-serif',
+                  '& fieldset': { borderColor: '#cac9cf' },
+                  '&:hover fieldset': { borderColor: '#9b96b0' },
+                  '&.Mui-focused fieldset': { borderColor: '#473bab' },
+                },
+                '& .MuiOutlinedInput-input': { fontSize: 13, fontFamily: 'Roboto, sans-serif' },
+              }}
+            />
           </>
         )}
         trailing={(
@@ -482,7 +515,7 @@ export const AlertsKanbanBoard = () => {
       />
 
       {viewMode === 'table' ? (
-        <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
+        <AlertsTable alerts={searched} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
       ) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', height: 'fit-content' }}>
         {COLUMNS.map((col) => {

@@ -56,12 +56,12 @@ export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
 };
 
 export const APPROVAL_LABELS: Record<ApprovalFilterKey, string> = {
-  approved_email: 'Approved Email',
+  approved_email: 'Email Approved',
   pending_email: 'Pending Email Review',
-  rejected_email: 'Rejected Email',
-  approved_assets: 'Approved Assets',
+  rejected_email: 'Email Changes Requested',
+  approved_assets: 'Assets Approved',
   pending_assets: 'Pending Asset Review',
-  rejected_assets: 'Rejected Assets',
+  rejected_assets: 'Asset Changes Requested',
 };
 
 /** Render order for the Approvals field, shared by the left panel and the Filter Row. */
