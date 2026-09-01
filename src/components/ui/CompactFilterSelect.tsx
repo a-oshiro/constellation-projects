@@ -173,6 +173,12 @@ export function CompactFilterSelect<T>({
         <TextField {...params} placeholder={value.length === 0 ? label : undefined} size="small" />
       )}
       size="small"
+      // The field itself stays a fixed FIELD_WIDTH, but the dropdown shouldn't inherit that — size
+      // it to its own content so option labels never wrap onto a second line.
+      slotProps={{
+        popper: { style: { width: 'fit-content', minWidth: FIELD_WIDTH } },
+        paper: { sx: { '& .MuiAutocomplete-option': { whiteSpace: 'nowrap' } } },
+      }}
       sx={{
         width: FIELD_WIDTH,
         flexShrink: 0,
