@@ -1,7 +1,7 @@
 import { Autocomplete, Checkbox, TextField } from '@mui/material';
 import type { ReactNode } from 'react';
 
-export const FIELD_WIDTH = 140;
+export const FIELD_WIDTH = 160;
 
 const ACTIVE_PURPLE = '#473bab';
 
