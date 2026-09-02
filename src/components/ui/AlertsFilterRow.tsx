@@ -6,7 +6,6 @@ import {
   ALERT_FILTER_FIELD_ORDER, DATE_PRESETS, LIFECYCLE_STEP_LABELS, APPROVAL_LABELS, APPROVAL_OPTIONS, MODEL_TYPE_OPTIONS,
   buildAlertFilterOptions, hasActiveAlertFilters, dateRangeLabel, getAlertFilterFieldCount,
 } from '../../utils/alertFilters';
-import type { AlertFilterState, AlertFilterFieldKey, AlertsViewMode } from '../../utils/alertFilters';
 import type { AlertFilterState, AlertFilterFieldKey } from '../../utils/alertFilters';
 import { approvalOptionIcon } from './AlertsFilterPanel';
 import { CompactFilterSelect, FIELD_WIDTH } from './CompactFilterSelect';
