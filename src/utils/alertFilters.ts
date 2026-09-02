@@ -241,25 +241,6 @@ export function getAlertFilterFieldCount(state: AlertFilterState, key: AlertFilt
   return FIELD_COUNTS[key](state);
 }
 
-export type AlertsViewMode = 'kanban' | 'table';
-
-/** Filters that are always shown in the Filter Row, regardless of viewport width — Lifecycle step only applies to List. */
-export function getHardDefaultFilterFields(viewMode: AlertsViewMode): AlertFilterFieldKey[] {
-  return viewMode === 'table' ? ['dateRange', 'lifecycleSteps', 'approvals'] : ['dateRange', 'approvals'];
-}
-
-/** Defaults plus any field with an active value — these can never be hidden by the Filter Row's responsive layout. */
-export function getMustShowFilterFields(state: AlertFilterState, viewMode: AlertsViewMode): AlertFilterFieldKey[] {
-  const defaults = new Set(getHardDefaultFilterFields(viewMode));
-  return ALERT_FILTER_FIELD_ORDER.filter((k) => defaults.has(k) || isAlertFilterFieldActive(state, k));
-}
-
-/** The remaining fields, shown only as space in the Filter Row allows. */
-export function getOptionalFilterFields(state: AlertFilterState, viewMode: AlertsViewMode): AlertFilterFieldKey[] {
-  const must = new Set(getMustShowFilterFields(state, viewMode));
-  return ALERT_FILTER_FIELD_ORDER.filter((k) => !must.has(k));
-}
-
 /** Removes exactly the value a single chip represents, leaving the rest of the filter state untouched. */
 export function removeFilterChip(state: AlertFilterState, chip: ActiveFilterChip): AlertFilterState {
   switch (chip.dimension) {

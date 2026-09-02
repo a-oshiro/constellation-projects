@@ -2,12 +2,13 @@ import { Autocomplete, Checkbox, TextField } from '@mui/material';
 import type { ReactNode } from 'react';
 import { Tooltip } from './Tooltip';
 
-export const FIELD_WIDTH = 160;
+export const FIELD_WIDTH = 140;
+export const FIELD_HEIGHT = 36;
 
-const ACTIVE_PURPLE = '#473bab';
+export const ACTIVE_PURPLE = '#473bab';
 
 /** Selection-count badge, a small rounded square (not a circle/pill). */
-function CountBadge({ count }: { count: number }) {
+export function CountBadge({ count }: { count: number }) {
   return (
     <span
       style={{
@@ -156,7 +157,8 @@ export function CompactFilterSelect<T>({
               alignItems: 'center',
               flexWrap: 'nowrap',
               overflow: 'hidden',
-              minHeight: 36,
+              height: FIELD_HEIGHT,
+              boxSizing: 'border-box',
               padding: '6px 8px !important',
               borderRadius: '4px',
               fontSize: 13,

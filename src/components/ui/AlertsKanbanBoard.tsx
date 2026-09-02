@@ -451,7 +451,6 @@ export const AlertsKanbanBoard = () => {
         state={alertFilterState}
         onChange={updateAlertFilterState}
         onReset={resetAlertFilterState}
-        viewMode={viewMode}
         filterPanelOpen={alertsFilterPanelOpen}
         onToggleFilterPanel={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
         activeFilterFieldCount={activeFilterFieldCount}
