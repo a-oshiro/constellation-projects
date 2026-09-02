@@ -4,7 +4,9 @@ const DAY = 24 * 60 * 60 * 1000;
 
 export type AlertSortOrder = 'newest' | 'oldest';
 export type DateRangePreset = 'month' | 'quarter' | 'all' | 'custom';
-export type ApprovalFilterKey = 'approved_email' | 'rejected_email' | 'approved_assets' | 'rejected_assets';
+export type ApprovalFilterKey =
+  | 'approved_email' | 'pending_email' | 'rejected_email'
+  | 'approved_assets' | 'pending_assets' | 'rejected_assets';
 
 export interface AlertFilterState {
   sortOrder: AlertSortOrder;
@@ -54,16 +56,25 @@ export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
 };
 
 export const APPROVAL_LABELS: Record<ApprovalFilterKey, string> = {
-  approved_email: 'Approved Email',
-  rejected_email: 'Rejected Email',
-  approved_assets: 'Approved Assets',
-  rejected_assets: 'Rejected Assets',
+  approved_email: 'Email Approved',
+  pending_email: 'Pending Email Review',
+  rejected_email: 'Email Changes Requested',
+  approved_assets: 'Assets Approved',
+  pending_assets: 'Pending Asset Review',
+  rejected_assets: 'Asset Changes Requested',
 };
+
+/** Render order for the Approvals field, shared by the left panel and the Filter Row. */
+export const APPROVAL_OPTIONS: ApprovalFilterKey[] = [
+  'approved_email', 'approved_assets', 'pending_email', 'pending_assets', 'rejected_email', 'rejected_assets',
+];
 
 const APPROVAL_PREDICATES: Record<ApprovalFilterKey, (alert: Alert) => boolean> = {
   approved_email: (a) => a.emailStatus === 'approved',
+  pending_email: (a) => a.emailStatus === 'pending',
   rejected_email: (a) => a.emailStatus === 'rejected',
   approved_assets: (a) => a.assetsStatus === 'approved',
+  pending_assets: (a) => a.assetsStatus === 'pending',
   rejected_assets: (a) => a.assetsStatus === 'rejected',
 };
 
@@ -148,7 +159,7 @@ export interface ActiveFilterChip {
   value?: string;
 }
 
-function dateRangeLabel(state: AlertFilterState): string {
+export function dateRangeLabel(state: AlertFilterState): string {
   if (state.datePreset === 'custom') {
     return `${state.startDate || '…'} – ${state.endDate || '…'}`;
   }
@@ -180,18 +191,54 @@ export function hasActiveAlertFilters(state: AlertFilterState): boolean {
 
 /** Count of distinct filter fields with an active value (e.g. Signal Type, Date Range) — for the filter icon's badge. */
 export function getActiveFilterFieldCount(state: AlertFilterState): number {
-  const fields = [
-    state.datePreset !== 'all',
-    state.signalTypes.length > 0,
-    state.lifecycleSteps.length > 0,
-    state.approvals.length > 0,
-    state.modelTypes.length > 0,
-    state.years.length > 0,
-    state.makes.length > 0,
-    state.models.length > 0,
-    state.trims.length > 0,
-  ];
-  return fields.filter(Boolean).length;
+  return ALERT_FILTER_FIELD_ORDER
+    .filter((k) => k !== 'sortOrder')
+    .filter((k) => isAlertFilterFieldActive(state, k)).length;
+}
+
+export type AlertFilterFieldKey =
+  | 'sortOrder' | 'signalTypes' | 'dateRange' | 'lifecycleSteps' | 'approvals'
+  | 'modelTypes' | 'years' | 'makes' | 'models' | 'trims';
+
+/** Mirrors the left panel's top-to-bottom field order — also the Filter Row's render order. */
+export const ALERT_FILTER_FIELD_ORDER: AlertFilterFieldKey[] = [
+  'sortOrder', 'signalTypes', 'dateRange', 'lifecycleSteps', 'approvals',
+  'modelTypes', 'years', 'makes', 'models', 'trims',
+];
+
+const FIELD_ACTIVE_PREDICATES: Record<AlertFilterFieldKey, (s: AlertFilterState) => boolean> = {
+  sortOrder: (s) => s.sortOrder !== DEFAULT_ALERT_FILTER_STATE.sortOrder,
+  signalTypes: (s) => s.signalTypes.length > 0,
+  dateRange: (s) => s.datePreset !== 'all',
+  lifecycleSteps: (s) => s.lifecycleSteps.length > 0,
+  approvals: (s) => s.approvals.length > 0,
+  modelTypes: (s) => s.modelTypes.length > 0,
+  years: (s) => s.years.length > 0,
+  makes: (s) => s.makes.length > 0,
+  models: (s) => s.models.length > 0,
+  trims: (s) => s.trims.length > 0,
+};
+
+export function isAlertFilterFieldActive(state: AlertFilterState, key: AlertFilterFieldKey): boolean {
+  return FIELD_ACTIVE_PREDICATES[key](state);
+}
+
+/** Count shown in a Filter Row field's selection badge — mirrors FIELD_ACTIVE_PREDICATES, but as a count rather than a boolean. */
+const FIELD_COUNTS: Record<AlertFilterFieldKey, (s: AlertFilterState) => number> = {
+  sortOrder: () => 0,
+  signalTypes: (s) => s.signalTypes.length,
+  dateRange: (s) => (s.datePreset === 'all' ? 0 : 1),
+  lifecycleSteps: (s) => s.lifecycleSteps.length,
+  approvals: (s) => s.approvals.length,
+  modelTypes: (s) => s.modelTypes.length,
+  years: (s) => s.years.length,
+  makes: (s) => s.makes.length,
+  models: (s) => s.models.length,
+  trims: (s) => s.trims.length,
+};
+
+export function getAlertFilterFieldCount(state: AlertFilterState, key: AlertFilterFieldKey): number {
+  return FIELD_COUNTS[key](state);
 }
 
 /** Removes exactly the value a single chip represents, leaving the rest of the filter state untouched. */

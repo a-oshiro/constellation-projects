@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Checkbox, IconButton, Chip, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
+  Close, Check, Replay, Search, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -10,12 +10,13 @@ import { useSnackbar } from '../../context/SnackbarContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets, backgroundForOffer } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
-import { applyAlertFilters, getActiveFilterChips, removeFilterChip, hasActiveAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
+import { applyAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 import { AlertsTable } from './AlertsTable';
 import { FeedQc } from './FeedQc';
 import { ArchivedAlertsDialog } from './ArchivedAlertsDialog';
+import { AlertsFilterRow } from './AlertsFilterRow';
 
 type ViewMode = 'kanban' | 'table';
 
@@ -351,6 +352,7 @@ export const AlertsKanbanBoard = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [archiveMenuAnchor, setArchiveMenuAnchor] = useState<HTMLElement | null>(null);
   const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // One representative preview asset per offer, used to build each alert card's thumbnail
   // from the offers its email actually references (featured + the secondary grid). Each offer's
@@ -387,14 +389,21 @@ export const AlertsKanbanBoard = () => {
     [activeAlerts, offers, alertFilterState],
   );
 
-  const activeFilterChips = useMemo(() => getActiveFilterChips(alertFilterState), [alertFilterState]);
+  // Search narrows down within whatever the field filters already produced — it isn't itself part
+  // of the persisted filter state.
+  const searched = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return filtered;
+    return filtered.filter((a) => a.subject.toLowerCase().includes(query) || a.category.toLowerCase().includes(query));
+  }, [filtered, searchTerm]);
+
   const activeFilterFieldCount = useMemo(() => getActiveFilterFieldCount(alertFilterState), [alertFilterState]);
 
   const byColumn = useMemo(() => {
     const map: Record<AlertStatus, Alert[]> = { generated: [], rejected: [], approved: [], sent: [] };
-    filtered.forEach((a) => map[a.status].push(a));
+    searched.forEach((a) => map[a.status].push(a));
     return map;
-  }, [filtered]);
+  }, [searched]);
 
   const openAlert = alerts.find((a) => a.id === openAlertId) ?? null;
 
@@ -436,77 +445,76 @@ export const AlertsKanbanBoard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <IconButton
-          size="large"
-          onClick={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
-          sx={{
-            padding: '5px', flexShrink: 0,
-            color: alertsFilterPanelOpen || hasActiveAlertFilters(alertFilterState) ? '#473bab' : '#1f1d25',
-            '&:hover': { background: '#f0eeff', color: '#473bab' },
-          }}
-        >
-          <FiltersIconWithBadge count={activeFilterFieldCount} />
-        </IconButton>
-        <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>
-          Alerts Lifecycle
-        </span>
-        <div style={{ marginLeft: 8 }}>
-          <FeedQc />
-        </div>
-        <IconButton
-          size="large"
-          onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
-          sx={{ padding: '5px', flexShrink: 0, color: '#1f1d25', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
-        >
-          <MoreVert style={{ fontSize: 24 }} />
-        </IconButton>
-        <Menu anchorEl={archiveMenuAnchor} open={!!archiveMenuAnchor} onClose={() => setArchiveMenuAnchor(null)}>
-          <MenuItem onClick={() => { setArchiveMenuAnchor(null); setArchivedDialogOpen(true); }}>
-            <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
-            View archived alerts
-          </MenuItem>
-        </Menu>
-        <div style={{ flex: 1 }} />
-        
-        {/* If any filters are active, show them as chips with a "Clear Filters" button. */}
-        {activeFilterChips.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
-              Filtering by
+      <AlertsFilterRow
+        alerts={activeAlerts}
+        offers={offers}
+        state={alertFilterState}
+        onChange={updateAlertFilterState}
+        onReset={resetAlertFilterState}
+        filterPanelOpen={alertsFilterPanelOpen}
+        onToggleFilterPanel={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
+        activeFilterFieldCount={activeFilterFieldCount}
+        leading={(
+          <>
+            <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', whiteSpace: 'nowrap' }}>
+              Alerts Lifecycle
             </span>
-            {activeFilterChips.map((chip) => (
-              <Chip
-                key={chip.id}
-                label={chip.label}
-                onDelete={() => updateAlertFilterState(removeFilterChip(alertFilterState, chip))}
-                sx={CHIP_SX}
-              />
-            ))}
-            <button
-              onClick={resetAlertFilterState}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
-                fontFamily: 'Roboto, sans-serif', color: '#473bab', fontWeight: 500, letterSpacing: '0.46px',
-              }}
+            <div style={{ marginLeft: 8 }}>
+              <FeedQc />
+            </div>
+            <IconButton
+              size="large"
+              onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
+              sx={{ padding: '5px', flexShrink: 0, color: '#1f1d25', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
             >
-              Clear Filters
-            </button>
-          </div>
+              <MoreVert style={{ fontSize: 24 }} />
+            </IconButton>
+            <Menu anchorEl={archiveMenuAnchor} open={!!archiveMenuAnchor} onClose={() => setArchiveMenuAnchor(null)}>
+              <MenuItem onClick={() => { setArchiveMenuAnchor(null); setArchivedDialogOpen(true); }}>
+                <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
+                View archived alerts
+              </MenuItem>
+            </Menu>
+            <TextField
+              size="small"
+              placeholder="Search alerts"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              slotProps={{
+                input: { startAdornment: <InputAdornment position="start"><Search style={{ fontSize: 18, color: '#9c99a9' }} /></InputAdornment> },
+              }}
+              sx={{
+                width: 200,
+                flexShrink: 0,
+                '& .MuiOutlinedInput-root': {
+                  background: '#f9fafa',
+                  borderRadius: '4px',
+                  minHeight: 36,
+                  fontSize: 13,
+                  fontFamily: 'Roboto, sans-serif',
+                  '& fieldset': { borderColor: '#cac9cf' },
+                  '&:hover fieldset': { borderColor: '#9b96b0' },
+                  '&.Mui-focused fieldset': { borderColor: '#473bab' },
+                },
+                '& .MuiOutlinedInput-input': { fontSize: 13, fontFamily: 'Roboto, sans-serif' },
+              }}
+            />
+          </>
         )}
-
-        <IconButton
-          size="large"
-          onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
-          title={viewMode === 'kanban' ? 'Switch to table view' : 'Switch to Kanban view'}
-          sx={{ padding: '5px', flexShrink: 0, color: '#686576', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
-        >
-          {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
-        </IconButton>
-      </div>
+        trailing={(
+          <IconButton
+            size="large"
+            onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
+            title={viewMode === 'kanban' ? 'Switch to table view' : 'Switch to Kanban view'}
+            sx={{ padding: '5px', flexShrink: 0, color: '#686576', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
+          >
+            {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
+          </IconButton>
+        )}
+      />
 
       {viewMode === 'table' ? (
-        <AlertsTable alerts={filtered} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
+        <AlertsTable alerts={searched} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
       ) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', height: 'fit-content' }}>
         {COLUMNS.map((col) => {
