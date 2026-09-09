@@ -13,7 +13,7 @@ import { formatRelativeTime } from '../../utils/relativeTime';
 import { AlertsFilterPanel } from './AlertsFilterPanel';
 import { ArchivedAlertsTable } from './ArchivedAlertsTable';
 import {
-  AlertThumbnail, ReviewRow, lastActorFor, FiltersIconWithBadge, TableViewIcon, KanbanViewIcon, CHIP_SX,
+  AlertThumbnail, AlertApprovalChips, FiltersIconWithBadge, TableViewIcon, KanbanViewIcon, CHIP_SX,
 } from './AlertsKanbanBoard';
 
 type ViewMode = 'card' | 'table';
@@ -62,10 +62,7 @@ const ArchivedAlertCard = ({ alert, assets, onOpen }: ArchivedAlertCardProps) =>
             Archived {formatRelativeTime(alert.archivedAt ?? alert.createdAt)}
           </p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor />
-          <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor />
-        </div>
+        <AlertApprovalChips alert={alert} />
       </div>
     </div>
   );

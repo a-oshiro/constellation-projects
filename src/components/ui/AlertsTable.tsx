@@ -5,7 +5,7 @@ import type { Alert, AlertActivityAction, Asset } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
 import { LIFECYCLE_STEP_LABELS, getModelType } from '../../utils/alertFilters';
-import { AlertThumbnail, ReviewRow, lastActorFor } from './AlertsKanbanBoard';
+import { AlertThumbnail, AlertApprovalChips } from './AlertsKanbanBoard';
 
 const HEADER_CELL_SX = {
   fontSize: 12, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
@@ -135,10 +135,7 @@ export const AlertsTable = ({ alerts, assetsByAlertId, onOpenAlert, onArchive }:
                   </span>
                 </TableCell>
                 <TableCell sx={{ ...BODY_CELL_SX, minWidth: 200 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor />
-                    <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor />
-                  </div>
+                  <AlertApprovalChips alert={alert} />
                 </TableCell>
                 <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap' }}>
                   {lastUpdate && (

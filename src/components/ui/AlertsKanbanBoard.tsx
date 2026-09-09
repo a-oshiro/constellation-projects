@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Search, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined, PlayArrow,
+  Close, Check, Replay, Search, Send, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -9,7 +9,7 @@ import { useLayout } from '../../context/LayoutContext';
 import { useSnackbar } from '../../context/SnackbarContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets, backgroundForOffer } from '../../utils/overviewAssets';
-import { CATEGORY_STYLE, formatReviewerName } from '../../utils/alertReview';
+import { CATEGORY_STYLE } from '../../utils/alertReview';
 import { applyAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
@@ -124,41 +124,39 @@ const CARD_MENU_ACTION_LABEL: Partial<Record<AlertStatus, string>> = {
   approved: 'Send Alert',
 };
 
-/** Most recent activity entry for a given review track, used to attribute its row on the card. */
-export function lastActorFor(alert: Alert, track: 'email' | 'assets'): string | undefined {
-  const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
-  const entry = [...alert.activity].reverse().find((e) => actions.includes(e.action));
-  return entry?.actorName;
-}
-
-const REVIEW_ROW_STYLE: Record<ReviewStatus, { Icon: React.ElementType; color: string }> = {
-  pending: { Icon: CheckCircleOutlined, color: '#9c99a9' },
-  approved: { Icon: CheckCircle, color: '#4caf50' },
-  rejected: { Icon: Sync, color: '#d2323f' },
+/** Icon + color per review track status — mirrors the Figma "QC Chip" states (pending/approved/rejected). */
+const APPROVAL_CHIP_STYLE: Record<ReviewStatus, { Icon: React.ElementType; color: string }> = {
+  pending: { Icon: PendingOutlined, color: '#9c99a9' },
+  approved: { Icon: CheckCircleOutlined, color: '#4caf50' },
+  rejected: { Icon: Replay, color: '#e65100' },
 };
 
-interface ReviewRowProps {
-  label: string;
-  status: ReviewStatus;
-  actorName?: string;
-  revealActor: boolean;
-  showPendingLabel?: boolean;
-}
+const ApprovalStatusChip = ({ icon: Icon, color, label }: { icon: React.ElementType; color: string; label: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+    <Icon style={{ fontSize: 18, color, flexShrink: 0 }} />
+    <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.16px', lineHeight: '18px', whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  </div>
+);
 
-export const ReviewRow = ({ label, status, actorName, revealActor, showPendingLabel = true }: ReviewRowProps) => {
-  const { Icon, color } = REVIEW_ROW_STYLE[status];
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <Icon style={{ fontSize: 16, color, flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {label}
-      </span>
-      <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px', whiteSpace: 'nowrap', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {status === 'pending' ? (showPendingLabel ? 'Pending' : '') : revealActor ? formatReviewerName(actorName ?? '') : ''}
-      </span>
-    </div>
-  );
-};
+/**
+ * Email/Assets approval status, shown side by side — collapses into a single "Sent" chip once the
+ * alert has gone out, since the two tracks no longer matter individually at that point. Never shows
+ * who made the approval/change request (not even on hover) — only the current status.
+ */
+export const AlertApprovalChips = ({ alert }: { alert: Alert }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    {alert.status === 'sent' ? (
+      <ApprovalStatusChip icon={Send} color="#4caf50" label="Sent" />
+    ) : (
+      <>
+        <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.emailStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.emailStatus].color} label="Email" />
+        <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.assetsStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.assetsStatus].color} label="Assets" />
+      </>
+    )}
+  </div>
+);
 
 export const THUMB_SIZE = 72;
 
@@ -305,8 +303,7 @@ const AlertCard = ({
             Created {formatRelativeTime(alert.createdAt)}
           </span>
         )}
-        <ReviewRow label="Email content" status={alert.emailStatus} actorName={lastActorFor(alert, 'email')} revealActor={hovered} showPendingLabel={false} />
-        <ReviewRow label="Assets" status={alert.assetsStatus} actorName={lastActorFor(alert, 'assets')} revealActor={hovered} showPendingLabel={false} />
+        <AlertApprovalChips alert={alert} />
       </div>
 
       {showArchiveButton && (
