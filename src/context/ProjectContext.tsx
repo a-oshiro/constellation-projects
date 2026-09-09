@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useRe
 import { CURRENT_USER } from '../data/mockData';
 import { DEFAULT_PROJECT_ID, getProjectById } from '../data/projects';
 import type { Project } from '../data/projects';
-import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
+import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertCategory, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
+import constellationLogo from '../assets/constellation-logo.png';
 
 /** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
@@ -104,6 +105,8 @@ interface ProjectContextValue {
   sendAlert: (id: string) => void;
   /** Manually removes an alert from the Kanban/Table into the Archived Alerts dialog. No-ops if already archived. */
   archiveAlert: (id: string) => void;
+  /** Evergreen-only: seeds a handful of new mock Alerts (status 'generated') onto the board, drawn from the project's current offers. Returns how many were created. */
+  generateAlerts: () => number;
   /**
    * Combined review action: approves or rejects one track and saves whatever Assignee/Mentioned
    * Teammates/Comment the reviewer entered alongside the decision — all three are optional. No-ops
@@ -456,6 +459,49 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // Mirrors the AI-authored "generated" mock alerts (see data/evergreen/alerts.ts) so a freshly
+  // generated alert looks identical to the seeded ones: same category pool, same activity shape.
+  const generateAlerts = useCallback(() => {
+    const pool = offers.filter((o) => !o.swapOnly);
+    if (pool.length === 0) return 0;
+
+    const templates: { category: AlertCategory; subject: (o: Offer) => string }[] = [
+      { category: 'Conquest', subject: (o) => `A nearby dealer cleared several New ${o.vehicleName} units this month` },
+      { category: 'Aging', subject: (o) => `Your New ${o.vehicleName} has been sitting on the lot too long` },
+      { category: 'MSRP', subject: (o) => `A competitor holds a lower MSRP on the New ${o.vehicleName}` },
+      { category: 'Offers', subject: (o) => `A competitor is beating your lease on the New ${o.vehicleName}` },
+      { category: 'Inventory Gaps/Levels', subject: (o) => `Demand for the New ${o.vehicleName} is outpacing your inventory` },
+    ];
+
+    const count = Math.min(3 + Math.floor(Math.random() * 3), pool.length);
+    const chosen = [...pool].sort(() => Math.random() - 0.5).slice(0, count);
+    const timestamp = Date.now();
+
+    const newAlerts: Alert[] = chosen.map((offer, i) => {
+      const template = templates[Math.floor(Math.random() * templates.length)];
+      const subject = template.subject(offer);
+      const id = `gen-alert-${timestamp}-${i}`;
+      return {
+        id,
+        category: template.category,
+        subject,
+        preheader: 'Constellation Insights',
+        bodyParagraphs: [`${subject}.`, 'Here is the VIN you need to advertise now:'],
+        featuredOfferId: offer.id,
+        otherOfferIds: pool.filter((o) => o.id !== offer.id).map((o) => o.id),
+        vin: offer.vin ?? `VIN-${offer.id}-${timestamp}`,
+        status: 'generated',
+        emailStatus: 'pending',
+        assetsStatus: 'pending',
+        createdAt: timestamp,
+        activity: [{ id: `act-${id}-generated`, action: 'generated', timestamp, actorName: 'AI AutoAgent', actorAvatar: constellationLogo }],
+      };
+    });
+
+    setAlerts((prev) => [...newAlerts, ...prev]);
+    return newAlerts.length;
+  }, [offers]);
+
   const selectProject = useCallback((id: string) => {
     const project = getProjectById(id);
     setSelectedProjectId(id);
@@ -767,7 +813,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, sendAlert, archiveAlert, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
+      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>

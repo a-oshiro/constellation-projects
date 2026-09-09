@@ -15,6 +15,8 @@ import { computePreviewAssets, groupIntoAdShells, computeAlertOfferVisibility } 
 import { useLayout } from '../context/LayoutContext';
 import { useProject } from '../context/ProjectContext';
 import { LockableContent } from '../components/ui/LockedOverlay';
+import { EvergreenProjectBadge } from '../components/ui/EvergreenProjectBadge';
+import { UnlockProjectDialog } from '../components/ui/UnlockProjectDialog';
 
 type SectionKey = 'offers' | 'templates' | 'themeAndLogos' | 'assets' | 'adShells' | 'campaigns';
 
@@ -124,7 +126,7 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
 
 export const ProjectOverviewPage = () => {
   const { tasksPanelOpen, openTasksPanel } = useLayout();
-  const { currentProject: project, alerts, selectedProjectId, selectProject } = useProject();
+  const { currentProject: project, alerts, selectedProjectId, selectProject, locked, setLocked } = useProject();
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
 
@@ -138,6 +140,10 @@ export const ProjectOverviewPage = () => {
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     offers: true, templates: true, themeAndLogos: true, assets: true, adShells: true, campaigns: true,
   });
+
+  // Mirrors MainLayout's own copy of this dialog — on every other Evergreen page the badge (and its
+  // unlock flow) is a fixed overlay owned by MainLayout, but here it renders inline in the title row instead.
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
 
   const toggle = (key: SectionKey) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -214,9 +220,11 @@ export const ProjectOverviewPage = () => {
       >
         {/* ── Header ─────────────────────────────────────────── */}
         <div style={{ padding: '10px 16px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
-          <div style={{ marginBottom: 6 }}>
-            <Breadcrumbs items={['Projects', project.projectName]} />
-          </div>
+          {!project.isEvergreen && (
+            <div style={{ marginBottom: 6 }}>
+              <Breadcrumbs items={['Projects', project.projectName]} />
+            </div>
+          )}
 
           {(() => {
             const tasksToggle = !tasksPanelOpen && (
@@ -280,19 +288,29 @@ export const ProjectOverviewPage = () => {
               </div>
             );
 
-            // Evergreen projects have no second "expanded" state to reveal, so Expand is dropped and
-            // everything lives in one row alongside the title instead of spilling onto a second line.
+            // Evergreen projects have no second "expanded" state to reveal, and no breadcrumbs above
+            // this row, so everything lives in one row right alongside the title.
             if (project.isEvergreen) {
               return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   {tasksToggle}
                   {title}
-                  {menuButton}
-                  {statusAndTags}
-                  <div style={{ flex: 1 }} />
-                  {lastUpdatedAndCreated}
                   {accountBlock}
                   {creatorBlock}
+                  <ProjectStatusBadge status={project.workflowStatus} />
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                    {project.startDate} - {project.endDate}
+                  </span>
+                  {lastUpdatedAndCreated}
+                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                    Creator: {project.creator}
+                  </span>
+                  <EvergreenProjectBadge
+                    locked={locked}
+                    onLockedClick={() => setUnlockDialogOpen(true)}
+                    onUnlockedClick={() => setLocked(true)}
+                  />
                 </div>
               );
             }
@@ -321,19 +339,27 @@ export const ProjectOverviewPage = () => {
           })()}
         </div>
 
+        {project.isEvergreen && (
+          <UnlockProjectDialog
+            open={unlockDialogOpen}
+            onClose={() => setUnlockDialogOpen(false)}
+            onConfirm={() => { setLocked(false); setUnlockDialogOpen(false); }}
+          />
+        )}
+
         {/* ── Sections ───────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto" style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {project.isEvergreen ? (
             <>
-              <ProjectSummary
+              {/* <ProjectSummary
                 cards={summaryCards}
                 latestAssets={latestAssets}
                 totalAssetsCount={visibleAssets.length}
                 assetsRoute={SECTION_ROUTES.assets}
                 onNavigate={navigate}
                 showAssetsPreview={false}
-              />
+              /> */}
               <AlertsKanbanBoard />
             </>
           ) : (

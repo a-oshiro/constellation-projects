@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
+import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Search, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined,
+  Close, Check, Replay, Search, Send, CheckCircle, Sync, CheckCircleOutlined, MoreVert, Inventory2Outlined, PlayArrow,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -339,7 +339,7 @@ const AlertCard = ({
 };
 
 export const AlertsKanbanBoard = () => {
-  const { alerts, offers, moveAlert, archiveAlert, currentProject } = useProject();
+  const { alerts, offers, moveAlert, archiveAlert, generateAlerts, currentProject } = useProject();
   const {
     alertsFilterPanelOpen, openAlertsFilterPanel, closeAlertsFilterPanel,
     alertFilterState, updateAlertFilterState, resetAlertFilterState,
@@ -443,8 +443,78 @@ export const AlertsKanbanBoard = () => {
     columnAlerts.filter((a) => selectedIds.has(a.id)).forEach((a) => moveAndDeselect(a.id, targetStatus));
   };
 
+  const handleGenerateAlerts = () => {
+    const count = generateAlerts();
+    if (count > 0) showSnackbar({ message: `Generated ${count} new alert${count === 1 ? '' : 's'}.` });
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Actions row — left-aligned CTAs, archive menu, and search, all above the (separate) Filter Row. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button
+          variant="contained"
+          disableElevation
+          size="small"
+          startIcon={<PlayArrow style={{ fontSize: 16 }} />}
+          onClick={handleGenerateAlerts}
+          sx={{
+            background: '#473bab',
+            color: '#ffffff',
+            borderRadius: '100px',
+            padding: '4px 10px',
+            fontSize: 13,
+            fontFamily: 'Roboto, sans-serif',
+            fontWeight: 500,
+            lineHeight: '22px',
+            letterSpacing: '0.46px',
+            textTransform: 'none',
+            whiteSpace: 'nowrap',
+            '&:hover': { background: '#3d3396', boxShadow: 'none' },
+          }}
+        >
+          Generate Alerts
+        </Button>
+        <FeedQc />
+        <IconButton
+          size="large"
+          onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
+          sx={{ padding: '5px', flexShrink: 0, color: '#1f1d25', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
+        >
+          <MoreVert style={{ fontSize: 24 }} />
+        </IconButton>
+        <Menu anchorEl={archiveMenuAnchor} open={!!archiveMenuAnchor} onClose={() => setArchiveMenuAnchor(null)}>
+          <MenuItem onClick={() => { setArchiveMenuAnchor(null); setArchivedDialogOpen(true); }}>
+            <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
+            View archived alerts
+          </MenuItem>
+        </Menu>
+        <TextField
+          size="small"
+          placeholder="Search alerts"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          slotProps={{
+            input: { startAdornment: <InputAdornment position="start"><Search style={{ fontSize: 18, color: '#9c99a9' }} /></InputAdornment> },
+          }}
+          sx={{
+            width: 200,
+            flexShrink: 0,
+            '& .MuiOutlinedInput-root': {
+              background: '#f9fafa',
+              borderRadius: '100px',
+              minHeight: 36,
+              fontSize: 13,
+              fontFamily: 'Roboto, sans-serif',
+              '& fieldset': { borderColor: '#cac9cf' },
+              '&:hover fieldset': { borderColor: '#9b96b0' },
+              '&.Mui-focused fieldset': { borderColor: '#473bab' },
+            },
+            '& .MuiOutlinedInput-input': { fontSize: 13, fontFamily: 'Roboto, sans-serif', padding: '8px 12px' },
+          }}
+        />
+      </div>
+
       <AlertsFilterRow
         alerts={activeAlerts}
         offers={offers}
@@ -454,53 +524,7 @@ export const AlertsKanbanBoard = () => {
         filterPanelOpen={alertsFilterPanelOpen}
         onToggleFilterPanel={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
         activeFilterFieldCount={activeFilterFieldCount}
-        leading={(
-          <>
-            <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', whiteSpace: 'nowrap' }}>
-              Alerts Lifecycle
-            </span>
-            <div style={{ marginLeft: 8 }}>
-              <FeedQc />
-            </div>
-            <IconButton
-              size="large"
-              onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
-              sx={{ padding: '5px', flexShrink: 0, color: '#1f1d25', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
-            >
-              <MoreVert style={{ fontSize: 24 }} />
-            </IconButton>
-            <Menu anchorEl={archiveMenuAnchor} open={!!archiveMenuAnchor} onClose={() => setArchiveMenuAnchor(null)}>
-              <MenuItem onClick={() => { setArchiveMenuAnchor(null); setArchivedDialogOpen(true); }}>
-                <ListItemIcon><Inventory2Outlined fontSize="small" /></ListItemIcon>
-                View archived alerts
-              </MenuItem>
-            </Menu>
-            <TextField
-              size="small"
-              placeholder="Search alerts"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              slotProps={{
-                input: { startAdornment: <InputAdornment position="start"><Search style={{ fontSize: 18, color: '#9c99a9' }} /></InputAdornment> },
-              }}
-              sx={{
-                width: 200,
-                flexShrink: 0,
-                '& .MuiOutlinedInput-root': {
-                  background: '#f9fafa',
-                  borderRadius: '4px',
-                  minHeight: 36,
-                  fontSize: 13,
-                  fontFamily: 'Roboto, sans-serif',
-                  '& fieldset': { borderColor: '#cac9cf' },
-                  '&:hover fieldset': { borderColor: '#9b96b0' },
-                  '&.Mui-focused fieldset': { borderColor: '#473bab' },
-                },
-                '& .MuiOutlinedInput-input': { fontSize: 13, fontFamily: 'Roboto, sans-serif' },
-              }}
-            />
-          </>
-        )}
+        leading={null}
         trailing={(
           <IconButton
             size="large"

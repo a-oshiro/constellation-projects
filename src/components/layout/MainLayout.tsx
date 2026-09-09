@@ -203,7 +203,8 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             className="flex-1 min-w-0 overflow-hidden"
             style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
           >
-            {currentProject.isEvergreen && (
+            {/* On the Project Overview page, this badge renders inline as part of the Project title row instead. */}
+            {currentProject.isEvergreen && !isProjectOverviewRoute && (
               <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
                 <EvergreenProjectBadge
                   locked={locked}
@@ -212,7 +213,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                 />
               </div>
             )}
-            {currentProject.isEvergreen && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && (
               <UnlockProjectDialog
                 open={unlockDialogOpen}
                 onClose={() => setUnlockDialogOpen(false)}
