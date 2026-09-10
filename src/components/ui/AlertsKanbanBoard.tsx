@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
   Close, Check, Replay, Search, Send, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
+  WarningAmberOutlined, ImageNotSupportedOutlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -158,6 +159,41 @@ export const AlertApprovalChips = ({ alert }: { alert: Alert }) => (
   </div>
 );
 
+/** Red pill shown in place of the Email/Assets approval chips whenever an alert's generation failed outright — used by both the card and the table row's Approvals cell. */
+export const GenerationFailedChip = () => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+    <WarningAmberOutlined style={{ fontSize: 18, color: '#d32f2f', flexShrink: 0 }} />
+    <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#d32f2f', letterSpacing: '0.16px', lineHeight: '18px', whiteSpace: 'nowrap' }}>
+      Generation Failed
+    </span>
+  </div>
+);
+
+/** Amber "N QC Findings" pill shown on a card/row whose alert carries non-blocking QC findings. */
+export const QcFindingsChip = ({ count }: { count: number }) => (
+  <div
+    style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+      background: 'rgba(225,118,19,0.08)', borderRadius: 8, padding: '3px 8px',
+    }}
+  >
+    <WarningAmberOutlined style={{ fontSize: 14, color: '#c45500', flexShrink: 0 }} />
+    <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#c45500', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+      {count} QC Finding{count === 1 ? '' : 's'}
+    </span>
+  </div>
+);
+
+/** Red-tinted broken-image placeholder shown instead of AlertThumbnail whenever an alert's generation failed outright. */
+export const FailedThumbnail = ({ size = 72 }: { size?: number }) => (
+  <div style={{
+    width: size, height: size, borderRadius: 12, flexShrink: 0,
+    background: 'rgba(211,47,47,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  }}>
+    <ImageNotSupportedOutlined style={{ fontSize: size * 0.45, color: '#d32f2f' }} />
+  </div>
+);
+
 export const THUMB_SIZE = 72;
 
 const ThumbTile = ({ asset, dim }: { asset: Asset; dim?: boolean }) => {
@@ -245,6 +281,8 @@ const AlertCard = ({
   const highlighted = hovered || selected;
   const showCardMenuActions = actions.length > 0 && alert.status !== 'generated';
   const showArchiveButton = (hovered || !!menuAnchor) && !bulkActive;
+  const failed = !!alert.generationFailure;
+  const qcFindingCount = alert.qcFindings?.length ?? 0;
 
   return (
     <div
@@ -256,7 +294,7 @@ const AlertCard = ({
       onMouseLeave={() => setHovered(false)}
       style={{
         background: '#ffffff',
-        border: highlighted ? '2px solid #473bab' : '1px solid rgba(0,0,0,0.08)',
+        border: highlighted ? '2px solid #473bab' : failed ? '1px solid #d32f2f' : '1px solid rgba(0,0,0,0.08)',
         borderRadius: 12,
         padding: '10px 12px 10px 4px',
         display: 'flex',
@@ -277,18 +315,21 @@ const AlertCard = ({
       ) : (
         <div style={{ width: 0, flexShrink: 0 }} />
       )}
-      <AlertThumbnail assets={assets} />
+      {failed ? <FailedThumbnail /> : <AlertThumbnail assets={assets} />}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span
-          style={{
-            display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center',
-            background: categoryStyle.background, color: categoryStyle.color,
-            borderRadius: 8, padding: '2px 8px', fontSize: 11, fontFamily: 'Roboto, sans-serif',
-            fontWeight: 400, letterSpacing: '0.4px', whiteSpace: 'nowrap',
-          }}
-        >
-          {alert.category}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span
+            style={{
+              display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center',
+              background: categoryStyle.background, color: categoryStyle.color,
+              borderRadius: 8, padding: '2px 8px', fontSize: 11, fontFamily: 'Roboto, sans-serif',
+              fontWeight: 400, letterSpacing: '0.4px', whiteSpace: 'nowrap',
+            }}
+          >
+            {alert.category}
+          </span>
+          {!failed && qcFindingCount > 0 && <QcFindingsChip count={qcFindingCount} />}
+        </div>
         <span
           style={{
             fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25',
@@ -303,7 +344,7 @@ const AlertCard = ({
             Created {formatRelativeTime(alert.createdAt)}
           </span>
         )}
-        <AlertApprovalChips alert={alert} />
+        {failed ? <GenerationFailedChip /> : <AlertApprovalChips alert={alert} />}
       </div>
 
       {showArchiveButton && (

@@ -1,4 +1,4 @@
-import type { AlertCategory } from '../data/types';
+import type { AlertCategory, QcFindingType } from '../data/types';
 
 /** Shared between AlertsKanbanBoard and AlertDialog — kept out of either component file so Fast Refresh stays happy. */
 export const CATEGORY_STYLE: Record<AlertCategory, { background: string; color: string }> = {
@@ -17,3 +17,10 @@ export function formatReviewerName(name: string): string {
   if (parts.length < 2) return name;
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
+
+/** Display label for each QC finding type — shared by the card/row/dialog tag and the left-floating detail card. */
+export const QC_FINDING_LABEL: Record<QcFindingType, string> = {
+  payment_consistency: 'Payment consistency',
+  mileage_consistency: 'Mileage consistency',
+  selling_price_consistency: 'Selling price consistency',
+};

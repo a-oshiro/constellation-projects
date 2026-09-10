@@ -101,6 +101,10 @@ interface ProjectContextValue {
   setOfferAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
   /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Rejected. */
   rebuildAlert: (id: string) => void;
+  /** Clears a hard generation failure and resets both review tracks to pending, as if the alert had just been (successfully) generated. Only valid while the alert has a `generationFailure`. */
+  regenerateAlert: (id: string) => void;
+  /** Overwrites the alert's recipient email list. */
+  setAlertRecipients: (id: string, recipients: string[]) => void;
   /** Marks a fully-approved alert as Sent. Only valid while the alert is Approved. */
   sendAlert: (id: string) => void;
   /** Manually removes an alert from the Kanban/Table into the Archived Alerts dialog. No-ops if already archived. */
@@ -330,6 +334,26 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
       };
     }));
+  }, []);
+
+  const regenerateAlert = useCallback((id: string) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || !a.generationFailure) return a;
+      const timestamp = Date.now();
+      return {
+        ...a,
+        generationFailure: undefined,
+        emailStatus: 'pending',
+        assetsStatus: 'pending',
+        offerReviews: {},
+        createdAt: timestamp,
+        activity: [...a.activity, makeActivityEntry(id, 'regenerated', timestamp)],
+      };
+    }));
+  }, []);
+
+  const setAlertRecipients = useCallback((id: string, recipients: string[]) => {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, recipients } : a)));
   }, []);
 
   const sendAlert = useCallback((id: string) => {
@@ -813,7 +837,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
+      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>

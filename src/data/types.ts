@@ -235,8 +235,29 @@ export type AlertActivityAction =
   | 'assets_approved'
   | 'assets_rejected'
   | 'rebuilt'
+  | 'regenerated'
   | 'sent'
   | 'archived';
+
+/** A hard failure of the generation system (trigger failure, incomplete asset generation, etc.) — its presence on an Alert means the email/assets could never be produced, so the dialog shows an empty state instead of a preview and every approval control is disabled. */
+export interface AlertGenerationFailure {
+  message: string;
+  service: string;
+  statusCode: number;
+}
+
+/** Non-blocking QC issue types surfaced on an individual asset/offer — advisory only, never blocks approval. */
+export type QcFindingType = 'payment_consistency' | 'mileage_consistency' | 'selling_price_consistency';
+
+/** One QC finding attached to a specific offer within an alert (e.g. "the stored offer has no MSRP"). */
+export interface QcFinding {
+  id: string;
+  type: QcFindingType;
+  offerId: string;
+  message: string;
+  expectedLabel: string;
+  actualLabel: string;
+}
 
 export interface AlertActivityEntry {
   id: string;
@@ -331,6 +352,12 @@ export interface Alert {
   comments?: AlertComment[];
   /** Set once the alert is manually archived — removed from the Kanban/Table and shown in the Archived Alerts dialog instead. */
   archivedAt?: number;
+  /** Present when the generation system failed to produce this alert's email/assets entirely — a hard, blocking failure (see AlertGenerationFailure). */
+  generationFailure?: AlertGenerationFailure;
+  /** Non-blocking QC issues found on one or more of this alert's offers — advisory only, never blocks approval. */
+  qcFindings?: QcFinding[];
+  /** Email addresses this alert will be sent to. Undefined until the user edits them, at which point the dialog's default suggestion list is persisted here. */
+  recipients?: string[];
 }
 
 export type TaskKey = 'offers' | 'templates' | 'theme_and_logos' | 'review' | 'approved' | 'ads' | 'campaigns';

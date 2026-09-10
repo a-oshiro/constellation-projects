@@ -4,6 +4,9 @@ import { Check, CheckCircle, CheckCircleOutlined, MoreVert, Sync } from '@mui/ic
 import type { ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
+import { Tooltip } from './Tooltip';
+
+const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
 
 /**
  * The two floating, bottom-right-pinned approval widgets — one for the email track (still a single
@@ -82,6 +85,8 @@ interface EmailApprovalWidgetProps {
   actorName?: string;
   timestamp?: number;
   disabled?: boolean;
+  /** When set (alongside disabled), every action button shows this text in a tooltip on hover instead of just being inert. */
+  disabledReason?: string;
   onApprove: () => void;
   onRequestChanges: () => void;
   onApproveChanges: () => void;
@@ -89,7 +94,7 @@ interface EmailApprovalWidgetProps {
 }
 
 export const EmailApprovalWidget = ({
-  status, actorName, timestamp, disabled, onApprove, onRequestChanges, onApproveChanges, onUndo,
+  status, actorName, timestamp, disabled, disabledReason, onApprove, onRequestChanges, onApproveChanges, onUndo,
 }: EmailApprovalWidgetProps) => {
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
@@ -123,33 +128,45 @@ export const EmailApprovalWidget = ({
 
       {isPending ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button
-            disabled={disabled}
-            onClick={onRequestChanges}
-            style={{ ...actionPillBase, background: '#ffffff', color: 'rgb(71, 59, 171)', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-          >
-            <Sync style={{ fontSize: 16 }} />
-            Request Changes
-          </button>
-          <button
-            disabled={disabled}
-            onClick={onApprove}
-            style={{ ...actionPillBase, background: '#4caf50', color: '#ffffff', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-          >
-            <Check style={{ fontSize: 16 }} />
-            Approve Email
-          </button>
+          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
+            <span>
+              <button
+                disabled={disabled}
+                onClick={onRequestChanges}
+                style={{ ...actionPillBase, background: '#ffffff', color: 'rgb(71, 59, 171)', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+              >
+                <Sync style={{ fontSize: 16 }} />
+                Request Changes
+              </button>
+            </span>
+          </Tooltip>
+          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
+            <span>
+              <button
+                disabled={disabled}
+                onClick={onApprove}
+                style={{ ...actionPillBase, background: '#4caf50', color: '#ffffff', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+              >
+                <Check style={{ fontSize: 16 }} />
+                Approve Email
+              </button>
+            </span>
+          </Tooltip>
         </div>
       ) : !isApproved && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end' }}>
-          <button
-            disabled={disabled}
-            onClick={onApproveChanges}
-            style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-          >
-            <Check style={{ fontSize: 16 }} />
-            Approve
-          </button>
+          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
+            <span>
+              <button
+                disabled={disabled}
+                onClick={onApproveChanges}
+                style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+              >
+                <Check style={{ fontSize: 16 }} />
+                Approve
+              </button>
+            </span>
+          </Tooltip>
         </div>
       )}
     </div>
@@ -166,6 +183,8 @@ interface AssetApprovalWidgetProps {
   lastRejectedActorName?: string;
   lastRejectedTimestamp?: number;
   disabled?: boolean;
+  /** When set (alongside disabled), the Approve action shows this text in a tooltip on hover instead of just being inert. */
+  disabledReason?: string;
   /** Approves only the assets that haven't been reviewed at all yet — never touches ones already in
    * Changes Requested, which the user has to resolve individually. */
   onApproveRemaining: () => void;
@@ -174,7 +193,7 @@ interface AssetApprovalWidgetProps {
 }
 
 export const AssetApprovalWidget = ({
-  assets, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled,
+  assets, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled, disabledReason,
   onApproveRemaining, onUndoAllReviews, onSelectAsset,
 }: AssetApprovalWidgetProps) => {
   const totalCount = assets.length;
@@ -236,14 +255,18 @@ export const AssetApprovalWidget = ({
               ) : (
               <div/>
               )}
-              <button
-                disabled={disabled}
-                onClick={onApproveRemaining}
-                style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                <Check style={{ fontSize: 16 }} />
-                {reviewedCount === 0 ? 'Approve All' : `Approve ${pendingCount} remaining`}
-              </button>
+              <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
+                <span>
+                  <button
+                    disabled={disabled}
+                    onClick={onApproveRemaining}
+                    style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                  >
+                    <Check style={{ fontSize: 16 }} />
+                    {reviewedCount === 0 ? 'Approve All' : `Approve ${pendingCount} remaining`}
+                  </button>
+                </span>
+              </Tooltip>
             </div>
           )}
         </>
