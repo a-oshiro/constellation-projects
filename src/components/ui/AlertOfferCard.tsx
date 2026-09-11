@@ -20,6 +20,8 @@ interface AlertOfferCardProps {
   /** True while the project is Evergreen-locked — disables Edit Offer with an explanatory tooltip. */
   locked: boolean;
   onEditOffer: () => void;
+  /** Opens this offer's read-only Inventory Item detail in the dialog's right panel — wired to the VIN/Stock No. links below. */
+  onOpenInventory: () => void;
 }
 
 const pillStyle: React.CSSProperties = {
@@ -41,7 +43,7 @@ const linkStyle: React.CSSProperties = {
 /** Opens a task page in a new browser tab — used by the Template/Styles section link-out buttons. */
 const openTaskPage = (path: string) => window.open(path, '_blank', 'noopener,noreferrer');
 
-export const AlertOfferCard = ({ offer, template, background, projectId, locked, onEditOffer }: AlertOfferCardProps) => (
+export const AlertOfferCard = ({ offer, template, background, projectId, locked, onEditOffer, onOpenInventory }: AlertOfferCardProps) => (
   <div
     style={{
       position: 'absolute', top: 0, right: '100%', marginRight: 24, width: 240, flexShrink: 0,
@@ -63,9 +65,16 @@ export const AlertOfferCard = ({ offer, template, background, projectId, locked,
           <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {offer.vehicleName}
           </span>
-          <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {offer.vin}
-          </span>
+          {offer.vin && (
+            <button onClick={onOpenInventory} style={{ ...linkStyle, fontSize: 11, fontWeight: 400 }}>
+              {offer.vin}
+            </button>
+          )}
+          {offer.stockNumber && (
+            <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>
+              Stock No: <button onClick={onOpenInventory} style={{ ...linkStyle, display: 'inline', fontSize: 11, fontWeight: 400 }}>{offer.stockNumber}</button>
+            </span>
+          )}
           {offer.offerTypes[0] && <span style={pillStyle}>{offer.offerTypes[0].type}</span>}
           <Tooltip
             title={locked ? 'Unlock project to make changes' : ''}

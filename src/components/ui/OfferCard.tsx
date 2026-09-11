@@ -35,7 +35,7 @@ const OutOfStockIcon = () => (
   </svg>
 );
 
-function getOfferTypeDisplayFields(ot: OfferTypeData): { label: string; value: string; info?: boolean }[] {
+export function getOfferTypeDisplayFields(ot: OfferTypeData): { label: string; value: string; info?: boolean }[] {
   switch (ot.type) {
     case 'Lease':
       return [

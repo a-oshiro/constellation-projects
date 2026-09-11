@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { IconButton, Menu, Switch } from '@mui/material';
 import {
   Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ChatBubbleOutlined,
+  MailOutlined, DirectionsCarOutlined,
 } from '@mui/icons-material';
 import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -18,7 +19,8 @@ import { AlertAssetPreviewModal } from './AlertAssetPreviewModal';
 import { EmailApprovalWidget, AssetApprovalWidget, AssetStatusBadge } from './AlertApprovalWidgets';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
 import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
-import { AlertRecipientsControl } from './AlertRecipientsControl';
+import { AlertRecipientsPanel } from './AlertRecipientsPanel';
+import { AlertOffersPanel } from './AlertOffersPanel';
 import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
@@ -64,7 +66,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     offers, currentProject, locked, setEmailReview, setOfferAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
-  const [showHistory, setShowHistory] = useState(false);
+  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | null>(null);
+  const [inventoryOfferId, setInventoryOfferId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
@@ -116,8 +119,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   }, [activeAnchorId]);
 
   // Cursor-following hint: active from the moment the dialog opens, tracking the cursor anywhere on
-  // screen, until the user clicks inside the email body content — no auto-hide timer, no re-arming on
-  // hover. Only offered for alerts still awaiting a decision.
+  // screen, until the user clicks inside the email body content or 5 seconds elapse, whichever comes
+  // first — no re-arming on hover. Only offered for alerts still awaiting a decision.
   const canShowCursorHint = !alert.generationFailure && (alert.status === 'generated' || alert.status === 'rejected');
   const hintDismissedRef = useRef(false);
   useEffect(() => {
@@ -127,7 +130,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       setCursorHint({ x: e.clientX, y: e.clientY });
     };
     window.addEventListener('mousemove', handleMove);
-    return () => window.removeEventListener('mousemove', handleMove);
+    const autoHideTimer = setTimeout(() => {
+      hintDismissedRef.current = true;
+      setCursorHint(null);
+    }, 5000);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      clearTimeout(autoHideTimer);
+    };
   }, [canShowCursorHint]);
   const dismissCursorHint = () => {
     hintDismissedRef.current = true;
@@ -154,7 +164,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // Recipients: persisted once the user edits them; otherwise a plausible default drawn from the account name.
   const accountSlug = currentProject.accountName.toLowerCase().replace(/[^a-z0-9]+/g, '');
   const recipients = alert.recipients ?? ['marketing', 'sales', 'gm', 'advertising'].map((h) => `${h}@${accountSlug}.com`);
-  const recipientSuggestions = ['marketing', 'sales', 'gm', 'advertising', 'service', 'parts', 'manager', 'owner'].map((h) => `${h}@${accountSlug}.com`);
 
   const template = currentProject.templates[0];
   const hasBackgrounds = currentProject.backgrounds.length > 0;
@@ -168,7 +177,17 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const isArchived = !!alert.archivedAt;
 
   const handleSend = () => { sendAlert(alert.id); onClose(); };
-  const toggleHistory = () => setShowHistory((v) => !v);
+  // The right panel is mutually exclusive: opening History/Recipients/Offers cancels an in-progress offer
+  // edit, and (via onEditOffer below) starting an offer edit closes whichever of these was open.
+  const openRightPanel = (panel: 'history' | 'recipients' | 'offers') => {
+    setEditingOfferId(null);
+    setRightPanel((v) => (v === panel ? null : panel));
+  };
+  const openInventory = (offerId: string) => {
+    setInventoryOfferId(offerId);
+    setEditingOfferId(null);
+    setRightPanel('offers');
+  };
 
   const allComments = alert.comments ?? [];
   // A resolved comment's highlight/pin is hidden from the email/asset unless "Show Resolved" is on — the
@@ -351,7 +370,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               background={bg}
               projectId={currentProject.id}
               locked={!!projectLocked}
-              onEditOffer={() => setEditingOfferId(offer.id)}
+              onEditOffer={() => { setEditingOfferId(offer.id); setRightPanel(null); }}
+              onOpenInventory={() => openInventory(offer.id)}
             />
           </div>
         )}
@@ -453,8 +473,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
             {`Generated ${formatRelativeTime(alert.createdAt)} by AI AutoAgent`}
           </span>
-          <IconButton size="small" onClick={toggleHistory} sx={{ padding: '5px', background: showHistory ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
-            <HistoryOutlined style={{ fontSize: 20, color: showHistory ? '#473bab' : '#1f1d25' }} />
+          <IconButton size="small" onClick={() => openRightPanel('history')} sx={{ padding: '5px', background: rightPanel === 'history' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
+            <HistoryOutlined style={{ fontSize: 20, color: rightPanel === 'history' ? '#473bab' : '#1f1d25' }} />
+          </IconButton>
+          <IconButton size="small" onClick={() => openRightPanel('recipients')} sx={{ padding: '5px', background: rightPanel === 'recipients' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
+            <MailOutlined style={{ fontSize: 20, color: rightPanel === 'recipients' ? '#473bab' : '#1f1d25' }} />
+          </IconButton>
+          <IconButton size="small" onClick={() => openRightPanel('offers')} sx={{ padding: '5px', background: rightPanel === 'offers' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
+            <DirectionsCarOutlined style={{ fontSize: 20, color: rightPanel === 'offers' ? '#473bab' : '#1f1d25' }} />
           </IconButton>
           <IconButton size="small" onClick={onClose} sx={{ padding: '5px', background: 'rgba(17,16,20,0.08)', borderRadius: '100px' }}>
             <Close style={{ fontSize: 18, color: '#1f1d25' }} />
@@ -623,17 +649,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 </div>
               </div>
 
-              {/* Recipients — pinned top-left of the canvas, a sibling of the scrollable div so it doesn't
-                  scroll with the content. Hidden while generation failed: nothing would be sent yet. */}
-              {!failure && (
-                <AlertRecipientsControl
-                  recipients={recipients}
-                  suggestions={recipientSuggestions}
-                  onChange={(next) => setAlertRecipients(alert.id, next)}
-                  top={overlayTopOffset}
-                />
-              )}
-
               {/* Comments visibility controls — pinned top-right of the canvas, a sibling of the scrollable
                   div (not a descendant of it) so it stays fixed in the corner instead of scrolling with the
                   canvas's content. Hidden while generation failed: there is nothing to comment on. */}
@@ -642,16 +657,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 position: 'absolute', top: overlayTopOffset, right: 16, zIndex: 6, display: 'flex', alignItems: 'center', gap: 12,
                 background: 'rgba(244,245,246,0.9)', backdropFilter: 'blur(4px)', borderRadius: 8, padding: '4px 8px',
               }}>
-                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9' }}>
-                  Highlight text or click anywhere on the assets to add comments.
-                </span>
                 <IconButton
                   size="small"
                   onClick={() => setShowComments((v) => !v)}
                   title={showComments ? 'Hide comments' : 'Show comments'}
-                  sx={{ padding: '4px', background: showComments ? '#473bab' : 'transparent', '&:hover': { background: showComments ? '#3d3396' : 'rgba(0,0,0,0.04)' } }}
+                  sx={{ padding: '6px', background: showComments ? '#473bab' : 'transparent', '&:hover': { background: showComments ? '#3d3396' : 'rgba(0,0,0,0.04)' } }}
                 >
-                  <ChatBubbleOutlined style={{ fontSize: 18, color: showComments ? '#ffffff' : '#686576' }} />
+                  <ChatBubbleOutlined style={{ fontSize: 16, color: showComments ? '#ffffff' : '#686576' }} />
                 </IconButton>
                 <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ padding: '4px' }}>
                   <MoreVert style={{ fontSize: 18, color: '#686576' }} />
@@ -715,12 +727,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               </div>
             </div>
 
-            {/* Right panel — Activity History or the offer editor, mutually exclusive */}
-            {showHistory ? (
+            {/* Right panel — Activity History, Recipients, Offers, or the offer editor: mutually exclusive */}
+            {editingOffer && !projectLocked ? (
+              <AlertOfferEditPanel key={editingOffer.id} offer={editingOffer} onClose={() => setEditingOfferId(null)} />
+            ) : rightPanel === 'history' ? (
               <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Alert Activity History</span>
-                  <IconButton size="small" onClick={() => setShowHistory(false)} sx={{ padding: '4px' }}>
+                  <IconButton size="small" onClick={() => setRightPanel(null)} sx={{ padding: '4px' }}>
                     <Close style={{ fontSize: 16, color: '#686576' }} />
                   </IconButton>
                 </div>
@@ -745,8 +759,21 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   ))}
                 </div>
               </div>
-            ) : editingOffer && !projectLocked ? (
-              <AlertOfferEditPanel key={editingOffer.id} offer={editingOffer} onClose={() => setEditingOfferId(null)} />
+            ) : rightPanel === 'recipients' ? (
+              <AlertRecipientsPanel
+                recipients={recipients}
+                onChange={(next) => setAlertRecipients(alert.id, next)}
+                onClose={() => setRightPanel(null)}
+              />
+            ) : rightPanel === 'offers' ? (
+              <AlertOffersPanel
+                offers={allAlertOffers}
+                projectOffers={currentProject.offers}
+                projectId={currentProject.id}
+                inventoryOfferId={inventoryOfferId}
+                onSelectInventory={setInventoryOfferId}
+                onClose={() => { setRightPanel(null); setInventoryOfferId(null); }}
+              />
             ) : null}
           </div>
 
@@ -811,7 +838,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
           onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
           onAnchorClick={handleAnchorClick}
-          onEditOffer={() => setEditingOfferId(previewOffer.id)}
+          onEditOffer={() => { setEditingOfferId(previewOffer.id); setRightPanel(null); }}
           onReply={handleReply}
           onToggleReaction={handleToggleReaction}
           approvalStatus={alert.offerReviews?.[previewOffer.id]?.status ?? 'pending'}

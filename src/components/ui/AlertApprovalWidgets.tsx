@@ -16,12 +16,12 @@ const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
  */
 
 const widgetBase: React.CSSProperties = {
-  width: 360, boxSizing: 'border-box', borderRadius: 12, padding: 16,
+  width: 360, boxSizing: 'border-box', borderRadius: 12, padding: 12,
   boxShadow: '0px 3px 5px -1px rgba(0,0,0,0.2), 0px 6px 10px rgba(0,0,0,0.14), 0px 1px 18px rgba(0,0,0,0.12)',
 };
 
 const cardBase: React.CSSProperties = {
-  width: 240, boxSizing: 'border-box', borderRadius: 12, padding: 16,
+  width: 240, boxSizing: 'border-box', borderRadius: 12, padding: 12,
   boxShadow: '0px 3px 5px -1px rgba(0,0,0,0.2), 0px 6px 10px rgba(0,0,0,0.14), 0px 1px 18px rgba(0,0,0,0.12)',
 };
 
