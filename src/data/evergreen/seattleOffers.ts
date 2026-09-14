@@ -3,6 +3,8 @@ import bmwX1 from '../../assets/offers/X1.png';
 import bmwX3 from '../../assets/offers/X3.png';
 import bmwX5 from '../../assets/offers/X5.png';
 import bmw330i from '../../assets/offers/330i.png';
+import bmwX6 from '../../assets/offers/X6.png';
+import bmwiX from '../../assets/offers/iX.png';
 
 /**
  * Offers for the "Evergreen BMW of Seattle" project, seeded from the 7 YMMTs referenced
@@ -20,6 +22,7 @@ export const SEATTLE_OFFERS: Offer[] = [
     inStock: 9,
     condition: 'New',
     vin: '5UX53GP0T9513011',
+    stockNumber: '512034',
     msrp: 53300,
     disclosure: 'Sample STK: T9520001. Monthly lease payment of $569 per month plus tax for 36 months is based on an MSRP of $53,300. $3,799 due at signing, including $3,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     imageUrl: bmwX3,
@@ -34,8 +37,14 @@ export const SEATTLE_OFFERS: Offer[] = [
         salesPrice: 53300,
         totalDueAtSigning: 3799,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-x3-r1', name: 'Loyalty Credit', amount: 3000, status: 'applied', checked: true },
+          { id: 'sea-x3-r2', name: 'Military Incentive', amount: 2000, status: 'non_stackable', checked: false },
+          { id: 'sea-x3-r3', name: 'Corporate Fleet', amount: 1500, status: 'applied', checked: true },
+          { id: 'sea-x3-r4', name: 'Conquest Credit', amount: 1000, status: 'available', checked: false },
+        ],
       },
     ],
   },
@@ -49,6 +58,7 @@ export const SEATTLE_OFFERS: Offer[] = [
     inStock: 6,
     condition: 'New',
     vin: 'WBX73EF08T5548316',
+    stockNumber: '618472',
     msrp: 47215,
     disclosure: 'Sample STK: T9520002. Monthly lease payment of $499 per month plus tax for 36 months is based on an MSRP of $47,215. $3,299 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     imageUrl: bmwX1,
@@ -63,8 +73,14 @@ export const SEATTLE_OFFERS: Offer[] = [
         salesPrice: 47215,
         totalDueAtSigning: 3299,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-x1-r1', name: 'Loyalty Credit', amount: 1500, status: 'applied', checked: true },
+          { id: 'sea-x1-r2', name: 'Military Incentive', amount: 1000, status: 'applied', checked: true },
+          { id: 'sea-x1-r3', name: 'APR Credit', amount: 750, status: 'non_stackable', checked: false },
+          { id: 'sea-x1-r4', name: 'Conquest Credit', amount: 500, status: 'available', checked: false },
+        ],
       },
     ],
   },
@@ -77,6 +93,8 @@ export const SEATTLE_OFFERS: Offer[] = [
     trim: '330i Sedan',
     inStock: 8,
     condition: 'New',
+    vin: 'WBA5R7C09PFH23789',
+    stockNumber: '724198',
     imageUrl: bmw330i,
     disclosure: 'Sample STK: T9520003. Monthly lease payment of $479 per month plus tax for 36 months is based on an MSRP of $45,900. $3,199 due at signing, including $2,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
     offerTypes: [
@@ -89,8 +107,13 @@ export const SEATTLE_OFFERS: Offer[] = [
         downPayment: 2500,
         totalDueAtSigning: 3199,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-330i-r1', name: 'Loyalty Credit', amount: 1500, status: 'applied', checked: true },
+          { id: 'sea-330i-r2', name: 'Corporate Fleet', amount: 1000, status: 'applied', checked: true },
+          { id: 'sea-330i-r3', name: 'APR Credit', amount: 1000, status: 'non_stackable', checked: false },
+        ],
       },
     ],
   },
@@ -104,6 +127,8 @@ export const SEATTLE_OFFERS: Offer[] = [
     trim: 'xDrive40i',
     inStock: 5,
     condition: 'New',
+    vin: '5UXCR6C04N9L67892',
+    stockNumber: '835621',
     imageUrl: bmwX5,
     offerTypes: [
       {
@@ -115,8 +140,14 @@ export const SEATTLE_OFFERS: Offer[] = [
         downPayment: 4000,
         totalDueAtSigning: 4899,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-x5-40i-r1', name: 'Loyalty Credit', amount: 2000, status: 'applied', checked: true },
+          { id: 'sea-x5-40i-r2', name: 'Military Incentive', amount: 1500, status: 'non_stackable', checked: false },
+          { id: 'sea-x5-40i-r3', name: 'Mobility Program', amount: 1000, status: 'applied', checked: true },
+          { id: 'sea-x5-40i-r4', name: 'Conquest Credit', amount: 1500, status: 'available', checked: false },
+        ],
       },
     ],
   },
@@ -130,6 +161,8 @@ export const SEATTLE_OFFERS: Offer[] = [
     trim: 'xDrive50e',
     inStock: 4,
     condition: 'New',
+    vin: '5UXTA6C03N9N45671',
+    stockNumber: '947315',
     imageUrl: bmwX5,
     offerTypes: [
       {
@@ -141,8 +174,14 @@ export const SEATTLE_OFFERS: Offer[] = [
         downPayment: 4000,
         totalDueAtSigning: 4999,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-x5-50e-r1', name: 'EV Lease Credit', amount: 7500, status: 'applied', checked: true },
+          { id: 'sea-x5-50e-r2', name: 'Military Incentive', amount: 2000, status: 'non_stackable', checked: false },
+          { id: 'sea-x5-50e-r3', name: 'Loyalty Credit', amount: 3000, status: 'applied', checked: true },
+          { id: 'sea-x5-50e-r4', name: 'Corporate Fleet', amount: 1000, status: 'applied', checked: true },
+        ],
       },
     ],
   },
@@ -156,6 +195,8 @@ export const SEATTLE_OFFERS: Offer[] = [
     trim: 'sDrive40i',
     inStock: 6,
     condition: 'New',
+    vin: '5UXTA6C05N9M78903',
+    stockNumber: '256840',
     imageUrl: bmwX5,
     offerTypes: [
       {
@@ -167,8 +208,13 @@ export const SEATTLE_OFFERS: Offer[] = [
         downPayment: 4000,
         totalDueAtSigning: 4699,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-x5-sdrive-r1', name: 'Loyalty Credit', amount: 2000, status: 'applied', checked: true },
+          { id: 'sea-x5-sdrive-r2', name: 'APR Credit', amount: 1500, status: 'non_stackable', checked: false },
+          { id: 'sea-x5-sdrive-r3', name: 'Conquest Credit', amount: 1000, status: 'available', checked: false },
+        ],
       },
     ],
   },
@@ -182,6 +228,8 @@ export const SEATTLE_OFFERS: Offer[] = [
     trim: 'M340i Sedan',
     inStock: 3,
     condition: 'New',
+    vin: 'WBA53AR08PFJ67823',
+    stockNumber: '369452',
     imageUrl: bmw330i,
     offerTypes: [
       {
@@ -193,8 +241,80 @@ export const SEATTLE_OFFERS: Offer[] = [
         downPayment: 3000,
         totalDueAtSigning: 3899,
         milesPerYear: 10000,
+        startDate: '2026-06-01',
         expirationDate: '2026-08-31',
-        rebates: [],
+        rebates: [
+          { id: 'sea-m340i-r1', name: 'Loyalty Credit', amount: 1500, status: 'applied', checked: true },
+          { id: 'sea-m340i-r2', name: 'Military Incentive', amount: 1000, status: 'applied', checked: true },
+          { id: 'sea-m340i-r3', name: 'APR Credit', amount: 1500, status: 'non_stackable', checked: false },
+          { id: 'sea-m340i-r4', name: 'Corporate Fleet', amount: 750, status: 'available', checked: false },
+        ],
+      },
+    ],
+  },
+  // The next two are enrolled models with no offers referenced by any alert email (see alerts.ts) —
+  // seeded so the Alert Offers panel's Models tab always has a couple of "No Stock" examples to show.
+  {
+    id: 'sea-offer-x6-xdrive40i',
+    disclosure: 'Sample STK: T9520008. Monthly lease payment of $899 per month plus tax for 36 months is based on an MSRP of $77,300. $4,999 due at signing, including $4,000 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
+    vehicleName: '2026 BMW X6 xDrive40i',
+    year: 2026,
+    make: 'BMW',
+    model: 'X6',
+    trim: 'xDrive40i',
+    inStock: 0,
+    condition: 'New',
+    vin: '5UXTY8C05N9P12345',
+    stockNumber: '481027',
+    imageUrl: bmwX6,
+    offerTypes: [
+      {
+        id: 'sea-x6-lease',
+        type: 'Lease',
+        source: 'National',
+        monthlyPayment: 899,
+        term: 36,
+        downPayment: 4000,
+        totalDueAtSigning: 4999,
+        milesPerYear: 10000,
+        startDate: '2026-06-01',
+        expirationDate: '2026-08-31',
+        rebates: [
+          { id: 'sea-x6-r1', name: 'Loyalty Credit', amount: 2000, status: 'applied', checked: true },
+          { id: 'sea-x6-r2', name: 'Conquest Credit', amount: 1000, status: 'available', checked: false },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sea-offer-ix-xdrive50',
+    disclosure: 'Sample STK: T9520009. Monthly lease payment of $949 per month plus tax for 36 months is based on an MSRP of $84,100. $5,299 due at signing, including $4,500 cash down or trade equity plus government fees and taxes, any finance charges, electronic filing charge and $85 dealer doc fee. Based on 10,000 miles per year with approved credit for qualified customers only through BMW Financial Services NA. Not everyone will qualify. See dealer for complete details. Offer expires 8/31/2026.',
+    vehicleName: '2026 BMW iX xDrive50',
+    year: 2026,
+    make: 'BMW',
+    model: 'iX',
+    trim: 'xDrive50',
+    inStock: 0,
+    condition: 'New',
+    vin: '5UXKT0C08N9Q54321',
+    stockNumber: '592713',
+    imageUrl: bmwiX,
+    offerTypes: [
+      {
+        id: 'sea-ix-lease',
+        type: 'Lease',
+        source: 'National',
+        monthlyPayment: 949,
+        term: 36,
+        downPayment: 4500,
+        totalDueAtSigning: 5299,
+        milesPerYear: 10000,
+        startDate: '2026-06-01',
+        expirationDate: '2026-08-31',
+        rebates: [
+          { id: 'sea-ix-r1', name: 'EV Lease Credit', amount: 7500, status: 'applied', checked: true },
+          { id: 'sea-ix-r2', name: 'Military Incentive', amount: 2000, status: 'non_stackable', checked: false },
+        ],
       },
     ],
   },

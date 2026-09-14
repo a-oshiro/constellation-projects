@@ -15,6 +15,7 @@ export interface LeaseOfferData {
   salesPrice?: number;
   totalDueAtSigning?: number;
   milesPerYear?: number;
+  startDate?: string;
   expirationDate?: string;
   rebates?: Rebate[];
 }

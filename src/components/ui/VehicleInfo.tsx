@@ -21,6 +21,16 @@ interface VehicleInfoProps {
   onSave: (id: string, updated: Partial<Offer>) => void;
   /** Suppresses the built-in "Vehicle Info" title row — for callers (e.g. the alert dialog's tabbed offer editor) that provide their own outer title/close affordance. */
   hideHeader?: boolean;
+  /** When provided, replaces the footer's secondary button with a "Back" button wired to this instead of `onClose` — used by the alert dialog's offer editor, which gates leaving with unsaved changes behind a confirmation dialog. */
+  onBack?: () => void;
+  /** Where to navigate after a successful Save — defaults to `onBack` (falling back to `onClose`). Kept
+   * separate from `onBack` so saving never re-triggers that button's unsaved-changes confirmation gate:
+   * the changes are already saved, so there's nothing left to lose. */
+  onSaved?: () => void;
+  /** Fires whenever the unsaved-changes state changes — lets a caller (e.g. `onBack`'s confirmation gate) know whether there's anything to lose. */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Overrides the panel's fixed width (defaults to 360, matching the standalone Offers task page). */
+  width?: number;
 }
 
 const autocompleteSx = {
@@ -44,12 +54,16 @@ const SectionLabel = ({ text }: { text: string }) => (
   </div>
 );
 
-export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoProps) => {
+export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360 }: VehicleInfoProps) => {
   const [draft, setDraft] = useState<Partial<Offer>>({});
 
   useEffect(() => {
     setDraft({});
   }, [offer.id]);
+
+  useEffect(() => {
+    onDirtyChange?.(Object.keys(draft).length > 0);
+  }, [draft, onDirtyChange]);
 
   const val = <K extends keyof Offer>(field: K): Offer[K] =>
     (draft[field] !== undefined ? draft[field] : offer[field]) as Offer[K];
@@ -60,7 +74,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoP
   const handleSave = () => {
     onSave(offer.id, draft);
     setDraft({});
-    onClose();
+    (onSaved ?? onBack ?? onClose)();
   };
 
   const imageFileName = offer.imageUrl.split('/').pop() ?? offer.imageUrl;
@@ -73,7 +87,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoP
     <div
       className="flex flex-col shrink-0 overflow-hidden"
       style={{
-        width: 360,
+        width,
         background: '#ffffff',
         margin: '8px 8px 8px 0',
         borderRadius: 8,
@@ -430,7 +444,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoP
         }}
       >
         <button
-          onClick={onClose}
+          onClick={onBack ?? onClose}
           style={{
             padding: '6px 20px',
             borderRadius: 100,
@@ -444,7 +458,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader }: VehicleInfoP
             letterSpacing: '0.4px',
           }}
         >
-          Close
+          {onBack ? 'Back' : 'Close'}
         </button>
         <button
           onClick={handleSave}

@@ -31,7 +31,7 @@ interface AlertAssetPreviewModalProps {
   onToggleResolved: (commentId: string) => void;
   onDeleteComment: (commentId: string) => void;
   onAnchorClick: (commentId: string) => void;
-  onEditOffer: () => void;
+  onEditOffer: (view: 'vehicle' | 'offer') => void;
   onReply: (parentCommentId: string, text: string, mentionedNames: string[]) => void;
   onToggleReaction: (commentId: string, emoji: string) => void;
   approvalStatus: ReviewStatus;
@@ -185,7 +185,6 @@ export const AlertAssetPreviewModal = ({
                 timestamp={reviewTimestamp ?? 0}
                 disabled={approvalDisabled}
                 onUndo={onUndo}
-                onApproveChanges={approvalStatus === 'rejected' ? onApprove : undefined}
                 layout="static"
               />
             </div>

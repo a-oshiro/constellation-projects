@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { IconButton, Menu } from '@mui/material';
-import { Check, CheckCircle, CheckCircleOutlined, MoreVert, Sync } from '@mui/icons-material';
+import { IconButton } from '@mui/material';
+import { Check, CheckCircle, ExpandLess, ExpandMore, PendingOutlined, Sync, Undo } from '@mui/icons-material';
 import type { ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
@@ -12,7 +12,9 @@ const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
  * The two floating, bottom-right-pinned approval widgets — one for the email track (still a single
  * alert-wide decision), one for the assets track (individually decided per offer, so it shows one small
  * progress bar per asset instead of a single bar, and a title/icon that only shifts to "changes requested"
- * once a rejection exists). Both always show a title identifying which track they're for, in every state.
+ * once a rejection exists). Both always show a title identifying which track they're for, in every state,
+ * and are collapsible via the caret in their top-right corner (per CP-13922) — collapsed shows a single
+ * summary row, expanded reveals the reviewer subtitle, per-asset progress, and action buttons.
  */
 
 const widgetBase: React.CSSProperties = {
@@ -47,38 +49,32 @@ const subtitleStyle: React.CSSProperties = {
   fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px',
 };
 
-interface WidgetMenuItem {
-  label: string;
-  onClick: () => void;
-}
+const smallIconButtonSx = { padding: '1px', width: 24, height: 24, flexShrink: 0 };
 
-/** The 3-dot menu shared by all three widgets/cards below — only rendered when there's at least one action to offer. */
-const WidgetMenuButton = ({ items, disabled }: { items: WidgetMenuItem[]; disabled?: boolean }) => {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  if (items.length === 0) return null;
-  return (
-    <>
+/** Replaces the old 3-dot "Undo" menu — a single icon button whose hover message is passed in by the
+ * caller, since it reads differently for the Email widget, the Assets widget, and a single asset's badge. */
+const UndoButton = ({ tooltip, onClick, disabled }: { tooltip: string; onClick: () => void; disabled?: boolean }) => (
+  <Tooltip title={tooltip} slotProps={tooltipPopperProps}>
+    <span>
       <IconButton
         disabled={disabled}
-        onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
-        sx={{ padding: '1px', width: 24, height: 24, flexShrink: 0 }}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        sx={smallIconButtonSx}
       >
-        <MoreVert style={{ fontSize: 20, color: '#686576' }} />
+        <Undo style={{ fontSize: 18, color: '#686576' }} />
       </IconButton>
-      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} onClick={(e) => e.stopPropagation()} sx={{ zIndex: 100050 }}>
-        {items.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => { setAnchor(null); item.onClick(); }}
-            style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '6px 16px', fontSize: 14, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </Menu>
-    </>
-  );
-};
+    </span>
+  </Tooltip>
+);
+
+/** The collapse/expand caret shared by both bottom-right widgets. */
+const CollapseToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) => (
+  <IconButton onClick={(e) => { e.stopPropagation(); onToggle(); }} sx={smallIconButtonSx}>
+    {collapsed
+      ? <ExpandMore style={{ fontSize: 20, color: '#686576' }} />
+      : <ExpandLess style={{ fontSize: 20, color: '#686576' }} />}
+  </IconButton>
+);
 
 interface EmailApprovalWidgetProps {
   status: ReviewStatus;
@@ -96,14 +92,12 @@ interface EmailApprovalWidgetProps {
 export const EmailApprovalWidget = ({
   status, actorName, timestamp, disabled, disabledReason, onApprove, onRequestChanges, onApproveChanges, onUndo,
 }: EmailApprovalWidgetProps) => {
+  const [collapsed, setCollapsed] = useState(false);
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
   const background = isApproved ? '#edf7ed' : '#ffffff';
-  const menuItems: WidgetMenuItem[] = isApproved
-    ? [{ label: 'Undo Approval', onClick: onUndo }]
-    : !isPending
-      ? [{ label: 'Undo Changes Request', onClick: onUndo }]
-      : [];
+  const title = isApproved ? 'Email Approved' : isPending ? 'Email Approval' : 'Email Changes Requested';
+  const collapsedCaption = isApproved ? 'Approved' : isPending ? 'Pending review' : 'Changes Requested';
 
   return (
     <div style={{ ...widgetBase, background, display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -111,22 +105,23 @@ export const EmailApprovalWidget = ({
         {isApproved
           ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
           : isPending
-            ? <CheckCircleOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />
+            ? <PendingOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />
             : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
         <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isApproved ? '#1b5e20' : '#1f1d25' }}>
-          {isApproved ? 'Email Approved' : isPending ? 'Email Approval' : 'Email Changes Requested'}
+          {title}
         </span>
-        {isPending && <span style={captionStyle}>Pending review</span>}
-        <WidgetMenuButton items={menuItems} disabled={disabled} />
+        {collapsed && <span style={captionStyle}>{collapsedCaption}</span>}
+        {!collapsed && !isPending && <UndoButton tooltip="Undo Review" onClick={onUndo} disabled={disabled} />}
+        <CollapseToggle collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
 
-      {!isPending && (
-        <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
+      {!collapsed && !isPending && (
+        <span style={{ ...subtitleStyle, paddingLeft: 22, marginTop: 4 }}>
           By {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
         </span>
       )}
 
-      {isPending ? (
+      {!collapsed && (isPending ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end', marginTop: 8 }}>
           <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
             <span>
@@ -168,7 +163,7 @@ export const EmailApprovalWidget = ({
             </span>
           </Tooltip>
         </div>
-      )}
+      ))}
     </div>
   );
 };
@@ -196,6 +191,7 @@ export const AssetApprovalWidget = ({
   assets, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled, disabledReason,
   onApproveRemaining, onUndoAllReviews, onSelectAsset,
 }: AssetApprovalWidgetProps) => {
+  const [collapsed, setCollapsed] = useState(false);
   const totalCount = assets.length;
   const approvedCount = assets.filter((a) => a.status === 'approved').length;
   const rejectedCount = assets.filter((a) => a.status === 'rejected').length;
@@ -203,35 +199,36 @@ export const AssetApprovalWidget = ({
   const reviewedCount = approvedCount + rejectedCount;
   const isComplete = totalCount > 0 && approvedCount === totalCount;
   const hasRejected = rejectedCount > 0;
-  const menuItems: WidgetMenuItem[] = reviewedCount > 0 ? [{ label: 'Undo All Reviews', onClick: onUndoAllReviews }] : [];
+  const title = isComplete ? 'All Assets Approved' : hasRejected ? 'Assets Changes Requested' : 'Assets Approvals';
 
   return (
-    <div style={{ ...widgetBase, background: isComplete ? '#edf7ed' : '#ffffff', display: 'flex', flexDirection: 'column', gap: isComplete ? 4 : 12 }}>
+    <div style={{ ...widgetBase, background: isComplete ? '#edf7ed' : '#ffffff', display: 'flex', flexDirection: 'column', gap: collapsed ? 0 : isComplete ? 4 : 12 }}>
       <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
         {isComplete
           ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
           : hasRejected
             ? <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />
-            : <CheckCircleOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />}
+            : <PendingOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />}
         <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isComplete ? '#1b5e20' : '#1f1d25' }}>
-          {isComplete ? 'All Assets Approved' : hasRejected ? 'Assets Changes Requested' : 'Assets'}
+          {title}
         </span>
-        {!isComplete && <span style={captionStyle}>{reviewedCount} of {totalCount} reviewed</span>}
-        <WidgetMenuButton items={menuItems} disabled={disabled} />
+        {collapsed && <span style={captionStyle}>{reviewedCount} of {totalCount} reviewed</span>}
+        {!collapsed && reviewedCount > 0 && <UndoButton tooltip="Undo all reviews" onClick={onUndoAllReviews} disabled={disabled} />}
+        <CollapseToggle collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
 
-      {isComplete && (
+      {!collapsed && isComplete && (
         <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
           By {approverNames.map((n) => formatReviewerName(n)).join(', ')} • {lastApprovedTimestamp ? formatRelativeTime(lastApprovedTimestamp) : ''}
         </span>
       )}
-      {!isComplete && hasRejected && (
+      {!collapsed && !isComplete && hasRejected && (
         <span style={{ ...subtitleStyle, paddingLeft: 22, marginTop: -12 }}>
           By {formatReviewerName(lastRejectedActorName ?? '')} • {lastRejectedTimestamp ? formatRelativeTime(lastRejectedTimestamp) : ''}
         </span>
       )}
 
-      {!isComplete && (
+      {!collapsed && !isComplete && (
         <>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%', paddingLeft: 22 }}>
             {assets.map((a) => (
@@ -281,7 +278,6 @@ interface AssetStatusBadgeProps {
   timestamp: number;
   disabled?: boolean;
   onUndo: () => void;
-  onApproveChanges?: () => void;
   /** 'overlay' (default) pins the badge to the bottom-right corner of a position:relative asset wrapper.
    * 'static' renders it in normal flow instead, for placement outside the asset box (e.g. below the
    * enlarged preview, right-aligned by the parent). */
@@ -290,15 +286,9 @@ interface AssetStatusBadgeProps {
 
 /** Per-asset approve/reject readout — a small footer card pinned to the bottom-right corner of the asset
  * it belongs to (rather than living in the floating comment column), so the decision reads right where it
- * was made. No buttons live on the card itself — every action is tucked behind its 3-dot menu. */
-export const AssetStatusBadge = ({ label, actorName, timestamp, disabled, onUndo, onApproveChanges, layout = 'overlay' }: AssetStatusBadgeProps) => {
+ * was made. Its only action is the Undo icon — reverting this one asset back to pending. */
+export const AssetStatusBadge = ({ label, actorName, timestamp, disabled, onUndo, layout = 'overlay' }: AssetStatusBadgeProps) => {
   const isApproved = label === 'Approved';
-  const menuItems: WidgetMenuItem[] = isApproved
-    ? [{ label: 'Undo Approval', onClick: onUndo }]
-    : [
-        { label: 'Undo Changes Request', onClick: onUndo },
-        ...(onApproveChanges ? [{ label: 'Approve Changes', onClick: onApproveChanges }] : []),
-      ];
   return (
     <div
       style={{
@@ -319,7 +309,7 @@ export const AssetStatusBadge = ({ label, actorName, timestamp, disabled, onUndo
             By {actorName} • {formatRelativeTime(timestamp)}
           </span>
         </div>
-        <WidgetMenuButton items={menuItems} disabled={disabled} />
+        <UndoButton tooltip="Undo review" onClick={onUndo} disabled={disabled} />
       </div>
     </div>
   );

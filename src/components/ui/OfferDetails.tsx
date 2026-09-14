@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  IconButton, Switch, Checkbox, InputAdornment, TextField, Button,
+  IconButton, Switch, Checkbox, InputAdornment, TextField,
 } from '@mui/material';
 import {
   Close, Calculate, Add, CalendarToday, InfoOutlined,
@@ -11,7 +11,7 @@ import { AppSelect } from './AppSelect';
 import type {
   Offer, OfferTypeData, LeaseOfferData, FinanceOfferData,
   PurchaseOfferData, ZDLeaseOfferData, CustomOfferData,
-  Rebate, PurchaseRebateEntry, CustomField,
+  Rebate, CustomField,
 } from '../../data/types';
 
 const TERM_OPTIONS = ['24', '36', '39', '48', '60', '72'].map((v) => ({ value: v, label: `${v} months` }));
@@ -24,6 +24,19 @@ interface OfferDetailsProps {
   onSave: (offerId: string, offerTypeId: string, draft: Record<string, unknown>) => void;
   /** Suppresses the built-in title row (offer type name) — for callers that provide their own outer title/close affordance. */
   hideHeader?: boolean;
+  /** When provided, replaces the footer's secondary button with a "Back" button wired to this instead of the default (clear draft only) — used by the alert dialog's offer editor, which gates leaving with unsaved changes behind a confirmation dialog. */
+  onBack?: () => void;
+  /** Where to navigate after a successful Save — defaults to `onBack` (falling back to `onClose`). Kept
+   * separate from `onBack` so saving never re-triggers that button's unsaved-changes confirmation gate:
+   * the changes are already saved, so there's nothing left to lose. */
+  onSaved?: () => void;
+  /** Fires whenever the unsaved-changes state changes — lets a caller (e.g. `onBack`'s confirmation gate) know whether there's anything to lose. */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Overrides the panel's fixed width (defaults to 360, matching the standalone Offers task page). */
+  width?: number;
+  /** Optional content rendered above the form fields, inside the same scrollable area — e.g. the alert
+   * dialog editor's Offer Card, which should scroll together with the fields rather than stay pinned. */
+  topContent?: React.ReactNode;
 }
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
@@ -107,6 +120,66 @@ function NumberField(props: { label: string; value: number | undefined; onChange
 
 // ── Form: Lease ───────────────────────────────────────────────────────────────
 
+/** Read-only fee line-item table — dealer/optional fees are flat per-dealer amounts, not per-vehicle
+ * data, so (per CP-13922) these are the same fixed values for every Lease offer. */
+function FeesTable({ title, description, rows, total }: {
+  title: string;
+  description?: string;
+  rows: { label: string; amount: number }[];
+  total?: number;
+}) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{title}</div>
+        {description && (
+          <div style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', marginTop: 2 }}>{description}</div>
+        )}
+      </div>
+      <div style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden' }}>
+        {rows.map((row, i) => (
+          <div
+            key={row.label}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12,
+              borderTop: i === 0 ? 'none' : '1px solid rgba(0,0,0,0.12)',
+            }}
+          >
+            <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{row.label}</span>
+            <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>${row.amount.toLocaleString()}</span>
+          </div>
+        ))}
+        {total != null && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderTop: '1px solid rgba(0,0,0,0.12)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Total Fees</span>
+            <span style={{ fontSize: 12, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>${total.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const DEALER_FEES = [
+  { label: 'Dealer Documentation Fee', amount: 175 },
+  { label: 'Electronic Filling Fee', amount: 50 },
+  { label: 'Admin Fee', amount: 60 },
+  { label: 'Clear Mask Fee', amount: 15 },
+];
+const DEALER_FEES_TOTAL = DEALER_FEES.reduce((sum, f) => sum + f.amount, 0);
+
+const OPTIONAL_FEES = [
+  { label: 'Dealer Inspection Fee', amount: 100 },
+  { label: 'VIN Etching', amount: 200 },
+  { label: 'Nitrogen Tire Fill', amount: 300 },
+];
+
+const REBATE_STATUS_STYLE: Record<Rebate['status'], { background: string; color: string }> = {
+  applied: { background: 'rgba(46,125,50,0.10)', color: '#2e7d32' },
+  non_stackable: { background: 'rgba(230,81,0,0.10)', color: '#e65100' },
+  available: { background: 'rgba(2,136,209,0.08)', color: '#01579b' },
+};
+
 function LeaseForm({ data, onChange }: {
   data: Partial<LeaseOfferData>;
   onChange: (field: keyof LeaseOfferData, value: unknown) => void;
@@ -131,68 +204,84 @@ function LeaseForm({ data, onChange }: {
     onChange('rebates', next);
   };
 
+  // Computed/read-only fields — derived from the editable payment fields, not stored themselves.
+  const term = data.term ?? 0;
+  const milesPerYear = data.milesPerYear ?? 0;
+  const totalLeaseMileage = term > 0 && milesPerYear > 0 ? Math.round((term / 12) * milesPerYear) : undefined;
+  const totalPayment = data.monthlyPayment != null && term > 0 ? data.monthlyPayment * term : undefined;
+
   return (
     <>
       {/* Offer Calculator */}
       <div style={{ marginBottom: 20 }}>
         <SectionTitle>Payment Summary</SectionTitle>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: 'rgba(71,59,171,0.06)', borderRadius: 8,
-          padding: '8px 10px', marginBottom: 16,
-        }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6, background: '#473bab',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <Calculate style={{ fontSize: 14, color: '#ffffff' }} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', lineHeight: 1.4 }}>
-              Offer Calculator
+        <div style={{ background: '#f4f5f6', borderRadius: 8, padding: '4px 8px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Calculate style={{ fontSize: 20, color: '#686576', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#686576', lineHeight: 1.4 }}>
+                Offer Calculator
+              </div>
+              <div style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', color: '#686576', lineHeight: 1.4 }}>
+                Edits in these fields recalculate the Lease
+              </div>
             </div>
-            <div style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576', lineHeight: 1.4 }}>
-              Edits in these fields recalculate the Lease
-            </div>
+            <Switch
+              checked={calculatorOn}
+              onChange={(e) => setCalculatorOn(e.target.checked)}
+              size="small"
+              sx={{
+                flexShrink: 0,
+                '& .MuiSwitch-switchBase.Mui-checked': { color: '#ffffff' },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#473bab', opacity: 1 },
+                '& .MuiSwitch-track': { backgroundColor: '#cac9cf', opacity: 1 },
+              }}
+            />
           </div>
-          <Switch
-            checked={calculatorOn}
-            onChange={(e) => setCalculatorOn(e.target.checked)}
-            size="small"
-            sx={{
-              flexShrink: 0,
-              '& .MuiSwitch-switchBase.Mui-checked': { color: '#ffffff' },
-              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#473bab', opacity: 1 },
-              '& .MuiSwitch-track': { backgroundColor: '#cac9cf', opacity: 1 },
-            }}
-          />
-        </div>
 
-        <FieldGroup>
           <AppTextField
             label="Monthly Payment $"
             type="number"
             value={data.monthlyPayment != null ? String(data.monthlyPayment) : ''}
             onChange={(e) => handleFieldChange('monthlyPayment', e.target.value === '' ? undefined : Number(e.target.value))}
           />
-          <AppSelect
-            label="Term"
-            value={data.term != null ? String(data.term) : ''}
-            onChange={(v) => handleFieldChange('term', Number(v))}
-            options={TERM_OPTIONS}
-          />
+          <FieldGroup>
+            <AppSelect
+              label="Term"
+              value={data.term != null ? String(data.term) : ''}
+              onChange={(v) => handleFieldChange('term', Number(v))}
+              options={TERM_OPTIONS}
+            />
+            <AppTextField
+              label="Down Payment $"
+              type="number"
+              value={data.downPayment != null ? String(data.downPayment) : ''}
+              onChange={(e) => handleFieldChange('downPayment', e.target.value === '' ? undefined : Number(e.target.value))}
+            />
+            <AppTextField
+              label="Sales Price $"
+              type="number"
+              value={data.salesPrice != null ? String(data.salesPrice) : ''}
+              onChange={(e) => handleFieldChange('salesPrice', e.target.value === '' ? undefined : Number(e.target.value))}
+            />
+            <AppSelect
+              label="Miles Per Year"
+              value={data.milesPerYear != null ? String(data.milesPerYear) : ''}
+              onChange={(v) => handleFieldChange('milesPerYear', Number(v))}
+              options={MILES_OPTIONS}
+            />
+          </FieldGroup>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
           <AppTextField
-            label="Down Payment $"
-            type="number"
-            value={data.downPayment != null ? String(data.downPayment) : ''}
-            onChange={(e) => handleFieldChange('downPayment', e.target.value === '' ? undefined : Number(e.target.value))}
+            label="Total Lease Mileage"
+            value={totalLeaseMileage != null ? totalLeaseMileage.toLocaleString() : ''}
+            disabled
           />
-          <AppTextField
-            label="Sales Price $"
-            type="number"
-            value={data.salesPrice != null ? String(data.salesPrice) : ''}
-            onChange={(e) => handleFieldChange('salesPrice', e.target.value === '' ? undefined : Number(e.target.value))}
-          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
           <AppTextField
             label="Total Due at Signing $"
             type="number"
@@ -200,16 +289,19 @@ function LeaseForm({ data, onChange }: {
             onChange={(e) => handleFieldChange('totalDueAtSigning', e.target.value === '' ? undefined : Number(e.target.value))}
             slotProps={{ input: { endAdornment: <InputAdornment position="end"><InfoOutlined style={{ fontSize: 14, color: '#9c99a9' }} /></InputAdornment> } }}
           />
-          <AppSelect
-            label="Miles Per Year"
-            value={data.milesPerYear != null ? String(data.milesPerYear) : ''}
-            onChange={(v) => handleFieldChange('milesPerYear', Number(v))}
-            options={MILES_OPTIONS}
-          />
-        </FieldGroup>
-        <div style={{ marginTop: 12 }}>
           <AppTextField
-            label="Expiration Date"
+            label="Total Payment $"
+            value={totalPayment != null ? totalPayment.toLocaleString() : ''}
+            disabled
+          />
+          <AppTextField
+            label="Offer Start Date"
+            value={data.startDate ?? ''}
+            onChange={(e) => handleFieldChange('startDate', e.target.value)}
+            slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarToday style={{ fontSize: 14, color: '#9c99a9' }} /></InputAdornment> } }}
+          />
+          <AppTextField
+            label="Offer Expiration Date"
             value={data.expirationDate ?? ''}
             onChange={(e) => handleFieldChange('expirationDate', e.target.value)}
             slotProps={{ input: { endAdornment: <InputAdornment position="end"><CalendarToday style={{ fontSize: 14, color: '#9c99a9' }} /></InputAdornment> } }}
@@ -217,25 +309,27 @@ function LeaseForm({ data, onChange }: {
         </div>
       </div>
 
-      <div style={{ height: 1, background: '#f0f0f0', marginBottom: 16 }} />
+      <FeesTable title="Dealer Fees" rows={DEALER_FEES} total={DEALER_FEES_TOTAL} />
+      <FeesTable title="Optional Fees" description="Optional fees are not included in the offer’s costs." rows={OPTIONAL_FEES} />
 
       {/* Rebates */}
       <div style={{ paddingBottom: 8 }}>
         <SectionTitle>Rebates &amp; Conditionals</SectionTitle>
-        <button style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          color: '#473bab', fontSize: 13, fontFamily: 'Roboto, sans-serif',
-          fontWeight: 500, padding: '0 0 12px',
-        }}>
-          <Add style={{ fontSize: 16 }} /> Add
-        </button>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: '0 12px' }}>
+          <button style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: '#473bab', fontSize: 13, fontFamily: 'Roboto, sans-serif',
+            fontWeight: 500, padding: '10px 0',
+          }}>
+            <Add style={{ fontSize: 16 }} /> Add
+          </button>
           {draftRebates.map((r, i) => {
             const dimmed = r.status === 'non_stackable';
+            const statusStyle = REBATE_STATUS_STYLE[r.status];
             return (
               <div key={r.id}>
-                {i > 0 && <div style={{ height: 1, background: '#f0f0f0' }} />}
+                {i === 0 && <div style={{ height: 1, background: '#f0f0f0' }} />}
                 <div style={{ display: 'flex', alignItems: 'center', padding: '10px 0', gap: 8 }}>
                   <Checkbox
                     checked={r.checked}
@@ -243,30 +337,20 @@ function LeaseForm({ data, onChange }: {
                     size="small"
                     sx={{ padding: '2px', flexShrink: 0, color: '#cac9cf', '&.Mui-checked': { color: '#473bab' } }}
                   />
-                  <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: dimmed ? '#9c99a9' : '#1f1d25', flex: 1 }}>
+                  <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: dimmed ? '#9c99a9' : '#1f1d25', flex: 1, opacity: dimmed ? 0.5 : 1 }}>
                     {r.name}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    {r.status === 'applied' && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                        background: 'rgba(46,125,50,0.10)', color: '#2e7d32',
-                        fontSize: 11, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-                        borderRadius: 100, padding: '2px 7px', whiteSpace: 'nowrap',
-                      }}>
-                        <CheckCircle style={{ fontSize: 12 }} /> Applied
-                      </span>
-                    )}
-                    {r.status === 'non_stackable' && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                        background: 'rgba(230,81,0,0.10)', color: '#e65100',
-                        fontSize: 11, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-                        borderRadius: 100, padding: '2px 7px', whiteSpace: 'nowrap',
-                      }}>
-                        <WarningAmber style={{ fontSize: 12 }} /> Non-stackable
-                      </span>
-                    )}
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: statusStyle.background, color: statusStyle.color,
+                      fontSize: 11, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+                      borderRadius: 100, padding: '2px 7px', whiteSpace: 'nowrap',
+                    }}>
+                      {r.status === 'applied' && <CheckCircle style={{ fontSize: 12 }} />}
+                      {r.status === 'non_stackable' && <WarningAmber style={{ fontSize: 12 }} />}
+                      {r.status === 'applied' ? 'Applied' : r.status === 'non_stackable' ? 'Non-stackable' : 'Available'}
+                    </span>
                     <span style={{
                       fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
                       color: dimmed ? '#9c99a9' : '#1f1d25',
@@ -277,6 +361,7 @@ function LeaseForm({ data, onChange }: {
                     <InfoOutlined style={{ fontSize: 14, color: '#9c99a9' }} />
                   </div>
                 </div>
+                {i < draftRebates.length - 1 && <div style={{ height: 1, background: '#f0f0f0' }} />}
               </div>
             );
           })}
@@ -544,12 +629,16 @@ function CustomForm({ data, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: OfferDetailsProps) => {
+export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360, topContent }: OfferDetailsProps) => {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     setDraft({});
   }, [offerType.id]);
+
+  useEffect(() => {
+    onDirtyChange?.(Object.keys(draft).length > 0);
+  }, [draft, onDirtyChange]);
 
   const merged = { ...offerType, ...draft } as Record<string, unknown>;
 
@@ -560,7 +649,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: 
   const handleSave = () => {
     onSave(offer.id, offerType.id, draft);
     setDraft({});
-    onClose();
+    (onSaved ?? onBack ?? onClose)();
   };
 
   const handleCancel = () => setDraft({});
@@ -569,7 +658,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: 
     <div
       className="flex flex-col shrink-0 overflow-hidden"
       style={{
-        width: 360,
+        width,
         background: '#ffffff',
         margin: '8px 8px 8px 0',
         borderRadius: 8,
@@ -593,6 +682,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: 
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '16px 16px 8px' }}>
+        {topContent && <div style={{ marginBottom: 20 }}>{topContent}</div>}
         {offerType.type === 'Lease' && (
           <LeaseForm
             data={merged as Partial<LeaseOfferData>}
@@ -631,7 +721,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: 
         padding: '12px 16px', borderTop: '1px solid #f0f0f0', flexShrink: 0,
       }}>
         <button
-          onClick={handleCancel}
+          onClick={onBack ?? handleCancel}
           style={{
             padding: '6px 20px', borderRadius: 100,
             border: '1px solid #473bab', background: 'transparent',
@@ -639,7 +729,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader }: 
             fontFamily: 'Roboto, sans-serif', cursor: 'pointer', letterSpacing: '0.4px',
           }}
         >
-          Cancel
+          {onBack ? 'Back' : 'Cancel'}
         </button>
         <button
           onClick={handleSave}

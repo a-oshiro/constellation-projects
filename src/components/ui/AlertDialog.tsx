@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton, Menu, Switch } from '@mui/material';
 import {
-  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ChatBubbleOutlined,
+  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
   MailOutlined, DirectionsCarOutlined,
 } from '@mui/icons-material';
 import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
@@ -10,6 +10,7 @@ import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
+import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 import { HighlightableParagraph, FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
 import { CommentableAssetPreview } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
@@ -67,11 +68,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
   const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | null>(null);
-  const [inventoryOfferId, setInventoryOfferId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
+  /** Which editor the Offer Edit panel opens into — set alongside `editingOfferId` by whichever "Offer Card" row was clicked. */
+  const [editingOfferView, setEditingOfferView] = useState<'vehicle' | 'offer'>('offer');
+  const panelWidth = useResponsivePanelWidth();
   const [previewOfferId, setPreviewOfferId] = useState<string | null>(null);
   const [activeOfferCardOfferId, setActiveOfferCardOfferId] = useState<string | null>(null);
   const [activeQcFindingId, setActiveQcFindingId] = useState<string | null>(null);
@@ -183,10 +186,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setEditingOfferId(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
-  const openInventory = (offerId: string) => {
-    setInventoryOfferId(offerId);
-    setEditingOfferId(null);
-    setRightPanel('offers');
+  const editOffer = (offerId: string, view: 'vehicle' | 'offer') => {
+    setEditingOfferId(offerId);
+    setEditingOfferView(view);
+    setRightPanel(null);
+    // Scroll the email preview so the offer being edited is visible — lets the user watch their edits
+    // land on the asset while they make them.
+    handleSelectAsset(offerId);
   };
 
   const allComments = alert.comments ?? [];
@@ -333,7 +339,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               timestamp={reviewEntry.timestamp}
               disabled={isArchived}
               onUndo={() => setOfferAssetReview(alert.id, offer.id, 'pending')}
-              onApproveChanges={reviewEntry.status === 'rejected' ? () => setOfferAssetReview(alert.id, offer.id, 'approved') : undefined}
             />
           )}
           {findingsForThisOffer.length > 0 && (
@@ -370,8 +375,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               background={bg}
               projectId={currentProject.id}
               locked={!!projectLocked}
-              onEditOffer={() => { setEditingOfferId(offer.id); setRightPanel(null); }}
-              onOpenInventory={() => openInventory(offer.id)}
+              onEditOffer={(view) => editOffer(offer.id, view)}
             />
           </div>
         )}
@@ -475,12 +479,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           </span>
           <IconButton size="small" onClick={() => openRightPanel('history')} sx={{ padding: '5px', background: rightPanel === 'history' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
             <HistoryOutlined style={{ fontSize: 20, color: rightPanel === 'history' ? '#473bab' : '#1f1d25' }} />
-          </IconButton>
-          <IconButton size="small" onClick={() => openRightPanel('recipients')} sx={{ padding: '5px', background: rightPanel === 'recipients' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
-            <MailOutlined style={{ fontSize: 20, color: rightPanel === 'recipients' ? '#473bab' : '#1f1d25' }} />
-          </IconButton>
-          <IconButton size="small" onClick={() => openRightPanel('offers')} sx={{ padding: '5px', background: rightPanel === 'offers' ? 'rgba(71,59,171,0.1)' : 'transparent' }}>
-            <DirectionsCarOutlined style={{ fontSize: 20, color: rightPanel === 'offers' ? '#473bab' : '#1f1d25' }} />
           </IconButton>
           <IconButton size="small" onClick={onClose} sx={{ padding: '5px', background: 'rgba(17,16,20,0.08)', borderRadius: '100px' }}>
             <Close style={{ fontSize: 18, color: '#1f1d25' }} />
@@ -649,24 +647,40 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 </div>
               </div>
 
-              {/* Comments visibility controls — pinned top-right of the canvas, a sibling of the scrollable
-                  div (not a descendant of it) so it stays fixed in the corner instead of scrolling with the
-                  canvas's content. Hidden while generation failed: there is nothing to comment on. */}
+              {/* Recipients/Offers/Comments controls — pinned top-right of the canvas, a sibling of the
+                  scrollable div (not a descendant of it) so it stays fixed in the corner instead of
+                  scrolling with the canvas's content. Hidden while generation failed: there's nothing to
+                  act on. Recipients/Offers sit here (not the dialog header) per CP-13922, grouped with the
+                  comments toggle — every icon in this group is a uniform 30x30px button. */}
               {!failure && (
               <div style={{
-                position: 'absolute', top: overlayTopOffset, right: 16, zIndex: 6, display: 'flex', alignItems: 'center', gap: 12,
+                position: 'absolute', top: overlayTopOffset, right: 16, zIndex: 6, display: 'flex', alignItems: 'center', gap: 8,
                 background: 'rgba(244,245,246,0.9)', backdropFilter: 'blur(4px)', borderRadius: 8, padding: '4px 8px',
               }}>
                 <IconButton
                   size="small"
+                  onClick={() => openRightPanel('recipients')}
+                  sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'recipients' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
+                >
+                  <MailOutlined style={{ fontSize: 20, color: rightPanel === 'recipients' ? '#473bab' : '#1f1d25' }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => openRightPanel('offers')}
+                  sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'offers' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
+                >
+                  <DirectionsCarOutlined style={{ fontSize: 20, color: rightPanel === 'offers' ? '#473bab' : '#1f1d25' }} />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => setShowComments((v) => !v)}
                   title={showComments ? 'Hide comments' : 'Show comments'}
-                  sx={{ padding: '6px', background: showComments ? '#473bab' : 'transparent', '&:hover': { background: showComments ? '#3d3396' : 'rgba(0,0,0,0.04)' } }}
+                  sx={{ width: 30, height: 30, padding: 0, background: showComments ? 'rgba(71,59,171,0.1)' : 'transparent', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
                 >
-                  <ChatBubbleOutlined style={{ fontSize: 16, color: showComments ? '#ffffff' : '#686576' }} />
+                  <ModeCommentOutlined style={{ fontSize: 18, color: showComments ? '#473bab' : '#1f1d25' }} />
                 </IconButton>
-                <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ padding: '4px' }}>
-                  <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+                <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ width: 30, height: 30, padding: 0 }}>
+                  <MoreVert style={{ fontSize: 20, color: '#686576' }} />
                 </IconButton>
                 <Menu
                   anchorEl={commentsMenuAnchor}
@@ -729,9 +743,16 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
             {/* Right panel — Activity History, Recipients, Offers, or the offer editor: mutually exclusive */}
             {editingOffer && !projectLocked ? (
-              <AlertOfferEditPanel key={editingOffer.id} offer={editingOffer} onClose={() => setEditingOfferId(null)} />
+              <AlertOfferEditPanel
+                key={`${editingOffer.id}-${editingOfferView}`}
+                offer={editingOffer}
+                initialView={editingOfferView}
+                onBack={() => { setEditingOfferId(null); setRightPanel('offers'); }}
+                onClose={() => setEditingOfferId(null)}
+                onFocusAsset={() => handleSelectAsset(editingOffer.id)}
+              />
             ) : rightPanel === 'history' ? (
-              <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
+              <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Alert Activity History</span>
                   <IconButton size="small" onClick={() => setRightPanel(null)} sx={{ padding: '4px' }}>
@@ -769,10 +790,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               <AlertOffersPanel
                 offers={allAlertOffers}
                 projectOffers={currentProject.offers}
-                projectId={currentProject.id}
-                inventoryOfferId={inventoryOfferId}
-                onSelectInventory={setInventoryOfferId}
-                onClose={() => { setRightPanel(null); setInventoryOfferId(null); }}
+                locked={!!projectLocked}
+                onEditOffer={editOffer}
+                onClose={() => setRightPanel(null)}
               />
             ) : null}
           </div>
@@ -805,7 +825,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         </div>
       </div>
 
-      {cursorHint && (
+      {/* Tooltip Chat Indicator / Tooltip Indicator */}
+      {/* {cursorHint && (
         <div
           style={{
             position: 'fixed', top: cursorHint.y + 16, left: cursorHint.x + 16, zIndex: 100025, pointerEvents: 'none',
@@ -816,7 +837,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           <AddComment style={{ fontSize: 16}} />
           <span>Highlight text or click anywhere on the assets to add comments.</span>
         </div>
-      )}
+      )} */}
 
       {floatingSelection && (
         <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartComment} />
@@ -838,7 +859,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
           onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
           onAnchorClick={handleAnchorClick}
-          onEditOffer={() => { setEditingOfferId(previewOffer.id); setRightPanel(null); }}
+          onEditOffer={(view) => editOffer(previewOffer.id, view)}
           onReply={handleReply}
           onToggleReaction={handleToggleReaction}
           approvalStatus={alert.offerReviews?.[previewOffer.id]?.status ?? 'pending'}

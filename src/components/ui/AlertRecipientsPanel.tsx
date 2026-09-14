@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { IconButton, TextField } from '@mui/material';
 import { Close, ArrowUpward, Add } from '@mui/icons-material';
+import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 
 /**
  * Right-panel content listing an alert's recipient emails, opened from the dialog header's Recipients
@@ -22,6 +23,7 @@ const rowStyle: React.CSSProperties = {
 export const AlertRecipientsPanel = ({ recipients, onChange, onClose }: AlertRecipientsPanelProps) => {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  const panelWidth = useResponsivePanelWidth();
 
   const removeAt = (index: number) => onChange(recipients.filter((_, i) => i !== index));
 
@@ -34,7 +36,7 @@ export const AlertRecipientsPanel = ({ recipients, onChange, onClose }: AlertRec
   };
 
   return (
-    <div style={{ width: 360, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
         <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Recipients</span>
         <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>

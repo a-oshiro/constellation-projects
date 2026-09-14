@@ -7,7 +7,7 @@ import {
   Remove,
   ContentCopy,
   InfoOutlined,
-  ChatBubbleOutlineOutlined,
+  ModeCommentOutlined,
   HistoryOutlined,
   Search,
   MoreVert,
@@ -24,7 +24,7 @@ const ZOOM_STEPS = [50, 75, 100, 150, 200, 300];
 
 const SIDE_TABS = [
   { id: 'metadata',  label: 'Metadata',  Icon: InfoOutlined },
-  { id: 'comments',  label: 'Comments',  Icon: ChatBubbleOutlineOutlined },
+  { id: 'comments',  label: 'Comments',  Icon: ModeCommentOutlined },
   { id: 'history',   label: 'History',   Icon: HistoryOutlined },
 ] as const;
 
