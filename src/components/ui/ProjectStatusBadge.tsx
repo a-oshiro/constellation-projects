@@ -21,7 +21,7 @@ interface Config {
   Icon: React.ElementType;
 }
 
-const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
+export const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
   in_progress: {
     label: 'In Progress',
     background: 'rgba(2, 136, 209, 0.08)',

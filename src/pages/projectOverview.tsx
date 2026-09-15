@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { MoreVert, ExpandMore, ChevronRight, OpenInNew, CheckCircle, PendingOutlined } from '@mui/icons-material';
 import bmwLogoSrc from '../assets/bmw-logo.png';
@@ -11,23 +11,16 @@ import { AlertsKanbanBoard } from '../components/ui/AlertsKanbanBoard';
 import { ProjectSummary } from '../components/ui/ProjectSummary';
 import type { SummaryCardConfig } from '../components/ui/ProjectSummary';
 import type { SectionStatus } from '../data/projects';
+import { getProjectPath } from '../data/projects';
 import { computePreviewAssets, groupIntoAdShells, computeAlertOfferVisibility } from '../utils/overviewAssets';
 import { useLayout } from '../context/LayoutContext';
 import { useProject } from '../context/ProjectContext';
+import { useSyncProjectFromRoute } from '../hooks/useSyncProjectFromRoute';
 import { LockableContent } from '../components/ui/LockedOverlay';
 import { EvergreenProjectBadge } from '../components/ui/EvergreenProjectBadge';
 import { UnlockProjectDialog } from '../components/ui/UnlockProjectDialog';
 
 type SectionKey = 'offers' | 'templates' | 'themeAndLogos' | 'assets' | 'adShells' | 'campaigns';
-
-const SECTION_ROUTES: Record<SectionKey, string> = {
-  offers: '/offers',
-  templates: '/templates',
-  themeAndLogos: '/theme-and-logos',
-  assets: '/approved',
-  adShells: '/ads',
-  campaigns: '/campaigns',
-};
 
 const TagChip = ({ children }: { children: React.ReactNode }) => (
   <span style={{
@@ -126,16 +119,20 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
 
 export const ProjectOverviewPage = () => {
   const { tasksPanelOpen, openTasksPanel } = useLayout();
-  const { currentProject: project, alerts, selectedProjectId, selectProject, locked, setLocked } = useProject();
+  const { currentProject: project, alerts, locked, setLocked } = useProject();
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  useSyncProjectFromRoute();
 
-  // The URL is the source of truth for which project is shown — keep context in sync with it.
-  useEffect(() => {
-    if (projectId && projectId !== selectedProjectId) {
-      selectProject(projectId);
-    }
-  }, [projectId, selectedProjectId, selectProject]);
+  // Offers/Templates/Theme and Logos have their own project-scoped URLs; Assets/Ad Shells/Campaigns
+  // don't (they're driven purely by ProjectContext), so those stay as bare paths.
+  const SECTION_ROUTES: Record<SectionKey, string> = {
+    offers: getProjectPath(project, 'offers'),
+    templates: getProjectPath(project, 'templates'),
+    themeAndLogos: getProjectPath(project, 'theme-and-logos'),
+    assets: '/approved',
+    adShells: '/ads',
+    campaigns: '/campaigns',
+  };
 
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     offers: true, templates: true, themeAndLogos: true, assets: true, adShells: true, campaigns: true,

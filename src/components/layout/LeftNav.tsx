@@ -117,7 +117,7 @@ const BOTTOM_ITEMS: NavItem[] = [
 ];
 
 // Routes that keep "Projects" highlighted as the active section
-const PROJECTS_ROUTES = ['/projects', '/offers', '/templates', '/theme-and-logos', '/review', '/approved', '/ads'];
+const PROJECTS_ROUTES = ['/', '/projects', '/offers', '/templates', '/theme-and-logos', '/review', '/approved', '/ads'];
 
 // ── Mock client data ──────────────────────────────────────────────────────────
 

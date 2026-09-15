@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, IconButton, TextField } from '@mui/material';
 import { SwapOffersDialog } from '../components/ui/SwapOffersDialog';
 import { MoreVert, Search, AutoAwesome, TravelExplore, History } from '@mui/icons-material';
@@ -8,6 +8,7 @@ import { TaskFooter } from '../components/ui/TaskFooter';
 import { OfferCard } from '../components/ui/OfferCard';
 import { useProject } from '../context/ProjectContext';
 import { useLayout } from '../context/LayoutContext';
+import { useSyncProjectFromRoute } from '../hooks/useSyncProjectFromRoute';
 import { LockableContent } from '../components/ui/LockedOverlay';
 import type { OfferTypeName, OfferTypeData } from '../data/types';
 
@@ -29,18 +30,13 @@ const OutOfStockBannerIcon = () => (
 );
 
 export const OffersPage = () => {
-  const { offers, updateOffer, currentProject, locked, selectedProjectId, selectProject } = useProject();
+  const { offers, updateOffer, currentProject, locked } = useProject();
   const { offersPanel, openOffersPanel, closeOffersPanel } = useLayout();
   const [search, setSearch] = useState('');
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
-
-  // When reached via a project-scoped URL (e.g. a new tab opened from an alert), sync context to it.
-  useEffect(() => {
-    if (projectId && projectId !== selectedProjectId) selectProject(projectId);
-  }, [projectId, selectedProjectId, selectProject]);
+  useSyncProjectFromRoute();
 
   useEffect(() => () => closeOffersPanel(), []);
 

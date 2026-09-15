@@ -168,7 +168,8 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
 
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isProjectOverviewRoute = location.pathname.startsWith('/projects/');
-  const showLeftPanel = !isSettingsRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
+  const isBoardRoute = location.pathname === '/projects';
+  const showLeftPanel = !isSettingsRoute && !isBoardRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -204,7 +205,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
           >
             {/* On the Project Overview page, this badge renders inline as part of the Project title row instead. */}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && (
               <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
                 <EvergreenProjectBadge
                   locked={locked}
@@ -213,7 +214,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                 />
               </div>
             )}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && (
               <UnlockProjectDialog
                 open={unlockDialogOpen}
                 onClose={() => setUnlockDialogOpen(false)}
@@ -223,7 +224,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}
             </div>
-            {!isSettingsRoute && !isProjectOverviewRoute && <PreviewPanel />}
+            {!isSettingsRoute && !isProjectOverviewRoute && !isBoardRoute && <PreviewPanel />}
           </div>
           {!isSettingsRoute && offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
             <VehicleInfo

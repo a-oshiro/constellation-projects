@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ProjectProvider, useProject } from './context/ProjectContext';
+import { ProjectProvider } from './context/ProjectContext';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { MainLayout } from './components/layout/MainLayout';
@@ -9,6 +9,7 @@ import { ProgressIndicator } from './components/ui/ProgressIndicator';
 import { TestWidgetProvider } from './context/TestWidgetContext';
 import { TestWidget } from './components/ui/TestWidget';
 import { ProjectOverviewPage } from './pages/projectOverview';
+import { ProjectsBoardPage } from './pages/ProjectsBoardPage';
 import { OffersPage } from './pages/OffersPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { ThemeAndLogosPage } from './pages/ThemeAndLogosPage';
@@ -44,12 +45,6 @@ const theme = createTheme({
   },
 });
 
-/** Bare "/projects" has no dedicated project — redirect to whichever project is currently selected. */
-const ProjectIndexRedirect = () => {
-  const { selectedProjectId } = useProject();
-  return <Navigate to={`/projects/${selectedProjectId}`} replace />;
-};
-
 function App() {
   return (
     <TestWidgetProvider>
@@ -66,14 +61,14 @@ function App() {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Navigate to="/projects" replace />} />
-                  <Route path="/projects" element={<ProjectIndexRedirect />} />
-                  <Route path="/projects/:projectId" element={<ProjectOverviewPage />} />
+                  <Route path="/projects" element={<ProjectsBoardPage />} />
+                  <Route path="/projects/:accountSlug/:projectSlug" element={<ProjectOverviewPage />} />
                   <Route path="/offers" element={<OffersPage />} />
-                  <Route path="/projects/:projectId/offers" element={<OffersPage />} />
+                  <Route path="/projects/:accountSlug/:projectSlug/offers" element={<OffersPage />} />
                   <Route path="/templates" element={<TemplatesPage />} />
-                  <Route path="/projects/:projectId/templates" element={<TemplatesPage />} />
+                  <Route path="/projects/:accountSlug/:projectSlug/templates" element={<TemplatesPage />} />
                   <Route path="/theme-and-logos" element={<ThemeAndLogosPage />} />
-                  <Route path="/projects/:projectId/theme-and-logos" element={<ThemeAndLogosPage />} />
+                  <Route path="/projects/:accountSlug/:projectSlug/theme-and-logos" element={<ThemeAndLogosPage />} />
                   <Route path="/review" element={<ReviewPage />} />
                   <Route path="/approved" element={<ApprovedPage />} />
                   <Route path="/ads" element={<AdsPage />} />

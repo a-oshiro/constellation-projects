@@ -2,6 +2,7 @@ import { IconButton } from '@mui/material';
 import { OpenInNew } from '@mui/icons-material';
 import type { Background, Offer, Template } from '../../data/types';
 import { OfferListCard } from './AlertOffersPanel';
+import { getProjectPathById } from '../../data/projects';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
 
 /**
@@ -54,7 +55,7 @@ export const AlertOfferCard = ({ offer, template, background, projectId, locked,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={sectionTitleStyle}>Template</span>
-        <IconButton size="small" onClick={() => openTaskPage(`/projects/${projectId}/templates`)} sx={{ padding: '2px' }} title="Open Templates">
+        <IconButton size="small" onClick={() => openTaskPage(getProjectPathById(projectId, 'templates'))} sx={{ padding: '2px' }} title="Open Templates">
           <OpenInNew style={{ fontSize: 13, color: '#686576' }} />
         </IconButton>
       </div>
@@ -66,7 +67,7 @@ export const AlertOfferCard = ({ offer, template, background, projectId, locked,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={sectionTitleStyle}>Styles</span>
-        <IconButton size="small" onClick={() => openTaskPage(`/projects/${projectId}/theme-and-logos`)} sx={{ padding: '2px' }} title="Open Theme and Logos">
+        <IconButton size="small" onClick={() => openTaskPage(getProjectPathById(projectId, 'theme-and-logos'))} sx={{ padding: '2px' }} title="Open Theme and Logos">
           <OpenInNew style={{ fontSize: 13, color: '#686576' }} />
         </IconButton>
       </div>

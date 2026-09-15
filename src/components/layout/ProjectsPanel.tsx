@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconButton } from '@mui/material';
 import { ArrowBack, Close, Search, Add, FilterList, LocalOfferOutlined, ViewComfyOutlined, ImageOutlined, CheckCircle, PendingOutlined, RadioButtonUnchecked } from '@mui/icons-material';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
-import { PROJECTS } from '../../data/projects';
+import { PROJECTS, getProjectPath } from '../../data/projects';
 import type { Project } from '../../data/projects';
 import { useProject } from '../../context/ProjectContext';
 import { computePreviewAssets, groupIntoAdShells } from '../../utils/overviewAssets';
@@ -140,7 +140,7 @@ export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
     >
       {/* ── Header ──────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', minHeight: 40, padding: '12px 16px 8px', position: 'relative', flexShrink: 0 }}>
-        <IconButton size="small" onClick={onClose} sx={{ padding: '5px', flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate('/projects')} sx={{ padding: '5px', flexShrink: 0 }}>
           <ArrowBack style={{ fontSize: 20, color: '#1f1d25' }} />
         </IconButton>
         <span style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5, marginLeft: 4 }}>
@@ -195,7 +195,7 @@ export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
             project={project}
             active={project.id === selectedProjectId}
             locked={project.id === selectedProjectId ? locked : (project.locked ?? true)}
-            onClick={() => { selectProject(project.id); navigate(`/projects/${project.id}`); }}
+            onClick={() => { selectProject(project.id); navigate(getProjectPath(project)); }}
           />
         ))}
       </div>
