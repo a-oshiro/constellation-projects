@@ -1,4 +1,4 @@
-import type { Alert, AlertActivityEntry, AlertComment, AlertCategory, AlertStatus, ReviewStatus } from '../types';
+import type { Alert, AlertActivityEntry, AlertComment, AlertCategory, AlertStatus, Offer, ReviewStatus } from '../types';
 import { CURRENT_USER, MOCK_TEAMMATES } from '../mockData';
 import constellationLogo from '../../assets/constellation-logo.png'
 
@@ -138,6 +138,102 @@ const BULK_ARCHIVED_ALERTS: Alert[] = [
   { id: 'sea-alert-arch-19', category: 'Conquest', subject: 'Overlake BMW cleared 14 New 2026 BMW X1 xDrive28i in the last 120 days', featuredOfferId: 'sea-offer-x1-xdrive28i', vin: 'WBX73EF07T5594567', status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 125, archivedDaysAgo: 70 },
   { id: 'sea-alert-arch-20', category: 'Offers', subject: 'Irvine BMW undercuts your lease on the New 2026 BMW X3 30 xDrive', featuredOfferId: 'sea-offer-x3-30xdrive', vin: '5UX53GP08T9557891', status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 22, archivedDaysAgo: 5 },
 ].map(makeArchivedAlert);
+
+interface SampleAlertSpec {
+  category: AlertCategory;
+  subject: (vehicleName: string) => string;
+  status: AlertStatus;
+  emailStatus: ReviewStatus;
+  assetsStatus: ReviewStatus;
+  createdDaysAgo: number;
+  vinPrefix: string;
+}
+
+/** One spec per generated alert, in board order (Generated -> Rejected -> Approved -> Sent -> Generated) so a freshly-seeded Evergreen project shows its full lifecycle at a glance. */
+const SAMPLE_ALERT_SPECS: SampleAlertSpec[] = [
+  {
+    category: 'MSRP',
+    subject: (v) => `A nearby competitor is beating you on the ${v}`,
+    status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 3, vinPrefix: 'WBA5R7C0',
+  },
+  {
+    category: 'Offers',
+    subject: (v) => `Your competition is beating you on ${v} leases`,
+    status: 'rejected', emailStatus: 'rejected', assetsStatus: 'pending', createdDaysAgo: 8, vinPrefix: 'WBX73EF0',
+  },
+  {
+    category: 'Conquest',
+    subject: (v) => `A nearby dealer cleared several ${v} units in the last 90 days`,
+    status: 'approved', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 12, vinPrefix: '5UXCR6C0',
+  },
+  {
+    category: 'Aging',
+    subject: (v) => `Your ${v} has been sitting on the lot`,
+    status: 'sent', emailStatus: 'approved', assetsStatus: 'approved', createdDaysAgo: 18, vinPrefix: '5UXTA6C0',
+  },
+  {
+    category: 'Inventory Gaps/Levels',
+    subject: (v) => `Demand for the ${v} is outpacing your inventory`,
+    status: 'generated', emailStatus: 'pending', assetsStatus: 'pending', createdDaysAgo: 5, vinPrefix: 'WBA53AR0',
+  },
+];
+
+/**
+ * Generic 5-alert starter set for an Evergreen project that has no bespoke alert copy of its own
+ * (every generated Evergreen dealership besides BMW Seattle) — one alert per `SAMPLE_ALERT_SPECS`
+ * entry, cycling through that project's own `offers` so each alert references a real featured offer.
+ */
+export function buildSampleEvergreenAlerts(offers: Offer[], idPrefix: string): Alert[] {
+  return SAMPLE_ALERT_SPECS.map((spec, i) => {
+    const offer = offers[i % offers.length];
+    const vehicleName = `New ${offer.vehicleName}`;
+    const subject = spec.subject(vehicleName);
+    const createdAt = now - spec.createdDaysAgo * DAY;
+    const otherOfferIds = offers.filter((o) => o.id !== offer.id).map((o) => o.id);
+
+    const activity: AlertActivityEntry[] = [
+      { id: `act-${idPrefix}-${i}-generated`, action: 'generated', timestamp: createdAt, ...AI_AGENT },
+    ];
+    if (spec.emailStatus !== 'pending') {
+      activity.push({
+        id: `act-${idPrefix}-${i}-email`,
+        action: spec.emailStatus === 'approved' ? 'email_approved' : 'email_rejected',
+        timestamp: createdAt + DAY,
+        ...MICHAEL_STUART,
+      });
+    }
+    if (spec.assetsStatus !== 'pending') {
+      activity.push({
+        id: `act-${idPrefix}-${i}-assets`,
+        action: spec.assetsStatus === 'approved' ? 'assets_approved' : 'assets_rejected',
+        timestamp: createdAt + 2 * DAY,
+        ...JOHN_DOE,
+      });
+    }
+    if (spec.status === 'sent') {
+      activity.push({ id: `act-${idPrefix}-${i}-sent`, action: 'sent', timestamp: createdAt + 3 * DAY, ...JOHN_DOE });
+    }
+
+    return {
+      id: `${idPrefix}-alert-${i}`,
+      category: spec.category,
+      subject,
+      preheader: 'Constellation Insights',
+      bodyParagraphs: [`${subject}.`, 'Here is the VIN you need to advertise now:'],
+      featuredOfferId: offer.id,
+      otherOfferIds,
+      vin: `${spec.vinPrefix}${String(i + 1).padStart(9, '0')}`,
+      status: spec.status,
+      emailStatus: spec.emailStatus,
+      assetsStatus: spec.assetsStatus,
+      offerReviews: spec.assetsStatus === 'pending'
+        ? undefined
+        : allOffersReviewed([offer.id, ...otherOfferIds], spec.assetsStatus, JOHN_DOE, createdAt + 2 * DAY),
+      createdAt,
+      activity,
+    };
+  });
+}
 
 /**
  * 4 alerts for "Evergreen BMW of Seattle", one per reference email, seeded one-per-column
@@ -571,51 +667,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     archivedAt: now - 2 * DAY,
   },
 
-  // ── Error/warning treatment demo alerts — 2 hard generation failures, 2 non-blocking QC-finding warnings ──
-  {
-    id: 'sea-alert-failed-m340i',
-    category: 'MSRP',
-    subject: 'Bellevue BMW is beating you on the New 2026 BMW M340i Sedan',
-    preheader: 'Constellation Insights',
-    bodyParagraphs: [],
-    featuredOfferId: 'sea-offer-m340i-sedan',
-    otherOfferIds: othersExcept('sea-offer-m340i-sedan'),
-    vin: 'WBA53AR09PFJ78912',
-    status: 'generated',
-    emailStatus: 'pending',
-    assetsStatus: 'pending',
-    createdAt: now - 1 * DAY,
-    activity: [
-      { id: 'act-fail-1-generated', action: 'generated', timestamp: now - 1 * DAY, ...AI_AGENT },
-    ],
-    generationFailure: {
-      message: 'Asset generation incomplete: 57 of 200 expected assets missing.',
-      service: 'AWSLambda',
-      statusCode: 429,
-    },
-  },
-  {
-    id: 'sea-alert-failed-x1',
-    category: 'Conquest',
-    subject: 'Irvine BMW cleared 21 New 2026 BMW X1 xDrive28i in the last 90 days',
-    preheader: 'Constellation Insights',
-    bodyParagraphs: [],
-    featuredOfferId: 'sea-offer-x1-xdrive28i',
-    otherOfferIds: othersExcept('sea-offer-x1-xdrive28i'),
-    vin: 'WBX73EF09T5560123',
-    status: 'generated',
-    emailStatus: 'pending',
-    assetsStatus: 'pending',
-    createdAt: now - 2 * DAY,
-    activity: [
-      { id: 'act-fail-2-generated', action: 'generated', timestamp: now - 2 * DAY, ...AI_AGENT },
-    ],
-    generationFailure: {
-      message: 'The trigger service timed out before the email template could render.',
-      service: 'TriggerService',
-      statusCode: 504,
-    },
-  },
+  // ── Error/warning treatment demo alerts — 2 non-blocking QC-finding warnings ──
   {
     id: 'sea-alert-warning-x3-price',
     category: 'MSRP',

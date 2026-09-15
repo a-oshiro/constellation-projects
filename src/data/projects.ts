@@ -3,7 +3,7 @@ import type { ProjectWorkflowStatus } from '../components/ui/ProjectStatusBadge'
 import { OFFERS } from './offers';
 import { TEMPLATES, BACKGROUNDS, PROJECT_INFO, CURRENT_USER } from './mockData';
 import { SEATTLE_OFFERS } from './evergreen/seattleOffers';
-import { SEATTLE_ALERTS } from './evergreen/alerts';
+import { SEATTLE_ALERTS, buildSampleEvergreenAlerts } from './evergreen/alerts';
 import constellationLogo from '../assets/constellation-logo.png';
 
 /** Status of a single accordion section on the Project Overview page. */
@@ -371,8 +371,10 @@ function buildGeneratedProjects(): Project[] {
   DEALERSHIPS.slice(0, EVERGREEN_DEALERSHIP_COUNT).forEach((dealership, i) => {
     const templates = templatesWindow(i % TEMPLATE_ID_POOL.length, 1);
     const backgrounds = byTemplateIds(templates.map((t) => t.id));
+    const id = `proj-evergreen-${slugify(dealership.name)}`;
+    const offers = offersWindow(i, 6);
     projects.push({
-      id: `proj-evergreen-${slugify(dealership.name)}`,
+      id,
       accountName: dealership.name,
       accountCode: dealership.code,
       projectName: `Evergreen ${dealership.name}`,
@@ -389,9 +391,10 @@ function buildGeneratedProjects(): Project[] {
       isEvergreen: true,
       approvalEnabled: false,
       locked: true,
-      offers: offersWindow(i, 6),
+      offers,
       templates,
       backgrounds,
+      alerts: buildSampleEvergreenAlerts(offers, id),
       sectionStatus: sectionStatusFor('live'),
     });
   });
