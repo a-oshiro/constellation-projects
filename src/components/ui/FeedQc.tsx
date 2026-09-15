@@ -30,7 +30,9 @@ export const FeedQc = () => {
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        borderRadius: 12,
+        borderRadius: 100,
+        padding: '4px 12px 4px 4px',
+        background: '#F4F5F6',
       }}
     >
       <Button
@@ -60,6 +62,7 @@ export const FeedQc = () => {
         control={
           <Checkbox
             size="small"
+            style={{ padding: 6}}
             checked={approved}
             onChange={(e) => handleApprovalChange(e.target.checked)}
           />

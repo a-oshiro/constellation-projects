@@ -129,7 +129,7 @@ function ProjectListItem({ project, active, locked, onClick, onDuplicate, onShow
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)} onClick={(e) => e.stopPropagation()}>
         <MenuItem onClick={() => { setMenuAnchor(null); onShowOverview(); }}>
           <ListItemIcon><ProjectOverviewIcon style={{ fontSize: 18, color: '#686576' }} /></ListItemIcon>
-          Show Project overview
+          Project Settings
         </MenuItem>
         <MenuItem onClick={() => { setMenuAnchor(null); onDuplicate(); }}>
           <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>

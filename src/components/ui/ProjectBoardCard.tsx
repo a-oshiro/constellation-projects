@@ -107,7 +107,7 @@ export const ProjectBoardCard = ({ project, locked, onOpen, onDuplicate, onShowO
       {/* ── Hover: Show Project overview ──────────────────────────────── */}
       {hovered && (
         <div style={{ position: 'absolute', bottom: 8, right: 8 }}>
-          <Tooltip title="Show Project overview">
+          <Tooltip title="Project Settings">
             <IconButton
               onClick={(e) => { e.stopPropagation(); onShowOverview(); }}
               sx={{
@@ -135,8 +135,8 @@ export const ProjectBoardCard = ({ project, locked, onOpen, onDuplicate, onShowO
       </div>
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)} onClick={(e) => e.stopPropagation()}>
         <MenuItem onClick={() => { setMenuAnchor(null); onShowOverview(); }}>
-          <ListItemIcon><ProjectOverviewIcon /></ListItemIcon>
-          Show Project overview
+          <ListItemIcon><ProjectOverviewIcon style={{ fontSize: 20, color: 'rgba(117, 112, 123, 1)' }} /></ListItemIcon>
+          Project Settings
         </MenuItem>
         <MenuItem onClick={() => { setMenuAnchor(null); onDuplicate(); }}>
           <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>

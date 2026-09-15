@@ -16,7 +16,6 @@ import { useProject } from '../../context/ProjectContext';
 import { EvergreenProjectBadge } from '../ui/EvergreenProjectBadge';
 import { UnlockProjectDialog } from '../ui/UnlockProjectDialog';
 import { ProjectContentDialog } from '../ui/ProjectContentDialog';
-import type { Project } from '../../data/projects';
 import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
@@ -106,10 +105,10 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     editingShell, closeAdShellPanel,
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
     offersPanel, closeOffersPanel,
+    projectSettingsProject, openProjectSettings, closeProjectSettings,
   } = useLayout();
   const { offers, alerts, updateOffer, currentProject, locked, setLocked, selectProject } = useProject();
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
-  const [overviewDialogProject, setOverviewDialogProject] = useState<Project | null>(null);
   const navigate = useNavigate();
 
   const offersPanelOffer = offersPanel
@@ -206,7 +205,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                         onClose={closeTasksPanel}
                         width={leftWidth}
                         onDuplicateProject={() => {}}
-                        onShowOverview={setOverviewDialogProject}
+                        onShowOverview={openProjectSettings}
                       />
                     )
                     : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
@@ -275,14 +274,14 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
         </div>
       </div>
 
-      {overviewDialogProject && (
+      {projectSettingsProject && (
         <ProjectContentDialog
-          project={overviewDialogProject}
-          onClose={() => setOverviewDialogProject(null)}
+          project={projectSettingsProject}
+          onClose={closeProjectSettings}
           onNavigate={(path) => {
-            selectProject(overviewDialogProject.id);
+            selectProject(projectSettingsProject.id);
             navigate(path);
-            setOverviewDialogProject(null);
+            closeProjectSettings();
           }}
         />
       )}

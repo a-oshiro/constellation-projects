@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { IconButton } from '@mui/material';
-import { Close, InfoOutlined, WarningAmberOutlined } from '@mui/icons-material';
+import { Close, InfoOutlined } from '@mui/icons-material';
 import type { Offer } from '../../data/types';
 import { getOfferTypeDisplayFields } from './OfferCard';
 import { OfferIdentityCard } from './OfferIdentityCard';
+import { OutOfStockBadge } from './OutOfStockBadge';
 import { Tooltip } from './Tooltip';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 
@@ -114,12 +115,6 @@ const modelRowStyle: React.CSSProperties = {
   background: '#f4f5f6', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '10px 12px',
 };
 
-const noStockChipStyle: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FDF4EC', color: '#c45500',
-  borderRadius: 8, padding: '2px 8px 2px 6px', fontSize: 11, fontFamily: 'Roboto, sans-serif',
-  fontWeight: 500, letterSpacing: '0.4px', cursor: 'default', flexShrink: 0,
-};
-
 /** Every offer belongs to a curated "Evergreen BMW of Seattle" model — the shared `sea-offer-` id
  * prefix (also used by alerts.ts) picks those out of `projectOffers`, which otherwise also contains
  * ~15 unrelated demo BMW offers reused by other, non-Evergreen projects. */
@@ -203,10 +198,7 @@ export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, o
                             No offers were added to the email.
                           </>
                         } slotProps={tooltipPopperProps}>
-                          <span style={noStockChipStyle}>
-                            <WarningAmberOutlined style={{ fontSize: 13 }} />
-                            No Stock
-                          </span>
+                          <OutOfStockBadge />
                         </Tooltip>
                       )}
                     </div>

@@ -86,7 +86,7 @@ export const ProjectContentDialog = ({ project, onClose, onNavigate }: ProjectCo
             sx={{ minHeight: 36, flex: 1 }}
           >
             <Tab value="enrollment" label="Enrollment Settings" disableRipple sx={tabSx} />
-            <Tab value="contents" label="Project Contents" disableRipple sx={tabSx} />
+            <Tab value="contents" label="Project Defaults" disableRipple sx={tabSx} />
           </Tabs>
           <button
             onClick={onClose}

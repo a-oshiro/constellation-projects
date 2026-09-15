@@ -11,13 +11,14 @@ import { useSnackbar } from '../../context/SnackbarContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { computePreviewAssets, backgroundForOffer } from '../../utils/overviewAssets';
 import { CATEGORY_STYLE } from '../../utils/alertReview';
-import { applyAlertFilters, getActiveFilterFieldCount } from '../../utils/alertFilters';
+import { applyAlertFilters, DATE_PRESETS } from '../../utils/alertFilters';
+import type { DateRangePreset } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
 import { AlertsTable } from './AlertsTable';
 import { FeedQc } from './FeedQc';
 import { ArchivedAlertsDialog } from './ArchivedAlertsDialog';
-import { AlertsFilterRow } from './AlertsFilterRow';
+import { ProjectOverviewIcon } from './ProjectOverviewIcon';
 
 type ViewMode = 'kanban' | 'table';
 
@@ -88,6 +89,44 @@ export const KanbanViewIcon = () => (
     <path d="M15.9118 8C16.4316 8 16.8529 8.39797 16.8529 8.88889L16.8529 21.1111C16.8529 21.602 16.4316 22 15.9118 22L14.0882 22C13.5684 22 13.1471 21.602 13.1471 21.1111L13.1471 8.88889C13.1471 8.39797 13.5684 8 14.0882 8L15.9118 8Z" fill="currentColor" />
     <path d="M10.2647 8C10.7845 8 11.2059 8.39797 11.2059 8.88889L11.2059 21.1111C11.2059 21.602 10.7845 22 10.2647 22L8.44118 22C7.92138 22 7.5 21.602 7.5 21.1111L7.5 8.88889C7.5 8.39797 7.92138 8 8.44118 8L10.2647 8Z" fill="currentColor" />
   </svg>
+);
+
+/** Period selector replacing the (hidden) Filter Row's date field for Evergreen — reads/writes the
+ * same `alertFilterState.datePreset` the rest of the app's date filtering already relies on. */
+const AlertsPeriodToggle = ({ value, onChange }: { value: DateRangePreset; onChange: (preset: DateRangePreset) => void }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+    <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
+      Show alerts from:
+    </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 4, borderRadius: 100, background: '#f4f5f6', flexShrink: 0 }}>
+      {DATE_PRESETS.map((preset) => {
+        const active = value === preset.key;
+        return (
+          <button
+            key={preset.key}
+            type="button"
+            onClick={() => onChange(preset.key)}
+            style={{
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: 100,
+              padding: active ? '4px 10px' : '4px 5px',
+              background: active ? '#473bab' : 'transparent',
+              color: active ? '#ffffff' : '#686576',
+              fontSize: 13,
+              fontFamily: 'Roboto, sans-serif',
+              fontWeight: 500,
+              lineHeight: '22px',
+              letterSpacing: '0.46px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {preset.label}
+          </button>
+        );
+      })}
+    </div>
+  </div>
 );
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
@@ -378,10 +417,7 @@ const AlertCard = ({
 
 export const AlertsKanbanBoard = () => {
   const { alerts, offers, moveAlert, archiveAlert, generateAlerts, currentProject } = useProject();
-  const {
-    alertsFilterPanelOpen, openAlertsFilterPanel, closeAlertsFilterPanel,
-    alertFilterState, updateAlertFilterState, resetAlertFilterState,
-  } = useLayout();
+  const { alertFilterState, updateAlertFilterState, openProjectSettings } = useLayout();
   const { showSnackbar } = useSnackbar();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -435,8 +471,6 @@ export const AlertsKanbanBoard = () => {
     return filtered.filter((a) => a.subject.toLowerCase().includes(query) || a.category.toLowerCase().includes(query));
   }, [filtered, searchTerm]);
 
-  const activeFilterFieldCount = useMemo(() => getActiveFilterFieldCount(alertFilterState), [alertFilterState]);
-
   const byColumn = useMemo(() => {
     const map: Record<AlertStatus, Alert[]> = { generated: [], rejected: [], approved: [], sent: [] };
     searched.forEach((a) => map[a.status].push(a));
@@ -489,7 +523,7 @@ export const AlertsKanbanBoard = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Actions row — left-aligned CTAs, archive menu, and search, all above the (separate) Filter Row. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 0 }}>
         <Button
           variant="contained"
           disableElevation
@@ -514,6 +548,20 @@ export const AlertsKanbanBoard = () => {
           Generate Alerts
         </Button>
         <FeedQc />
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ProjectOverviewIcon style={{ fontSize: 16 }} />}
+          onClick={() => openProjectSettings(currentProject)}
+          sx={{
+            textTransform: 'none', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px',
+            color: '#473bab', borderColor: '#473bab', borderRadius: '100px', padding: '4px 12px',
+            flexShrink: 0, whiteSpace: 'nowrap',
+            '&:hover': { borderColor: '#3d3396', background: 'rgba(71,59,171,0.04)' },
+          }}
+        >
+          Project Settings
+        </Button>
         <IconButton
           size="large"
           onClick={(e) => setArchiveMenuAnchor(e.currentTarget)}
@@ -551,29 +599,22 @@ export const AlertsKanbanBoard = () => {
             '& .MuiOutlinedInput-input': { fontSize: 13, fontFamily: 'Roboto, sans-serif', padding: '8px 12px' },
           }}
         />
-      </div>
 
-      <AlertsFilterRow
-        alerts={activeAlerts}
-        offers={offers}
-        state={alertFilterState}
-        onChange={updateAlertFilterState}
-        onReset={resetAlertFilterState}
-        filterPanelOpen={alertsFilterPanelOpen}
-        onToggleFilterPanel={() => (alertsFilterPanelOpen ? closeAlertsFilterPanel() : openAlertsFilterPanel())}
-        activeFilterFieldCount={activeFilterFieldCount}
-        leading={null}
-        trailing={(
-          <IconButton
-            size="large"
-            onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
-            title={viewMode === 'kanban' ? 'Switch to table view' : 'Switch to Kanban view'}
-            sx={{ padding: '5px', flexShrink: 0, color: '#686576', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
-          >
-            {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
-          </IconButton>
-        )}
-      />
+        <div style={{ flex: 1 }} />
+
+        <AlertsPeriodToggle
+          value={alertFilterState.datePreset}
+          onChange={(datePreset) => updateAlertFilterState({ datePreset })}
+        />
+        <IconButton
+          size="large"
+          onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}
+          title={viewMode === 'kanban' ? 'Switch to table view' : 'Switch to Kanban view'}
+          sx={{ padding: '5px', flexShrink: 0, color: '#686576', '&:hover': { background: '#f0eeff', color: '#473bab' } }}
+        >
+          {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
+        </IconButton>
+      </div>
 
       {viewMode === 'table' ? (
         <AlertsTable alerts={searched} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />

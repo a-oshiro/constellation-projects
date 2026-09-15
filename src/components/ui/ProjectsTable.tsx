@@ -96,8 +96,8 @@ const ProjectTableRow = ({ project, status, onOpen, onDuplicate, onShowOverview 
         )}
         <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
           <MenuItem onClick={() => { setMenuAnchor(null); onShowOverview(); }}>
-            <ListItemIcon><ProjectOverviewIcon /></ListItemIcon>
-            Show Project overview
+            <ListItemIcon><ProjectOverviewIcon style={{ fontSize: 20, color: 'rgba(117, 112, 123, 1)' }} /></ListItemIcon>
+            Project Settings
           </MenuItem>
           <MenuItem onClick={() => { setMenuAnchor(null); onDuplicate(); }}>
             <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>

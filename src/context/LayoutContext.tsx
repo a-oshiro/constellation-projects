@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback } from 'react'
 import type { ReactNode, RefObject } from 'react';
 import type { AdShell } from '../components/ui/AdShellCard';
 import type { Asset } from '../data/types';
+import type { Project } from '../data/projects';
 import { DEFAULT_FILTER_STATE } from '../utils/assetFilters';
 import type { FilterState } from '../utils/assetFilters';
 import { DEFAULT_ALERT_FILTER_STATE } from '../utils/alertFilters';
@@ -50,6 +51,11 @@ interface LayoutContextValue {
   submittingIds: Set<string>;
   addSubmittingIds: (ids: Set<string>) => void;
   clearSubmittingIds: () => void;
+  /** The "Project Settings" dialog (Enrollment Settings / Project Defaults) — opened for a given project from the
+   * Projects General Board (Kanban card/table row), the Projects List panel, or the Project Overview page itself. */
+  projectSettingsProject: Project | null;
+  openProjectSettings: (project: Project) => void;
+  closeProjectSettings: () => void;
 }
 
 const LayoutContext = createContext<LayoutContextValue>({
@@ -84,6 +90,9 @@ const LayoutContext = createContext<LayoutContextValue>({
   submittingIds: new Set(),
   addSubmittingIds: () => {},
   clearSubmittingIds: () => {},
+  projectSettingsProject: null,
+  openProjectSettings: () => {},
+  closeProjectSettings: () => {},
 });
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
@@ -98,6 +107,7 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
   const [advancedGenerationOpen, setAdvancedGenerationOpen] = useState(false);
   const [advancedGenerationAssets, setAdvancedGenerationAssets] = useState<Asset[]>([]);
   const [submittingIds, setSubmittingIds] = useState<Set<string>>(new Set());
+  const [projectSettingsProject, setProjectSettingsProject] = useState<Project | null>(null);
   const mainPanelRef = useRef<HTMLDivElement | null>(null);
 
   const updateFilterState = useCallback((updates: Partial<FilterState>) => {
@@ -161,6 +171,9 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
       submittingIds,
       addSubmittingIds: (ids) => setSubmittingIds((prev) => new Set([...prev, ...ids])),
       clearSubmittingIds: () => setSubmittingIds(new Set()),
+      projectSettingsProject,
+      openProjectSettings: (project) => setProjectSettingsProject(project),
+      closeProjectSettings: () => setProjectSettingsProject(null),
     }}>
       {children}
     </LayoutContext.Provider>

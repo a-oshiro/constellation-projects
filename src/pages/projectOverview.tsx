@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconButton } from '@mui/material';
+import { Button, IconButton } from '@mui/material';
 import { MoreVert, ExpandMore, ChevronRight, OpenInNew, CheckCircle, PendingOutlined } from '@mui/icons-material';
 import bmwLogoSrc from '../assets/bmw-logo.png';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { ProjectStatusBadge } from '../components/ui/ProjectStatusBadge';
+import { ProjectOverviewIcon } from '../components/ui/ProjectOverviewIcon';
 import { OverviewOfferCard, OverviewTemplateCard, OverviewAssetCard, OverviewAdShellCard, ScrollRow, TemplateThumb } from '../components/ui/OverviewCards';
 import { FilledTemplatePreview } from '../components/ui/FilledTemplatePreview';
 import { AlertsKanbanBoard } from '../components/ui/AlertsKanbanBoard';
@@ -118,7 +119,7 @@ const Section = ({ title, count, status, expanded, onToggle, onDetails, emptyMes
 };
 
 export const ProjectOverviewPage = () => {
-  const { tasksPanelOpen, openTasksPanel } = useLayout();
+  const { tasksPanelOpen, openTasksPanel, openProjectSettings } = useLayout();
   const { currentProject: project, alerts, locked, setLocked } = useProject();
   const navigate = useNavigate();
   useSyncProjectFromRoute();
@@ -216,10 +217,10 @@ export const ProjectOverviewPage = () => {
         style={{ background: '#ffffff', margin: 8, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
       >
         {/* ── Header ─────────────────────────────────────────── */}
-        <div style={{ padding: '10px 16px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
+        <div style={{ padding: '12px 16px 12px', flexShrink: 0 }}>
           {!project.isEvergreen && (
-            <div style={{ marginBottom: 6 }}>
-              <Breadcrumbs items={['Projects', project.projectName]} />
+            <div style={{ marginBottom: 0 }}>
+              {/* <Breadcrumbs items={['Projects', project.projectName]} /> */}
             </div>
           )}
 
@@ -234,7 +235,7 @@ export const ProjectOverviewPage = () => {
             );
 
             const title = (
-              <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
+              <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', marginTop: 6, whiteSpace: 'nowrap' }}>
                 {project.projectName}
               </h1>
             );
@@ -243,6 +244,23 @@ export const ProjectOverviewPage = () => {
               <IconButton size="small" sx={{ padding: '4px' }}>
                 <MoreVert style={{ fontSize: 18, color: '#686576' }} />
               </IconButton>
+            );
+
+            const projectSettingsButton = (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ProjectOverviewIcon style={{ fontSize: 16 }} />}
+                onClick={() => openProjectSettings(project)}
+                sx={{
+                  textTransform: 'none', fontSize: 13, fontWeight: 500, letterSpacing: '0.46px',
+                  color: '#473bab', borderColor: '#473bab', borderRadius: '100px', padding: '4px 12px',
+                  flexShrink: 0, whiteSpace: 'nowrap',
+                  '&:hover': { borderColor: '#3d3396', background: 'rgba(71,59,171,0.04)' },
+                }}
+              >
+                Project Settings
+              </Button>
             );
 
             const statusAndTags = (
@@ -317,6 +335,7 @@ export const ProjectOverviewPage = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
                   {tasksToggle}
                   {title}
+                  {projectSettingsButton}
                   {menuButton}
                   <div style={{ flex: 1 }} />
                   {accountBlock}
