@@ -28,9 +28,7 @@ export const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
   generated: 'Generated',
   updated: 'Updated',
-  awaiting_approval: 'Awaiting Approval',
-  needs_edits: 'Needs Edits',
-  denied: 'Denied',
+  awaiting_approval: 'In Review',
   removed: 'Removed',
   approved: 'Approved',
 };

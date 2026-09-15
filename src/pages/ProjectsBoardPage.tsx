@@ -21,13 +21,12 @@ interface BoardColumn {
   statuses: ProjectWorkflowStatus[];
 }
 
-/** The board's seven fixed columns, in display order — each maps to one or more of the existing per-project workflow statuses. */
+/** The board's six fixed columns, in display order — each maps to one or more of the existing per-project workflow statuses. */
 const BOARD_COLUMNS: BoardColumn[] = [
   { label: 'In Progress', statuses: ['in_progress'] },
-  // { label: 'Needs Edits', statuses: ['needs_edits'] },
   { label: 'Changes Made', statuses: ['pending_changes'] },
   { label: 'Assets Created', statuses: ['assets_generated_no_approval'] },
-  { label: 'Awaiting Approval', statuses: ['awaiting_approval'] },
+  { label: 'In Review', statuses: ['awaiting_approval'] },
   { label: 'Approved', statuses: ['assets_generated'] },
   { label: 'Live', statuses: ['live', 'campaign_loaded'] },
 ];

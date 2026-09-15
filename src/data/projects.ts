@@ -302,7 +302,7 @@ const CAMPAIGN_NAMES = [
 ];
 
 const WORKFLOW_CYCLE: ProjectWorkflowStatus[] = [
-  'in_progress', 'needs_edits', 'pending_changes', 'assets_generated_no_approval',
+  'in_progress', 'awaiting_approval', 'pending_changes', 'assets_generated_no_approval',
   'awaiting_approval', 'assets_generated', 'campaign_loaded',
 ];
 
@@ -341,7 +341,6 @@ function sectionStatusFor(status: ProjectWorkflowStatus): ProjectSectionStatus {
   switch (status) {
     case 'in_progress':
       return { offers: 'done', templates: 'in_progress', themeAndLogos: 'draft', assets: 'draft', adShells: 'draft', campaigns: 'draft' };
-    case 'needs_edits':
     case 'pending_changes':
       return { offers: 'done', templates: 'done', themeAndLogos: 'done', assets: 'in_progress', adShells: 'draft', campaigns: 'draft' };
     case 'assets_generated_no_approval':

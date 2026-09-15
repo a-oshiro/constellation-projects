@@ -1,10 +1,10 @@
-import { HourglassEmpty, CheckCircle, WarningAmber, PendingOutlined, Sensors } from '@mui/icons-material';
-import { NeedsEditsIcon } from './NeedsEditsIcon';
+import { CheckCircle, WarningAmber, PendingOutlined } from '@mui/icons-material';
+import { InReviewIcon } from './InReviewIcon';
+import { LiveIcon } from './LiveIcon';
 
 export type ProjectWorkflowStatus =
   | 'in_progress'
   | 'awaiting_approval'
-  | 'needs_edits'
   | 'assets_generated'
   | 'assets_generated_no_approval'
   | 'pending_changes'
@@ -29,18 +29,11 @@ export const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     Icon: PendingOutlined,
   },
   awaiting_approval: {
-    label: 'Awaiting Approval',
+    label: 'In Review',
     background: 'rgba(225, 118, 19, 0.08)',
     color: '#c45500',
     opacity: 0.75,
-    Icon: HourglassEmpty,
-  },
-  needs_edits: {
-    label: 'Needs Edits',
-    background: 'rgba(225, 118, 19, 0.08)',
-    color: '#c45500',
-    opacity: 0.75,
-    Icon: NeedsEditsIcon,
+    Icon: InReviewIcon,
   },
   assets_generated: {
     label: 'Assets Approved',
@@ -55,10 +48,10 @@ export const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     Icon: CheckCircle,
   },
   campaign_loaded: {
-    label: 'Campaign Loaded',
+    label: 'Live',
     background: '#e8f5e9',
     color: '#1b5e20',
-    Icon: CheckCircle,
+    Icon: LiveIcon,
   },
   pending_changes: {
     label: 'Pending Changes',
@@ -71,7 +64,7 @@ export const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     label: 'Live',
     background: '#e8f5e9',
     color: '#1b5e20',
-    Icon: Sensors,
+    Icon: LiveIcon,
   },
   done: {
     label: 'Done',

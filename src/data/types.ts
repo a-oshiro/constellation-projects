@@ -1,5 +1,5 @@
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
-export type AssetStatus = 'draft' | 'approved' | 'generated' | 'awaiting_approval' | 'needs_edits' | 'denied' | 'updated' | 'removed';
+export type AssetStatus = 'draft' | 'approved' | 'generated' | 'awaiting_approval' | 'updated' | 'removed';
 export type ProjectStatus = 'campaign_loaded' | 'draft' | 'in_review' | 'published';
 
 export type OfferTypeName = 'Lease' | 'Finance' | 'Purchase' | 'ZD Lease' | 'Custom';

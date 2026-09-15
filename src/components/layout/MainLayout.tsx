@@ -159,15 +159,19 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname]);
 
+  // A project's own pages are /projects/:accountSlug/:projectSlug (Overview) and
+  // /projects/:accountSlug/:projectSlug/<task> (Offers, Templates, etc.) — only the former
+  // is the Project Overview page itself.
+  const isProjectOverviewRoute = /^\/projects\/[^/]+\/[^/]+\/?$/.test(location.pathname);
+
   // Close the Alerts filter panel when navigating away from a project overview
   useEffect(() => {
-    if (!location.pathname.startsWith('/projects/')) {
+    if (!isProjectOverviewRoute) {
       closeAlertsFilterPanel();
     }
-  }, [location.pathname]);
+  }, [isProjectOverviewRoute]);
 
   const isSettingsRoute = location.pathname.startsWith('/settings');
-  const isProjectOverviewRoute = location.pathname.startsWith('/projects/');
   const isBoardRoute = location.pathname === '/projects';
   const showLeftPanel = !isSettingsRoute && !isBoardRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
 

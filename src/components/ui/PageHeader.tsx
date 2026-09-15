@@ -26,7 +26,6 @@ export const PageHeader = ({
 
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const hasAwaitingApproval = assets.some((a) => a.status === 'awaiting_approval');
-  const hasNeedsEdits = assets.some((a) => a.status === 'needs_edits');
   const hasPendingChanges = assets.some((a) => a.status === 'updated' || a.status === 'removed');
   const approvedCount = assets.filter((a) => a.status === 'approved').length;
 
@@ -36,11 +35,9 @@ export const PageHeader = ({
       ? 'pending_changes'
       : hasAwaitingApproval
         ? 'awaiting_approval'
-        : hasNeedsEdits
-          ? 'needs_edits'
-          : approvedCount > 0
-            ? 'assets_generated'
-            : 'in_progress';
+        : approvedCount > 0
+          ? 'assets_generated'
+          : 'in_progress';
 
   return (
     <div

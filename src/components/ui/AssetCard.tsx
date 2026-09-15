@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Checkbox, Divider, IconButton, Menu, MenuItem } from '@mui/material';
 import {
-  MoreVert, FolderOutlined, CheckCircle, HourglassEmpty, DoNotDisturb, WarningAmber, PendingOutlined,
+  MoreVert, FolderOutlined, CheckCircle, DoNotDisturb, WarningAmber, PendingOutlined,
   EditOutlined, AssignmentReturnOutlined, ContentCopyOutlined, DriveFileRenameOutline,
   InsertLinkOutlined, FolderOpenOutlined, RefreshOutlined, DeleteOutlined,
 } from '@mui/icons-material';
-import { NeedsEditsIcon } from './NeedsEditsIcon';
+import { InReviewIcon } from './InReviewIcon';
 import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import type { Asset, AssetStatus } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
@@ -58,25 +58,11 @@ const STATUS_CONFIG: Record<AssetStatus, {
     iconColor: '#1b5e20',
   },
   awaiting_approval: {
-    label: 'Awaiting Approval',
+    label: 'In Review',
     bg: '#FDF4EC',
     textColor: '#c45500',
-    Icon: HourglassEmpty,
+    Icon: InReviewIcon,
     iconColor: '#c45500',
-  },
-  needs_edits: {
-    label: 'Needs Edits',
-    bg: '#FDF4EC',
-    textColor: '#c45500',
-    Icon: NeedsEditsIcon,
-    iconColor: '#c45500',
-  },
-  denied: {
-    label: 'Denied',
-    bg: '#FBEFF0',
-    textColor: '#be0e1c',
-    Icon: DoNotDisturb,
-    iconColor: '#be0e1c',
   },
   updated: {
     label: 'Updated',

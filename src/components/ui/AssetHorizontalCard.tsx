@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Checkbox, FormControlLabel, Autocomplete, TextField, Popover } from '@mui/material';
 import { HexColorPicker } from 'react-colorful';
-import { ExpandMore, ExpandLess, WarningAmber, HourglassEmpty, HighlightOff } from '@mui/icons-material';
+import { ExpandMore, ExpandLess, WarningAmber, HighlightOff } from '@mui/icons-material';
+import { InReviewIcon } from './InReviewIcon';
 import { OutOfStockBadge, isAssetOutOfStock } from './OutOfStockBadge';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { TEMPLATES } from '../../data/mockData';
@@ -18,7 +19,7 @@ const STATUS_CHIP_CONFIG: Partial<Record<AssetStatus, {
 }>> = {
   updated:           { bg: 'rgba(225,118,19,0.08)', color: '#c45500', opacity: 0.75, label: 'Updated',           Icon: WarningAmber },
   removed:           { bg: 'rgba(210,50,63,0.08)',  color: '#be0e1c',               label: 'Removed',           Icon: HighlightOff },
-  awaiting_approval: { bg: 'rgba(225,118,19,0.08)', color: '#c45500', opacity: 0.75, label: 'Awaiting Approval', Icon: HourglassEmpty },
+  awaiting_approval: { bg: 'rgba(225,118,19,0.08)', color: '#c45500', opacity: 0.75, label: 'In Review', Icon: InReviewIcon },
 };
 
 function AssetStatusChip({ status }: { status: AssetStatus }) {

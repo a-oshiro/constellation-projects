@@ -2,9 +2,10 @@ import { useMemo, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
 import { IconButton, Menu, MenuItem, Checkbox, Popover } from '@mui/material';
-import { ArrowBack, Close, CheckCircle, PendingOutlined, HourglassEmpty, WarningAmber, MoreVert } from '@mui/icons-material';
-import { NeedsEditsIcon } from '../ui/NeedsEditsIcon';
+import { ArrowBack, Close, CheckCircle, PendingOutlined, WarningAmber, MoreVert } from '@mui/icons-material';
+import { InReviewIcon } from '../ui/InReviewIcon';
 import { TASKS } from '../../data/mockData';
+import { getProjectPath } from '../../data/projects';
 import { ProjectStatusBadge } from '../ui/ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from '../ui/ProjectStatusBadge';
 
@@ -63,14 +64,13 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   const hasDraftAssets = assets.some((a) => a.status === 'draft');
   const hasAnyGeneratedAsset = assets.some((a) => a.status !== 'draft');
   const hasAwaitingApproval = assets.some((a) => a.status === 'awaiting_approval');
-  const hasNeedsEdits = assets.some((a) => a.status === 'needs_edits');
   const hasUpdatedAssets = assets.some((a) => a.status === 'updated');
   const hasRemovedAssets = assets.some((a) => a.status === 'removed');
   const hasGeneratedAssets = assets.some((a) => a.status === 'generated');
   const hasPendingChanges = hasUpdatedAssets || hasRemovedAssets;
-  // All review assets concluded when every non-approved asset is denied (no more actions needed)
+  // All review assets concluded once every asset has been approved (no more actions needed)
   const reviewAssets = assets.filter((a) => a.status !== 'approved');
-  const allReviewConcluded = assets.length > 0 && (reviewAssets.length === 0 || reviewAssets.every((a) => a.status === 'denied'));
+  const allReviewConcluded = assets.length > 0 && reviewAssets.length === 0;
   const allAssetsGeneratedNoApproval = !hasDraftAssets && !hasPendingChanges && hasGeneratedAssets;
   const updatedCount = assets.filter((a) => a.status === 'updated').length;
   const removedCount = assets.filter((a) => a.status === 'removed').length;
@@ -164,13 +164,11 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
           ? 'pending_changes'
           : hasAwaitingApproval
             ? 'awaiting_approval'
-            : hasNeedsEdits
-              ? 'needs_edits'
-              : campaignLoaded
-                ? 'campaign_loaded'
-                : liveCounts['approved'] > 0
-                  ? 'assets_generated'
-                  : 'in_progress')
+            : campaignLoaded
+              ? 'campaign_loaded'
+              : liveCounts['approved'] > 0
+                ? 'assets_generated'
+                : 'in_progress')
     : (hasDraftAssets
         ? 'in_progress'
         : hasPendingChanges
@@ -184,7 +182,10 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
   // Filter tasks based on workflow config
   const visibleTasks = TASKS.filter((t) => approvalEnabled || t.key !== 'approved');
 
-  const isActive = (task: TaskItem) => location.pathname === task.route;
+  // Task pages are reachable both as bare paths (/offers) and project-scoped ones
+  // (/projects/:accountSlug/:projectSlug/offers) — compare only the last path segment.
+  const currentTaskSegment = `/${location.pathname.split('/').filter(Boolean).pop() ?? ''}`;
+  const isActive = (task: TaskItem) => currentTaskSegment === task.route;
 
   const handleConfigureWorkflow = () => {
     setMenuOpen(false);
@@ -213,7 +214,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
           flexShrink: 0,
         }}
       >
-        <IconButton size="small" onClick={() => navigate('/projects')} sx={{ padding: '5px', flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(getProjectPath(currentProject))} sx={{ padding: '5px', flexShrink: 0 }}>
           <ArrowBack style={{ fontSize: 20, color: '#1f1d25' }} />
         </IconButton>
 
@@ -568,7 +569,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                   )}
                   {task.key === 'review' && approvalEnabled && hasAwaitingApproval && (
                     <span style={{ fontSize: 10, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {awaitingApprovalCount} Awaiting Approval
+                      {awaitingApprovalCount} In Review
                     </span>
                   )}
                   {task.key === 'approved' && approvedChangedCount > 0 && (
@@ -621,17 +622,15 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                             ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                             : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />)
                         : hasAwaitingApproval
-                          ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                          : hasNeedsEdits
-                            ? <NeedsEditsIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
-                            : allReviewConcluded
-                              ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
-                              : <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          ? <InReviewIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          : allReviewConcluded
+                            ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
+                            : <InReviewIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                 ) : task.key === 'approved' ? (
                   approvedChangedCount > 0
                     ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                     : approvedNowAwaitingCount > 0
-                      ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                      ? <InReviewIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                       : allReviewConcluded
                         ? <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                         : <PendingOutlined style={{ fontSize: 18, color: '#01579b', flexShrink: 0 }} />
@@ -647,7 +646,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                       : hasPendingChanges && adsUpdatedShellCount > 0
                         ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                         : adsAwaitingShellCount > 0
-                          ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                          ? <InReviewIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                           : allReviewConcluded && liveCounts['approved'] > 0
                             ? hasPendingChanges
                               ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
@@ -659,7 +658,7 @@ export const TasksPanel = ({ onClose, width = 280 }: TasksPanelProps) => {
                     : adsUpdatedShellCount > 0
                       ? <WarningAmber style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                       : adsAwaitingShellCount > 0
-                        ? <HourglassEmpty style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
+                        ? <InReviewIcon style={{ fontSize: 18, color: '#c45500', flexShrink: 0 }} />
                         : <CheckCircle style={{ fontSize: 18, color: '#2e7d32', flexShrink: 0 }} />
                 ) : (task.key === 'offers' || task.key === 'templates' || task.key === 'theme_and_logos') ? (
                   hasPendingChanges

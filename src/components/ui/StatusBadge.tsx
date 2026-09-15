@@ -1,10 +1,10 @@
 import {
-  CheckCircle, HourglassEmpty,
+  CheckCircle,
   DoNotDisturb, WarningAmber,
   PendingOutlined,
 } from '@mui/icons-material';
 import type { AssetStatus } from '../../data/types';
-import { NeedsEditsIcon } from './NeedsEditsIcon';
+import { InReviewIcon } from './InReviewIcon';
 
 interface Config {
   label: string;
@@ -34,24 +34,11 @@ const STATUS_CONFIG: Record<AssetStatus, Config> = {
     Icon: CheckCircle,
   },
   awaiting_approval: {
-    label: 'Awaiting Approval',
+    label: 'In Review',
     background: '#FDF4EC',
     color: '#c45500',
     textOpacity: 0.75,
-    Icon: HourglassEmpty,
-  },
-  needs_edits: {
-    label: 'Needs Edits',
-    background: '#FDF4EC',
-    color: '#c45500',
-    textOpacity: 0.75,
-    Icon: NeedsEditsIcon,
-  },
-  denied: {
-    label: 'Denied',
-    background: '#FBEFF0',
-    color: '#be0e1c',
-    Icon: DoNotDisturb,
+    Icon: InReviewIcon,
   },
   updated: {
     label: 'Updated',

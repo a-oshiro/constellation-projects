@@ -23,19 +23,15 @@ const EMPTY_ASSETS: never[] = [];
 const STATUS_OPTIONS: AssetStatus[] = [
   'approved',
   'awaiting_approval',
-  'needs_edits',
-  'denied',
 ];
 
-const TAB_ORDER: AssetStatus[] = ['draft', 'generated', 'updated', 'awaiting_approval', 'needs_edits', 'denied', 'removed'];
+const TAB_ORDER: AssetStatus[] = ['draft', 'generated', 'updated', 'awaiting_approval', 'removed'];
 const TAB_ORDER_NO_APPROVAL: AssetStatus[] = ['updated', 'removed', 'draft', 'generated'];
 const STATUS_TAB_LABELS: Record<string, string> = {
   draft: 'Draft',
   generated: 'Generated',
   updated: 'Updated',
-  awaiting_approval: 'Awaiting Approval',
-  needs_edits: 'Needs Edits',
-  denied: 'Denied',
+  awaiting_approval: 'In Review',
   removed: 'Removed',
 };
 import { PageHeader } from '../components/ui/PageHeader';
