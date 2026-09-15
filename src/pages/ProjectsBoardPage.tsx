@@ -12,6 +12,7 @@ import { ProjectBoardCard } from '../components/ui/ProjectBoardCard';
 import { ProjectsTable } from '../components/ui/ProjectsTable';
 import type { ProjectStatusInfo } from '../components/ui/ProjectsTable';
 import { KanbanViewIcon, TableViewIcon } from '../components/ui/AlertsKanbanBoard';
+import { ProjectContentDialog } from '../components/ui/ProjectContentDialog';
 
 type BoardTab = 'all' | 'mine';
 type ViewMode = 'kanban' | 'table';
@@ -46,7 +47,7 @@ const tabSx = {
 };
 
 const BoardColumnView = ({
-  column, projects, locked, selectedProjectId, onOpenProject, onDuplicateProject,
+  column, projects, locked, selectedProjectId, onOpenProject, onDuplicateProject, onShowOverview,
 }: {
   column: BoardColumn;
   projects: Project[];
@@ -54,6 +55,7 @@ const BoardColumnView = ({
   selectedProjectId: string;
   onOpenProject: (project: Project) => void;
   onDuplicateProject: (project: Project) => void;
+  onShowOverview: (project: Project) => void;
 }) => {
   const config = STATUS_CONFIG[column.statuses[0]];
 
@@ -77,6 +79,7 @@ const BoardColumnView = ({
             locked={project.id === selectedProjectId ? locked : (project.locked ?? true)}
             onOpen={() => onOpenProject(project)}
             onDuplicate={() => onDuplicateProject(project)}
+            onShowOverview={() => onShowOverview(project)}
           />
         ))}
       </div>
@@ -90,6 +93,7 @@ export const ProjectsBoardPage = () => {
   const [tab, setTab] = useState<BoardTab>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
+  const [overviewDialogProject, setOverviewDialogProject] = useState<Project | null>(null);
 
   const myProjectCount = useMemo(() => PROJECTS.filter((p) => p.creator === CURRENT_USER.name).length, []);
 
@@ -123,6 +127,12 @@ export const ProjectsBoardPage = () => {
   const handleOpenProject = (project: Project) => {
     selectProject(project.id);
     navigate(getProjectPath(project));
+  };
+
+  const handleNavigateFromDialog = (path: string) => {
+    if (overviewDialogProject) selectProject(overviewDialogProject.id);
+    navigate(path);
+    setOverviewDialogProject(null);
   };
 
   return (
@@ -229,12 +239,21 @@ export const ProjectsBoardPage = () => {
                   selectedProjectId={selectedProjectId}
                   onOpenProject={handleOpenProject}
                   onDuplicateProject={() => {}}
+                  onShowOverview={setOverviewDialogProject}
                 />
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {overviewDialogProject && (
+        <ProjectContentDialog
+          project={overviewDialogProject}
+          onClose={() => setOverviewDialogProject(null)}
+          onNavigate={handleNavigateFromDialog}
+        />
+      )}
     </div>
   );
 };

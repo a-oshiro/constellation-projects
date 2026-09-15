@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { IconButton, TextField } from '@mui/material';
-import { Close, ArrowUpward, Add } from '@mui/icons-material';
+import { Close, ArrowUpward, Add, DeleteOutlined } from '@mui/icons-material';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 
 /**
@@ -51,7 +51,7 @@ export const AlertRecipientsPanel = ({ recipients, onChange, onClose }: AlertRec
               {email}
             </span>
             <IconButton size="small" onClick={() => removeAt(index)} sx={{ padding: '4px', flexShrink: 0 }}>
-              <Close style={{ fontSize: 16, color: '#686576' }} />
+              <DeleteOutlined style={{ fontSize: 16, color: '#686576' }} />
             </IconButton>
           </div>
         ))}

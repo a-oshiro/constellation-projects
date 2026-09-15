@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconButton } from '@mui/material';
-import { ArrowBack, Close, Search, Add, FilterList, LocalOfferOutlined, ViewComfyOutlined, ImageOutlined, CheckCircle, PendingOutlined, RadioButtonUnchecked } from '@mui/icons-material';
+import { IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { ArrowBack, Close, Search, Add, FilterList, LocalOfferOutlined, ViewComfyOutlined, ImageOutlined, CheckCircle, PendingOutlined, RadioButtonUnchecked, MoreVert, ContentCopy } from '@mui/icons-material';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
 import { PROJECTS, getProjectPath } from '../../data/projects';
 import type { Project } from '../../data/projects';
 import { useProject } from '../../context/ProjectContext';
 import { computePreviewAssets, groupIntoAdShells } from '../../utils/overviewAssets';
 import { EvergreenIndicatorIcon } from '../ui/EvergreenProjectBadge';
+import { ProjectOverviewIcon } from '../ui/ProjectOverviewIcon';
 
 interface ProjectsPanelProps {
   onClose?: () => void;
   width?: number;
+  onDuplicateProject?: (project: Project) => void;
+  onShowOverview?: (project: Project) => void;
 }
 
 function statusDot(project: Project) {
@@ -27,8 +30,12 @@ function statusDot(project: Project) {
   }
 }
 
-function ProjectListItem({ project, active, locked, onClick }: { project: Project; active: boolean; locked: boolean; onClick: () => void }) {
+function ProjectListItem({ project, active, locked, onClick, onDuplicate, onShowOverview }: {
+  project: Project; active: boolean; locked: boolean; onClick: () => void;
+  onDuplicate: () => void; onShowOverview: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
   const shellCount = useMemo(() => {
     const assets = computePreviewAssets(project.offers, project.templates, project.backgrounds, project.projectName);
@@ -36,7 +43,7 @@ function ProjectListItem({ project, active, locked, onClick }: { project: Projec
   }, [project]);
 
   return (
-    <button
+    <div
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -107,12 +114,33 @@ function ProjectListItem({ project, active, locked, onClick }: { project: Projec
           {project.isEvergreen && <EvergreenIndicatorIcon locked={locked} />}
           {statusDot(project)}
         </div>
+
+        {/* Three-dot menu — shown on row hover (or while its menu is open) */}
+        {(hovered || !!menuAnchor) && (
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }}
+            sx={{ padding: '4px', flexShrink: 0, alignSelf: 'flex-start' }}
+          >
+            <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+          </IconButton>
+        )}
       </div>
-    </button>
+      <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)} onClick={(e) => e.stopPropagation()}>
+        <MenuItem onClick={() => { setMenuAnchor(null); onShowOverview(); }}>
+          <ListItemIcon><ProjectOverviewIcon /></ListItemIcon>
+          Show Project overview
+        </MenuItem>
+        <MenuItem onClick={() => { setMenuAnchor(null); onDuplicate(); }}>
+          <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
+          Duplicate project
+        </MenuItem>
+      </Menu>
+    </div>
   );
 }
 
-export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
+export const ProjectsPanel = ({ onClose, width = 280, onDuplicateProject, onShowOverview }: ProjectsPanelProps) => {
   const { selectedProjectId, selectProject, locked } = useProject();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -196,6 +224,8 @@ export const ProjectsPanel = ({ onClose, width = 280 }: ProjectsPanelProps) => {
             active={project.id === selectedProjectId}
             locked={project.id === selectedProjectId ? locked : (project.locked ?? true)}
             onClick={() => { selectProject(project.id); navigate(getProjectPath(project)); }}
+            onDuplicate={() => onDuplicateProject?.(project)}
+            onShowOverview={() => onShowOverview?.(project)}
           />
         ))}
       </div>

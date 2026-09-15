@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { LeftNav } from './LeftNav';
 import { TopBar } from './TopBar';
 import { TasksPanel } from './TasksPanel';
@@ -15,6 +15,8 @@ import { OfferDetails } from '../ui/OfferDetails';
 import { useProject } from '../../context/ProjectContext';
 import { EvergreenProjectBadge } from '../ui/EvergreenProjectBadge';
 import { UnlockProjectDialog } from '../ui/UnlockProjectDialog';
+import { ProjectContentDialog } from '../ui/ProjectContentDialog';
+import type { Project } from '../../data/projects';
 import type { Offer } from '../../data/types';
 
 // ── Resize constraints ────────────────────────────────────────────────────────
@@ -105,8 +107,10 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
     advancedGenerationOpen, advancedGenerationAssets, closeAdvancedGeneration,
     offersPanel, closeOffersPanel,
   } = useLayout();
-  const { offers, alerts, updateOffer, currentProject, locked, setLocked } = useProject();
+  const { offers, alerts, updateOffer, currentProject, locked, setLocked, selectProject } = useProject();
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
+  const [overviewDialogProject, setOverviewDialogProject] = useState<Project | null>(null);
+  const navigate = useNavigate();
 
   const offersPanelOffer = offersPanel
     ? (offers.find((o) => o.id === offersPanel.offerId) ?? null)
@@ -197,7 +201,14 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                     />
                   )
                   : isProjectOverviewRoute
-                    ? <ProjectsPanel onClose={closeTasksPanel} width={leftWidth} />
+                    ? (
+                      <ProjectsPanel
+                        onClose={closeTasksPanel}
+                        width={leftWidth}
+                        onDuplicateProject={() => {}}
+                        onShowOverview={setOverviewDialogProject}
+                      />
+                    )
                     : <TasksPanel onClose={closeTasksPanel} width={leftWidth} />
               }
               <ResizeHandle onDrag={handleLeftDrag} />
@@ -263,6 +274,18 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
           )}
         </div>
       </div>
+
+      {overviewDialogProject && (
+        <ProjectContentDialog
+          project={overviewDialogProject}
+          onClose={() => setOverviewDialogProject(null)}
+          onNavigate={(path) => {
+            selectProject(overviewDialogProject.id);
+            navigate(path);
+            setOverviewDialogProject(null);
+          }}
+        />
+      )}
     </div>
   );
 };
