@@ -225,7 +225,13 @@ export const ProjectsBoardPage = () => {
 
         {viewMode === 'table' ? (
           <div className="flex-1 overflow-hidden" style={{ padding: '0 16px 16px', minHeight: 0, display: 'flex' }}>
-            <ProjectsTable projects={visibleProjects} statusFor={statusFor} onOpenProject={handleOpenProject} />
+            <ProjectsTable
+              projects={visibleProjects}
+              statusFor={statusFor}
+              onOpenProject={handleOpenProject}
+              onDuplicateProject={() => {}}
+              onShowOverview={setOverviewDialogProject}
+            />
           </div>
         ) : (
           <div className="flex-1 overflow-auto" style={{ padding: '0 16px 16px', minHeight: 0 }}>
