@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import { IconButton } from '@mui/material';
-import { ViewComfyOutlined, PaletteOutlined, BrandingWatermarkOutlined, VolumeUpOutlined, OpenInNew, ExpandMore, ChevronRight } from '@mui/icons-material';
+import { ViewComfyOutlined, PaletteOutlined, BrandingWatermarkOutlined, VolumeUpOutlined, DataObjectOutlined, OpenInNew, ExpandMore, ChevronRight } from '@mui/icons-material';
 import type { Project } from '../../data/projects';
 import { getProjectPath } from '../../data/projects';
 import { TemplateThumb } from './OverviewCards';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
 
 const THUMB_SIZE = 120;
+
+/** No real custom-variables persistence layer in this app (same caveat as the Models tab's Enrollment Form
+ * list) — every project's templates share this one CTA variable, so it's just hardcoded here. */
+const CUSTOM_VARIABLES: { name: string; type: string; defaultValue: string }[] = [
+  { name: 'CTA', type: 'Text', defaultValue: 'VIEW INVENTORY' },
+];
 
 /** Backgrounds named "<dimension> Background N" across different template sizes are the same creative rendered at
  * different sizes — group them into one "Collection" per N so the same background isn't listed once per dimension. */
@@ -65,6 +71,26 @@ const NoSelection = () => (
   <span style={{ fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px' }}>No selection</span>
 );
 
+const variableColStyle: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+
+/** Read-only Name/Type/Default Value table — the Custom Variables section's content. */
+const CustomVariablesTable = ({ variables }: { variables: typeof CUSTOM_VARIABLES }) => (
+  <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', gap: 12, padding: '8px 12px', background: '#f4f5f6' }}>
+      <span style={{ ...variableColStyle, fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#686576', letterSpacing: '0.4px', textTransform: 'uppercase' }}>Name</span>
+      <span style={{ ...variableColStyle, fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#686576', letterSpacing: '0.4px', textTransform: 'uppercase' }}>Type</span>
+      <span style={{ ...variableColStyle, fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#686576', letterSpacing: '0.4px', textTransform: 'uppercase' }}>Default Value</span>
+    </div>
+    {variables.map((v) => (
+      <div key={v.name} style={{ display: 'flex', gap: 12, padding: '10px 12px', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+        <span style={{ ...variableColStyle, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{v.name}</span>
+        <span style={{ ...variableColStyle, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{v.type}</span>
+        <span style={{ ...variableColStyle, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>{v.defaultValue}</span>
+      </div>
+    ))}
+  </div>
+);
+
 interface ContentSectionProps {
   icon: React.ElementType;
   title: string;
@@ -111,7 +137,7 @@ interface ProjectContentsPanelProps {
 
 /** Read-only summary of everything the project draws from (Templates/Backgrounds/Logos/Audio) — no editing here. */
 export const ProjectContentsPanel = ({ project, onEditInProject }: ProjectContentsPanelProps) => {
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['templates', 'backgrounds', 'logos', 'audio']));
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['customVariables', 'templates', 'backgrounds', 'logos', 'audio']));
   const toggle = (key: string) => setExpandedKeys((prev) => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -124,6 +150,19 @@ export const ProjectContentsPanel = ({ project, onEditInProject }: ProjectConten
   return (
     <div style={{ flex: 1, overflowY: 'auto' }}>
       <ContentSection
+        icon={DataObjectOutlined}
+        title="Custom Variables"
+        count={CUSTOM_VARIABLES.length}
+        description="Named values templates can reference in place of hardcoded text, e.g. a shared CTA."
+        onEditInProject={() => onEditInProject(getProjectPath(project, 'templates'))}
+        expanded={expandedKeys.has('customVariables')}
+        onToggle={() => toggle('customVariables')}
+        isFirst
+      >
+        <CustomVariablesTable variables={CUSTOM_VARIABLES} />
+      </ContentSection>
+
+      <ContentSection
         icon={ViewComfyOutlined}
         title="Templates"
         count={project.templates.length}
@@ -131,7 +170,6 @@ export const ProjectContentsPanel = ({ project, onEditInProject }: ProjectConten
         onEditInProject={() => onEditInProject(getProjectPath(project, 'templates'))}
         expanded={expandedKeys.has('templates')}
         onToggle={() => toggle('templates')}
-        isFirst
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
           {project.templates.map((t) => (

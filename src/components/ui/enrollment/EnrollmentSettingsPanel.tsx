@@ -28,7 +28,7 @@ export const EnrollmentSettingsPanel = ({ settings, onChange }: EnrollmentSettin
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       {/* ── Left sub-nav ─────────────────────────────────────────── */}
-      <nav style={{ width: 320, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', padding: '16px 12px', minHeight: 0 }}>
+      <nav style={{ width: 220, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', padding: '16px 12px', minHeight: 0 }}>
         <div style={{ overflowY: 'auto' }}>
           {ENROLLMENT_TABS.map((tab) => {
             const isActive = tab.id === activeTab;

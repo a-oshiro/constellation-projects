@@ -14,14 +14,15 @@ import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 import { HighlightableParagraph, FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
 import { CommentableAssetPreview } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
-import { AlertOfferCard } from './AlertOfferCard';
 import { AlertOfferEditPanel } from './AlertOfferEditPanel';
 import { AlertAssetPreviewModal } from './AlertAssetPreviewModal';
 import { EmailApprovalWidget, AssetApprovalWidget, AssetStatusBadge } from './AlertApprovalWidgets';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
 import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
 import { AlertRecipientsPanel } from './AlertRecipientsPanel';
-import { AlertOffersPanel } from './AlertOffersPanel';
+import { AlertOffersPanel, type OfferHighlightRequest } from './AlertOffersPanel';
+import { AlertProjectSettingsPanel } from './AlertProjectSettingsPanel';
+import { ProjectOverviewIcon } from './ProjectOverviewIcon';
 import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
@@ -67,7 +68,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     offers, currentProject, locked, setEmailReview, setOfferAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
-  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | null>(null);
+  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | 'projectSettings' | null>(null);
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
@@ -76,11 +77,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [editingOfferView, setEditingOfferView] = useState<'vehicle' | 'offer'>('offer');
   const panelWidth = useResponsivePanelWidth();
   const [previewOfferId, setPreviewOfferId] = useState<string | null>(null);
-  const [activeOfferCardOfferId, setActiveOfferCardOfferId] = useState<string | null>(null);
+  /** Set by an asset's "Offer Info" button — opens the Alert Offers panel on the Selected tab and
+   * scrolls/flashes that offer's card there. `token` is a nonce so re-clicking the same asset's button
+   * retriggers the scroll/flash even when `offerId` is unchanged. */
+  const [highlightRequest, setHighlightRequest] = useState<OfferHighlightRequest | null>(null);
   const [activeQcFindingId, setActiveQcFindingId] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
-  const offerCardRef = useRef<HTMLDivElement>(null);
   const qcCardRef = useRef<HTMLDivElement>(null);
 
   // Margin commenting: a highlight/pin the user just created but hasn't sent a comment for yet, and the id
@@ -180,9 +183,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const isArchived = !!alert.archivedAt;
 
   const handleSend = () => { sendAlert(alert.id); onClose(); };
-  // The right panel is mutually exclusive: opening History/Recipients/Offers cancels an in-progress offer
-  // edit, and (via onEditOffer below) starting an offer edit closes whichever of these was open.
-  const openRightPanel = (panel: 'history' | 'recipients' | 'offers') => {
+  // The right panel is mutually exclusive: opening History/Recipients/Offers/Project Settings cancels an
+  // in-progress offer edit, and (via onEditOffer below) starting an offer edit closes whichever of these
+  // was open.
+  const openRightPanel = (panel: 'history' | 'recipients' | 'offers' | 'projectSettings') => {
     setEditingOfferId(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
@@ -193,6 +197,16 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     // Scroll the email preview so the offer being edited is visible — lets the user watch their edits
     // land on the asset while they make them.
     handleSelectAsset(offerId);
+  };
+  // Opens the Alert Offers panel (always, never toggling it closed) on the offer's card, per the canvas
+  // asset's "Offer Info" button. `token` just needs to change on every call (even for the same offerId) so
+  // AlertOffersPanel's effect retriggers — a monotonically incrementing ref serves that with no impure calls.
+  const highlightTokenRef = useRef(0);
+  const showOfferInOffersPanel = (offerId: string) => {
+    setEditingOfferId(null);
+    setRightPanel('offers');
+    highlightTokenRef.current += 1;
+    setHighlightRequest({ offerId, token: highlightTokenRef.current });
   };
 
   const allComments = alert.comments ?? [];
@@ -279,17 +293,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const assetStatusAnchorId = (offerId: string) => `asset-status-${offerId}`;
 
-  // Clicking anywhere in the dialog other than the open offer info card or the asset it belongs to closes
-  // it — the gray background, a different asset, or the email body text all count as "outside". Mirrors
-  // the same rule for the open QC finding card: outside its card and its own tag dismisses it.
+  // Clicking anywhere in the dialog other than the open QC finding card or the tag that opened it closes
+  // it — the gray background, a different asset, or the email body text all count as "outside".
   const handleDialogClick = (e: React.MouseEvent) => {
     const target = e.target as Node;
-
-    if (activeOfferCardOfferId) {
-      const insideCard = offerCardRef.current?.contains(target);
-      const insideAsset = anchorRefs.current.get(assetStatusAnchorId(activeOfferCardOfferId))?.contains(target);
-      if (!insideCard && !insideAsset) setActiveOfferCardOfferId(null);
-    }
 
     if (activeQcFindingId) {
       const insideCard = qcCardRef.current?.contains(target);
@@ -326,7 +333,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
             onTextSelected={setFloatingSelection}
             onRequestPreview={() => setPreviewOfferId(offer.id)}
-            onShowOfferCard={() => { setActiveQcFindingId(null); setActiveOfferCardOfferId((id) => (id === offer.id ? null : offer.id)); }}
+            onShowOfferCard={() => { setActiveQcFindingId(null); showOfferInOffersPanel(offer.id); }}
             approvalStatus={approvalStatus}
             approvalDisabled={isArchived}
             onApprove={() => setOfferAssetReview(alert.id, offer.id, 'approved')}
@@ -367,18 +374,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             </div>
           )}
         </div>
-        {activeOfferCardOfferId === offer.id && (
-          <div ref={offerCardRef}>
-            <AlertOfferCard
-              offer={offer}
-              template={template}
-              background={bg}
-              projectId={currentProject.id}
-              locked={!!projectLocked}
-              onEditOffer={(view) => editOffer(offer.id, view)}
-            />
-          </div>
-        )}
         {activeQcFinding && activeQcFinding.offerId === offer.id && (
           <div ref={qcCardRef}>
             <AlertQcFindingCard finding={activeQcFinding} />
@@ -659,6 +654,14 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               }}>
                 <IconButton
                   size="small"
+                  onClick={() => openRightPanel('projectSettings')}
+                  title="Project Settings"
+                  sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'projectSettings' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
+                >
+                  <ProjectOverviewIcon style={{ fontSize: 20, color: rightPanel === 'projectSettings' ? '#473bab' : '#1f1d25' }} />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => openRightPanel('recipients')}
                   sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'recipients' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
                 >
@@ -792,6 +795,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 projectOffers={currentProject.offers}
                 locked={!!projectLocked}
                 onEditOffer={editOffer}
+                onClose={() => setRightPanel(null)}
+                highlightRequest={highlightRequest}
+              />
+            ) : rightPanel === 'projectSettings' ? (
+              <AlertProjectSettingsPanel
+                project={currentProject}
                 onClose={() => setRightPanel(null)}
               />
             ) : null}

@@ -191,14 +191,14 @@ export const AlertAssetPreviewModal = ({
           )}
         </div>
 
-        <AlertOfferCard
+        {/* <AlertOfferCard
           offer={offer}
           template={template}
           background={background}
           projectId={projectId}
           locked={locked}
           onEditOffer={onEditOffer}
-        />
+        /> */}
 
         <FloatingCommentColumn
           entries={entries}
