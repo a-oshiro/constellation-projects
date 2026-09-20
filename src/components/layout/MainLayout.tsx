@@ -218,8 +218,11 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             className="flex-1 min-w-0 overflow-hidden"
             style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
           >
-            {/* On the Project Overview page, this badge renders inline as part of the Project title row instead. */}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && (
+            {/* On the Project Overview page, this badge renders inline as part of the Project title row instead.
+                Evergreen-ness is a property of `currentProject`, which stays set while browsing Settings pages —
+                exclude those routes too, or the badge/lock dialog would show there despite having nothing to do
+                with an evergreen project page. */}
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && (
               <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
                 <EvergreenProjectBadge
                   locked={locked}
@@ -228,7 +231,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                 />
               </div>
             )}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && (
               <UnlockProjectDialog
                 open={unlockDialogOpen}
                 onClose={() => setUnlockDialogOpen(false)}
