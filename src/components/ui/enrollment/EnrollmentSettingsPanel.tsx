@@ -20,9 +20,11 @@ type EnrollmentTabId = (typeof ENROLLMENT_TABS)[number]['id'];
 interface EnrollmentSettingsPanelProps {
   settings: EnrollmentSettings;
   onChange: (patch: Partial<EnrollmentSettings>) => void;
+  accountName: string;
+  accountBrand: string;
 }
 
-export const EnrollmentSettingsPanel = ({ settings, onChange }: EnrollmentSettingsPanelProps) => {
+export const EnrollmentSettingsPanel = ({ settings, onChange, accountName, accountBrand }: EnrollmentSettingsPanelProps) => {
   const [activeTab, setActiveTab] = useState<EnrollmentTabId>('vehicles');
 
   return (
@@ -72,7 +74,9 @@ export const EnrollmentSettingsPanel = ({ settings, onChange }: EnrollmentSettin
         {activeTab === 'vin-priorities' && <VinPrioritiesTab settings={settings} onChange={onChange} />}
         {activeTab === 'aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
         {activeTab === 'creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
-        {activeTab === 'fees-disclosures' && <FeesDisclosuresTab settings={settings} onChange={onChange} />}
+        {activeTab === 'fees-disclosures' && (
+          <FeesDisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
+        )}
       </div>
     </div>
   );

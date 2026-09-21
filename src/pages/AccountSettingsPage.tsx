@@ -241,6 +241,7 @@ export const AccountSettingsPage = () => {
           tabId={activeTab.id}
           tabLabel={activeTab.label}
           accountName={account.name}
+          accountBrand={account.brand}
           settings={draftEnrollment}
           onChange={handleEnrollmentChange}
           isDirty={isEnrollmentDirty}
