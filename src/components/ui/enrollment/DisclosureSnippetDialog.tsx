@@ -9,6 +9,11 @@ import {
   ImageSearchOutlined, ViewColumnOutlined, ExpandMore,
 } from '@mui/icons-material';
 import { useTestWidget } from '../../../context/TestWidgetContext';
+import type { DisclosureSnippetMeta } from '../../../data/enrollmentSettings';
+import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
+import type { DisclosureFormatType, DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
+import { renderFormattedHtml, substituteVariablesWithSamples } from '../../../utils/disclosureSnippetFormatting';
+import { buildVariableColorMap, findActiveVariableKeys } from '../../../utils/disclosureSnippetColors';
 import { DisclosureSourcePane } from './DisclosureSourcePane';
 
 const SIDE_TABS = [
