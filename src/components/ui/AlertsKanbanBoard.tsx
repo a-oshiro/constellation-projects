@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Search, Send, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
+  Send, Replay, Search, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
   WarningAmberOutlined, ImageNotSupportedOutlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
@@ -15,6 +15,7 @@ import { applyAlertFilters, DATE_PRESETS } from '../../utils/alertFilters';
 import type { DateRangePreset } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
+import { AlertOfferReviewDialog } from './AlertOfferReviewDialog';
 import { AlertsTable } from './AlertsTable';
 import { FeedQc } from './FeedQc';
 import { ArchivedAlertsDialog } from './ArchivedAlertsDialog';
@@ -131,8 +132,8 @@ const AlertsPeriodToggle = ({ value, onChange }: { value: DateRangePreset; onCha
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
-  { key: 'rejected', label: 'Changes Requested' },
-  { key: 'approved', label: 'Approved' },
+  { key: 'assets_review', label: 'Review Assets' },
+  { key: 'approved', label: 'Fully Reviewed' },
   { key: 'sent', label: 'Sent' },
 ];
 
@@ -144,23 +145,17 @@ interface ColumnAction {
   label: string;
 }
 
-/** Per-column lifecycle actions — mirrors the AlertDialog footer and the Kanban drag-drop transition matrix. */
+/** Per-column lifecycle actions — mirrors the AlertDialog footer and the Kanban drag-drop transition matrix.
+ * Offer/asset approval is granular now (per item, inside the review dialogs), so there's no whole-alert
+ * bulk approve/reject left here — only the still-single-shot Send action. */
 const COLUMN_ACTIONS: Partial<Record<AlertStatus, ColumnAction[]>> = {
-  generated: [
-    { icon: Close, color: '#d2323f', borderColor: 'rgba(210,50,63,0.5)', targetStatus: 'rejected', label: 'Reject' },
-    { icon: Check, color: '#4caf50', borderColor: 'rgba(76,175,80,0.5)', targetStatus: 'approved', label: 'Approve' },
-  ],
-  rejected: [
-    { icon: Replay, color: '#473bab', borderColor: 'rgba(99,86,225,0.5)', targetStatus: 'generated', label: 'Rebuild' },
-  ],
   approved: [
     { icon: Send, color: '#473bab', borderColor: 'rgba(99,86,225,0.5)', targetStatus: 'sent', label: 'Send' },
   ],
 };
 
-/** Labels for the Rejected/Approved cards' quick actions when surfaced in the card's three-dot menu. */
+/** Label for the Fully Reviewed card's quick action when surfaced in the card's three-dot menu. */
 const CARD_MENU_ACTION_LABEL: Partial<Record<AlertStatus, string>> = {
-  rejected: 'Rebuild Alert',
   approved: 'Send Alert',
 };
 
@@ -181,8 +176,8 @@ const ApprovalStatusChip = ({ icon: Icon, color, label }: { icon: React.ElementT
 );
 
 /**
- * Email/Assets approval status, shown side by side — collapses into a single "Sent" chip once the
- * alert has gone out, since the two tracks no longer matter individually at that point. Never shows
+ * Offers/Assets review status, shown side by side — collapses into a single "Sent" chip once the
+ * alert has gone out, since the two stages no longer matter individually at that point. Never shows
  * who made the approval/change request (not even on hover) — only the current status.
  */
 export const AlertApprovalChips = ({ alert }: { alert: Alert }) => (
@@ -191,7 +186,7 @@ export const AlertApprovalChips = ({ alert }: { alert: Alert }) => (
       <ApprovalStatusChip icon={Send} color="#4caf50" label="Sent" />
     ) : (
       <>
-        <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.emailStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.emailStatus].color} label="Email" />
+        <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.offersStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.offersStatus].color} label="Offers" />
         <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.assetsStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.assetsStatus].color} label="Assets" />
       </>
     )}
@@ -472,7 +467,7 @@ export const AlertsKanbanBoard = () => {
   }, [filtered, searchTerm]);
 
   const byColumn = useMemo(() => {
-    const map: Record<AlertStatus, Alert[]> = { generated: [], rejected: [], approved: [], sent: [] };
+    const map: Record<AlertStatus, Alert[]> = { generated: [], assets_review: [], approved: [], sent: [] };
     searched.forEach((a) => map[a.status].push(a));
     return map;
   }, [searched]);
@@ -681,7 +676,7 @@ export const AlertsKanbanBoard = () => {
                     assets={assetsByAlertId.get(alert.id) ?? []}
                     dragging={draggingId === alert.id}
                     selected={selectedIds.has(alert.id)}
-                    selectable={col.key !== 'sent' && col.key !== 'generated'}
+                    selectable={col.key === 'approved'}
                     bulkActive={bulkActive}
                     onToggleSelect={(checked) => toggleSelect(alert.id, checked)}
                     onDragStart={(e) => { e.dataTransfer.setData('text/plain', alert.id); setDraggingId(alert.id); }}
@@ -708,7 +703,11 @@ export const AlertsKanbanBoard = () => {
         />
       )}
 
-      {openAlert && <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />}
+      {openAlert && (
+        openAlert.status === 'generated'
+          ? <AlertOfferReviewDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />
+          : <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />
+      )}
     </div>
   );
 };

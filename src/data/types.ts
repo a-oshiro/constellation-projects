@@ -225,14 +225,17 @@ export interface AssetComment {
 }
 
 export type AlertCategory = 'Conquest' | 'Aging' | 'MSRP' | 'Offers' | 'De-Listing' | 'Inventory Gaps/Levels' | 'FTC';
-/** Overall Kanban column — derived from `emailStatus`/`assetsStatus`, except 'sent' which is set explicitly. */
-export type AlertStatus = 'generated' | 'rejected' | 'approved' | 'sent';
-/** Per-half review state, independently tracked for the email and the assets. */
+/**
+ * Overall Kanban column — derived from the two sequential review stages, except 'sent' which is set
+ * explicitly: 'generated' (offer review in progress) -> 'assets_review' (every offer decided, creative
+ * review in progress) -> 'approved' (every asset approved — shown to users as "Fully Reviewed") -> 'sent'.
+ */
+export type AlertStatus = 'generated' | 'assets_review' | 'approved' | 'sent';
+/** Per-item review state. Used independently for a stage-1 offer decision and a stage-2 asset decision. */
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 export type AlertActivityAction =
   | 'generated'
-  | 'email_approved'
-  | 'email_rejected'
+  | 'offers_reviewed'
   | 'assets_approved'
   | 'assets_rejected'
   | 'rebuilt'
@@ -297,10 +300,10 @@ export interface AssetCommentAnchor {
 
 export type AlertCommentAnchor = EmailCommentAnchor | AssetCommentAnchor;
 
-/** A comment left on one review track (email or assets), optionally assigning a single owner and mentioning other teammates. */
+/** A comment left on the assets review track, optionally assigning a single owner and mentioning other teammates. */
 export interface AlertComment {
   id: string;
-  track: 'email' | 'assets';
+  track: 'assets';
   text: string;
   assigneeName?: string;
   assigneeAvatar?: string;
@@ -320,17 +323,19 @@ export interface AlertComment {
   reactions?: Record<string, string[]>;
 }
 
-/** One offer's individual asset-approval decision — who made it and when, so the asset approval widget and per-asset status card can show "by {actorName} • {relative time}". Absence from `Alert.offerReviews` means the offer hasn't been reviewed yet ('pending'). */
+/** One offer's individual review decision (used by both `Alert.offerReviews` and `Alert.assetReviews`) — who made it and when, so the approval widgets and per-item status badges can show "by {actorName} • {relative time}". Absence from the record means that item hasn't been reviewed yet ('pending'). */
 export interface OfferReviewEntry {
   status: Exclude<ReviewStatus, 'pending'>;
   actorName: string;
   timestamp: number;
 }
 
-/** An AI-drafted email proposal for an Evergreen project, tracked through the Generated/Rejected/Approved/Sent lifecycle. */
+/** An AI-drafted email proposal for an Evergreen project, tracked through a two-stage review: offer content, then generated creative, before Send. */
 export interface Alert {
   id: string;
   category: AlertCategory;
+  /** One-paragraph mock narrative explaining where/why this alert was generated — shown on the offer review dialog's left rail alongside `category` ("Alert Type"). */
+  reasoning: string;
   subject: string;
   preheader: string;
   bodyParagraphs: string[];
@@ -340,12 +345,14 @@ export interface Alert {
   otherOfferIds: string[];
   vin: string;
   status: AlertStatus;
-  /** Independent review state of the email content — approved/rejected in parallel with `assetsStatus`. */
-  emailStatus: ReviewStatus;
-  /** Rollup of `offerReviews` — any rejection wins, else approved once every offer is approved, else pending. Kept as a stored field (recomputed whenever `offerReviews` changes) so existing readers (Kanban, table, filters) don't need to know about per-offer status. */
+  /** Stage-1 rollup of `offerReviews` — 'approved' (i.e. "every offer decided") once every offer in the alert has a non-pending entry, else 'pending'. A rejected offer still counts as decided; it just never proceeds to stage 2. Kept as a stored field, recomputed whenever `offerReviews` changes. */
+  offersStatus: ReviewStatus;
+  /** Stage-2 rollup of `assetReviews` over every offer that survived stage 1 — 'approved' once every one of those assets is approved, else 'pending'. Recomputed whenever `assetReviews` changes. */
   assetsStatus: ReviewStatus;
-  /** Per-offer (featuredOfferId + otherOfferIds) review state, keyed by offer id. Absent entries default to 'pending'. */
+  /** Stage-1 (offer content) review state, keyed by offer id. Absent entries default to 'pending'. A 'rejected' entry is a soft-reject: the offer stays in the alert's data but is excluded from stage 2 and from the email. */
   offerReviews?: Record<string, OfferReviewEntry>;
+  /** Stage-2 (generated creative) review state, keyed by offer id — only ever set for offers whose stage-1 status is 'approved'. Absent entries default to 'pending'. */
+  assetReviews?: Record<string, OfferReviewEntry>;
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];

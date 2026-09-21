@@ -1,22 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { IconButton, Menu, Switch } from '@mui/material';
+import { Button, IconButton, Menu, Switch } from '@mui/material';
 import {
-  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
-  MailOutlined, DirectionsCarOutlined,
+  Close, HistoryOutlined, MoreVert, Send, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
+  MailOutlined, DirectionsCarOutlined, DraftsOutlined, Check, ExpandLess, ExpandMore,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertComment, AssetCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
 import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
-import { HighlightableParagraph, FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
+import { FloatingCommentButton } from './AlertHighlightableText';
 import { CommentableAssetPreview } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
 import { AlertOfferEditPanel } from './AlertOfferEditPanel';
 import { AlertAssetPreviewModal } from './AlertAssetPreviewModal';
-import { EmailApprovalWidget, AssetApprovalWidget, AssetStatusBadge } from './AlertApprovalWidgets';
+import { AlertEmailPreview } from './AlertEmailPreview';
+import { AssetApprovalWidget, AssetStatusBadge } from './AlertApprovalWidgets';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
 import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
 import { AlertRecipientsPanel } from './AlertRecipientsPanel';
@@ -27,10 +28,9 @@ import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
-  email_approved: 'Email Approved',
-  email_rejected: 'Email Rejected',
+  offers_reviewed: 'Offers Reviewed',
   assets_approved: 'Assets Approved',
-  assets_rejected: 'Assets Rejected',
+  assets_rejected: 'Assets Changes Requested',
   rebuilt: 'Rebuilt',
   regenerated: 'Regenerated',
   sent: 'Sent',
@@ -39,11 +39,8 @@ const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
 
 const DISABLED_TOOLTIP_REASON = 'Alert generation failed. Regenerate Alert to proceed with review.';
 
-/** Most recent activity entry for a given review track — powers both the footer badge and the Undo action. */
-function lastActivityFor(alert: Alert, track: 'email' | 'assets'): AlertActivityEntry | undefined {
-  const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
-  return [...alert.activity].reverse().find((e) => actions.includes(e.action));
-}
+/** The main canvas's fixed content width — used both by the asset review grid and, centered within it, the (narrower) email preview, so the floating comment column's right-margin math stays simple. */
+const CONTENT_WIDTH = 700;
 
 const footerButtonBase: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
@@ -51,26 +48,27 @@ const footerButtonBase: React.CSSProperties = {
   fontWeight: 500, letterSpacing: '0.4px', lineHeight: '24px', flexShrink: 0,
 };
 
-/** Shared shape for a not-yet-committed drag-selection, whether it came from the email body (an EmailCommentAnchor) or an asset creative (an AssetCommentAnchor). */
-interface FloatingSelection {
-  top: number;
-  left: number;
-  anchor: AlertCommentAnchor;
-}
-
 interface AlertDialogProps {
   alert: Alert;
   onClose: () => void;
 }
 
+/**
+ * Stage-2/3 dialog: opened for an alert once every offer has been decided (see `AlertOfferReviewDialog`
+ * for stage 1). While `status === 'assets_review'`, the main canvas is a grid of the surviving offers'
+ * generated creative for the user to approve/reject, with an optional Email Preview side panel that
+ * visibly builds up as assets are approved. Once every asset is approved, `status` becomes 'approved'
+ * ("Fully Reviewed") and this same dialog instead shows the finished email full-width with a Send footer.
+ */
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const {
-    offers, currentProject, locked, setEmailReview, setOfferAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
+    offers, currentProject, locked, setAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
-  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | 'projectSettings' | null>(null);
+  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | 'projectSettings' | 'emailPreview' | null>(null);
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
+  const [showReviewedAssets, setShowReviewedAssets] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   /** Which editor the Offer Edit panel opens into — set alongside `editingOfferId` by whichever "Offer Card" row was clicked. */
@@ -83,15 +81,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [highlightRequest, setHighlightRequest] = useState<OfferHighlightRequest | null>(null);
   const [activeQcFindingId, setActiveQcFindingId] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
   const qcCardRef = useRef<HTMLDivElement>(null);
 
-  // Margin commenting: a highlight/pin the user just created but hasn't sent a comment for yet, and the id
-  // of a comment whose highlight/pin was just clicked (or vice versa) for a brief jump/emphasis.
-  const [pendingAnchor, setPendingAnchor] = useState<AlertCommentAnchor | undefined>(undefined);
+  // Margin commenting: a pin the user just created but hasn't sent a comment for yet, and the id of a
+  // comment whose pin was just clicked (or vice versa) for a brief jump/emphasis.
+  const [pendingAnchor, setPendingAnchor] = useState<AssetCommentAnchor | undefined>(undefined);
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
-  const [floatingSelection, setFloatingSelection] = useState<FloatingSelection | null>(null);
-  const emailBodyRef = useRef<HTMLDivElement>(null);
+  const [floatingSelection, setFloatingSelection] = useState<{ top: number; left: number; anchor: AssetCommentAnchor } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -114,8 +110,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose, previewOfferId, editingOfferId]);
 
-  // Bidirectional jump/emphasis: scroll both the comment card and its highlight/pin into view, then clear
-  // the emphasis after a beat — no new dependency, just scrollIntoView + a timed state reset.
+  // Bidirectional jump/emphasis: scroll both the comment card and its pin into view, then clear the
+  // emphasis after a beat — no new dependency, just scrollIntoView + a timed state reset.
   useEffect(() => {
     if (!activeAnchorId) return;
     commentRefs.current.get(activeAnchorId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -124,37 +120,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     return () => clearTimeout(t);
   }, [activeAnchorId]);
 
-  // Cursor-following hint: active from the moment the dialog opens, tracking the cursor anywhere on
-  // screen, until the user clicks inside the email body content or 5 seconds elapse, whichever comes
-  // first — no re-arming on hover. Only offered for alerts still awaiting a decision.
-  const canShowCursorHint = !alert.generationFailure && (alert.status === 'generated' || alert.status === 'rejected');
-  const hintDismissedRef = useRef(false);
-  useEffect(() => {
-    if (!canShowCursorHint) return;
-    const handleMove = (e: MouseEvent) => {
-      if (hintDismissedRef.current) return;
-      setCursorHint({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMove);
-    const autoHideTimer = setTimeout(() => {
-      hintDismissedRef.current = true;
-      setCursorHint(null);
-    }, 5000);
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      clearTimeout(autoHideTimer);
-    };
-  }, [canShowCursorHint]);
-  const dismissCursorHint = () => {
-    hintDismissedRef.current = true;
-    setCursorHint(null);
-  };
-
   const findOffer = (id: string) => offers.find((o) => o.id === id);
   const featuredOffer = findOffer(alert.featuredOfferId);
   const otherOffers = alert.otherOfferIds.map(findOffer).filter((o): o is Offer => Boolean(o));
+  const allAlertOffers = featuredOffer ? [featuredOffer, ...otherOffers] : otherOffers;
+  // Only offers approved in stage 1 (offer review) ever get a stage-2 asset review — a stage-1-rejected
+  // offer never had an asset generated for it and never appears here or in the email.
+  const reviewableOffers = allAlertOffers.filter((o) => alert.offerReviews?.[o.id]?.status === 'approved');
 
-  // Generation-failed state: a hard failure blocks the normal email preview entirely and disables every
+  // Generation-failed state: a hard failure blocks the normal preview entirely and disables every
   // approve/request-changes control. QC findings are a separate, non-blocking overlay on the normal view.
   const failure = alert.generationFailure;
   const qcFindings = alert.qcFindings ?? [];
@@ -178,15 +152,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const historyEntries = [...alert.activity].reverse();
 
-  const emailActivity = lastActivityFor(alert, 'email');
+  const isFullyReviewed = alert.status === 'approved' || alert.status === 'sent';
   const isSent = alert.status === 'sent';
   const isArchived = !!alert.archivedAt;
 
   const handleSend = () => { sendAlert(alert.id); onClose(); };
-  // The right panel is mutually exclusive: opening History/Recipients/Offers/Project Settings cancels an
-  // in-progress offer edit, and (via onEditOffer below) starting an offer edit closes whichever of these
-  // was open.
-  const openRightPanel = (panel: 'history' | 'recipients' | 'offers' | 'projectSettings') => {
+  // The right panel is mutually exclusive: opening History/Recipients/Offers/Project Settings/Email
+  // Preview cancels an in-progress offer edit, and (via onEditOffer below) starting an offer edit closes
+  // whichever of these was open.
+  const openRightPanel = (panel: 'history' | 'recipients' | 'offers' | 'projectSettings' | 'emailPreview') => {
     setEditingOfferId(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
@@ -194,8 +168,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setEditingOfferId(offerId);
     setEditingOfferView(view);
     setRightPanel(null);
-    // Scroll the email preview so the offer being edited is visible — lets the user watch their edits
-    // land on the asset while they make them.
+    // Scroll the canvas so the offer being edited is visible — lets the user watch their edits land on
+    // the asset while they make them.
     handleSelectAsset(offerId);
   };
   // Opens the Alert Offers panel (always, never toggling it closed) on the offer's card, per the canvas
@@ -210,8 +184,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   };
 
   const allComments = alert.comments ?? [];
-  // A resolved comment's highlight/pin is hidden from the email/asset unless "Show Resolved" is on — the
-  // comment *card* itself still respects this independently inside FloatingCommentColumn.
+  // A resolved comment's pin is hidden from the asset unless "Show Resolved" is on — the comment *card*
+  // itself still respects this independently inside FloatingCommentColumn.
   const highlightableComments = allComments.filter((c) => showResolved || !c.resolved);
 
   /** Every comment anchored to one offer's asset (plus their replies), regardless of resolved state — used by the preview modal, which always shows its full history. */
@@ -222,59 +196,21 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     return [...anchored, ...replies];
   };
 
-  /** Same, but respecting the resolved-highlight visibility rule — used for the inline pin/highlight overlay. */
+  /** Same, but respecting the resolved-pin visibility rule — used for the inline pin overlay. */
   const pinsForOffer = (offerId: string) =>
     highlightableComments
       .filter((c): c is AlertComment & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
       .map((c) => ({ anchor: c.anchor, commentId: c.id }));
 
-  const emailAnchors = highlightableComments
-    .filter((c): c is AlertComment & { anchor: EmailCommentAnchor } => c.anchor?.kind === 'email')
-    .map((c) => ({ anchor: c.anchor, commentId: c.id }));
-  // A highlight the user just made but hasn't sent a comment for yet — shown immediately, non-interactive,
-  // and removed the moment it's cancelled or sent.
-  const anchorsForParagraph = (index: number) => {
-    const committed = emailAnchors.filter((a) => a.anchor.paragraphIndex === index);
-    if (pendingAnchor?.kind === 'email' && pendingAnchor.paragraphIndex === index) {
-      return [...committed, { anchor: pendingAnchor, commentId: PENDING_ANCHOR_ID }];
-    }
-    return committed;
-  };
+  const columnEntries: ColumnEntry[] = allComments
+    .filter((c) => !c.parentCommentId)
+    .map((c) => ({
+      id: c.id,
+      comment: c,
+      replies: allComments.filter((r) => r.parentCommentId === c.id),
+    }));
 
   const handleAnchorClick = (commentId: string) => setActiveAnchorId(commentId);
-
-  const handleEmailMouseUp = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.toString().trim().length === 0 || !emailBodyRef.current) {
-      setFloatingSelection(null);
-      return;
-    }
-    const range = selection.getRangeAt(0);
-    if (!emailBodyRef.current.contains(range.startContainer)) { setFloatingSelection(null); return; }
-
-    let node: Node | null = range.startContainer;
-    let paragraphEl: HTMLElement | null = null;
-    while (node && node !== emailBodyRef.current) {
-      if (node instanceof HTMLElement && node.dataset.paragraphIndex !== undefined) { paragraphEl = node; break; }
-      node = node.parentNode;
-    }
-    if (!paragraphEl) { setFloatingSelection(null); return; }
-
-    const paragraphIndex = Number(paragraphEl.dataset.paragraphIndex);
-    const preRange = document.createRange();
-    preRange.selectNodeContents(paragraphEl);
-    preRange.setEnd(range.startContainer, range.startOffset);
-    const startOffset = preRange.toString().length;
-    const quotedText = range.toString();
-    const endOffset = startOffset + quotedText.length;
-
-    const rect = range.getBoundingClientRect();
-    setFloatingSelection({
-      top: rect.top - 6,
-      left: rect.right + 8,
-      anchor: { kind: 'email', paragraphIndex, startOffset, endOffset, quotedText },
-    });
-  };
 
   const handleStartComment = () => {
     if (!floatingSelection) return;
@@ -285,8 +221,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const handleSendComment = (text: string, mentionedNames: string[]) => {
     if (!pendingAnchor) return;
-    const track = pendingAnchor.kind === 'email' ? 'email' : 'assets';
-    addAlertComment(alert.id, track, { text, mentionedNames, anchor: pendingAnchor });
+    addAlertComment(alert.id, 'assets', { text, mentionedNames, anchor: pendingAnchor });
     setPendingAnchor(undefined);
     setShowComments(true);
   };
@@ -294,7 +229,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const assetStatusAnchorId = (offerId: string) => `asset-status-${offerId}`;
 
   // Clicking anywhere in the dialog other than the open QC finding card or the tag that opened it closes
-  // it — the gray background, a different asset, or the email body text all count as "outside".
+  // it — the gray background, a different asset, or elsewhere in the canvas all count as "outside".
   const handleDialogClick = (e: React.MouseEvent) => {
     const target = e.target as Node;
 
@@ -305,12 +240,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     }
   };
 
-  const renderInlineAsset = (offer: Offer) => {
+  const assetReviewFor = (offerId: string) => alert.assetReviews?.[offerId];
+
+  /** One offer's tile in the asset-review grid — the generated creative plus the same hover Approve/Request-Changes controls `CommentableAssetPreview` already provides, QC findings, and comment pins. */
+  const renderAssetTile = (offer: Offer) => {
     const bg = bgFor(offer);
     if (!template || !bg) return null;
     const pins = pinsForOffer(offer.id);
-    const pendingForThis = pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === offer.id ? pendingAnchor : undefined;
-    const reviewEntry = alert.offerReviews?.[offer.id];
+    const pendingForThis = pendingAnchor?.offerId === offer.id ? pendingAnchor : undefined;
+    const reviewEntry = assetReviewFor(offer.id);
     const approvalStatus = reviewEntry?.status ?? 'pending';
     const findingsForThisOffer = qcFindingsForOffer(offer.id);
 
@@ -318,7 +256,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       <div
         key={offer.id}
         ref={(el) => registerAnchorRef(assetStatusAnchorId(offer.id), el)}
-        style={{ position: 'relative', marginBottom: 20 }}
+        style={{ position: 'relative' }}
       >
         <div style={{ position: 'relative', width: '100%', aspectRatio: `${template.width} / ${template.height}` }}>
           <CommentableAssetPreview
@@ -336,8 +274,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             onShowOfferCard={() => { setActiveQcFindingId(null); showOfferInOffersPanel(offer.id); }}
             approvalStatus={approvalStatus}
             approvalDisabled={isArchived}
-            onApprove={() => setOfferAssetReview(alert.id, offer.id, 'approved')}
-            onReject={() => setOfferAssetReview(alert.id, offer.id, 'rejected')}
+            onApprove={() => setAssetReview(alert.id, offer.id, 'approved')}
+            onReject={() => setAssetReview(alert.id, offer.id, 'rejected')}
           />
           {reviewEntry && (
             <AssetStatusBadge
@@ -345,7 +283,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               actorName={reviewEntry.actorName}
               timestamp={reviewEntry.timestamp}
               disabled={isArchived}
-              onUndo={() => setOfferAssetReview(alert.id, offer.id, 'pending')}
+              onUndo={() => setAssetReview(alert.id, offer.id, 'pending')}
             />
           )}
           {findingsForThisOffer.length > 0 && (
@@ -357,7 +295,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   <button
                     key={finding.id}
                     ref={(el) => registerAnchorRef(qcCardAnchorId(finding.id), el)}
-                    onClick={(e) => { e.stopPropagation(); setActiveOfferCardOfferId(null); setActiveQcFindingId((id) => (id === finding.id ? null : finding.id)); }}
+                    onClick={(e) => { e.stopPropagation(); setActiveQcFindingId((id) => (id === finding.id ? null : finding.id)); }}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none',
                       background: '#FDF4EC', borderRadius: 8, padding: '3px 8px 3px 6px',
@@ -387,41 +325,31 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const previewOffer = previewOfferId ? offers.find((o) => o.id === previewOfferId) : undefined;
   const previewBg = previewOffer ? bgFor(previewOffer) : undefined;
 
-  const allAlertOffers = featuredOffer ? [featuredOffer, ...otherOffers] : otherOffers;
-  const offerReviewFor = (offerId: string) => alert.offerReviews?.[offerId];
+  const pendingAssetOffers = reviewableOffers.filter((o) => (assetReviewFor(o.id)?.status ?? 'pending') === 'pending');
+  const reviewedAssetOffers = reviewableOffers.filter((o) => (assetReviewFor(o.id)?.status ?? 'pending') !== 'pending');
 
-  const columnEntries: ColumnEntry[] = allComments
-    .filter((c) => !c.parentCommentId)
-    .map((c) => ({
-      id: c.id,
-      comment: c,
-      replies: allComments.filter((r) => r.parentCommentId === c.id),
-    }));
-
-  const assetEntries: { offerId: string; status: ReviewStatus }[] = allAlertOffers.map((o) => ({ offerId: o.id, status: offerReviewFor(o.id)?.status ?? 'pending' }));
-  const approvedOfferEntries = allAlertOffers
-    .map((o) => offerReviewFor(o.id))
+  const assetEntries: { offerId: string; status: ReviewStatus }[] = reviewableOffers.map((o) => ({ offerId: o.id, status: assetReviewFor(o.id)?.status ?? 'pending' }));
+  const approvedAssetEntries = reviewableOffers
+    .map((o) => assetReviewFor(o.id))
     .filter((e): e is OfferReviewEntry => !!e && e.status === 'approved');
-  const rejectedOfferEntries = allAlertOffers
-    .map((o) => offerReviewFor(o.id))
+  const rejectedAssetEntries = reviewableOffers
+    .map((o) => assetReviewFor(o.id))
     .filter((e): e is OfferReviewEntry => !!e && e.status === 'rejected');
-  const approverNames = [...new Set(approvedOfferEntries.map((e) => e.actorName))];
-  const lastApprovedTimestamp = approvedOfferEntries.length
-    ? Math.max(...approvedOfferEntries.map((e) => e.timestamp))
+  const approverNames = [...new Set(approvedAssetEntries.map((e) => e.actorName))];
+  const lastApprovedTimestamp = approvedAssetEntries.length
+    ? Math.max(...approvedAssetEntries.map((e) => e.timestamp))
     : undefined;
-  const lastRejectedEntry = rejectedOfferEntries.length
-    ? rejectedOfferEntries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest))
+  const lastRejectedEntry = rejectedAssetEntries.length
+    ? rejectedAssetEntries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest))
     : undefined;
 
   const handleUndoAllAssetReviews = () => {
-    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
+    reviewableOffers.forEach((o) => setAssetReview(alert.id, o.id, 'pending'));
   };
   // Only approves assets that haven't been reviewed at all — an asset already in Changes Requested is left
   // alone, since that decision has to be resolved individually (Approve Changes / Undo on its own card).
   const handleApproveRemainingAssets = () => {
-    allAlertOffers.forEach((o) => {
-      if (!offerReviewFor(o.id)) setOfferAssetReview(alert.id, o.id, 'approved');
-    });
+    pendingAssetOffers.forEach((o) => setAssetReview(alert.id, o.id, 'approved'));
   };
   const handleSelectAsset = (offerId: string) => {
     const container = scrollContainerRef.current;
@@ -429,25 +357,31 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     if (container && target) scrollElementIntoViewCentered(container, target);
   };
 
-  // Carousel within the enlarged asset preview — steps through allAlertOffers in order, wrapping at the ends.
-  const previewIndex = previewOffer ? allAlertOffers.findIndex((o) => o.id === previewOffer.id) : -1;
+  // Carousel within the enlarged asset preview — steps through reviewableOffers in order, wrapping at the ends.
+  const previewIndex = previewOffer ? reviewableOffers.findIndex((o) => o.id === previewOffer.id) : -1;
   const handlePreviewPrev = () => {
-    if (allAlertOffers.length === 0 || previewIndex === -1) return;
-    const nextIndex = (previewIndex - 1 + allAlertOffers.length) % allAlertOffers.length;
-    setPreviewOfferId(allAlertOffers[nextIndex].id);
+    if (reviewableOffers.length === 0 || previewIndex === -1) return;
+    const nextIndex = (previewIndex - 1 + reviewableOffers.length) % reviewableOffers.length;
+    setPreviewOfferId(reviewableOffers[nextIndex].id);
   };
   const handlePreviewNext = () => {
-    if (allAlertOffers.length === 0 || previewIndex === -1) return;
-    const nextIndex = (previewIndex + 1) % allAlertOffers.length;
-    setPreviewOfferId(allAlertOffers[nextIndex].id);
+    if (reviewableOffers.length === 0 || previewIndex === -1) return;
+    const nextIndex = (previewIndex + 1) % reviewableOffers.length;
+    setPreviewOfferId(reviewableOffers[nextIndex].id);
   };
 
   const handleReply = (parentCommentId: string, text: string, mentionedNames: string[]) => {
-    const parent = allComments.find((c) => c.id === parentCommentId);
-    addAlertComment(alert.id, parent?.track ?? 'email', { text, mentionedNames, parentCommentId });
+    addAlertComment(alert.id, 'assets', { text, mentionedNames, parentCommentId });
     setShowComments(true);
   };
   const handleToggleReaction = (commentId: string, emoji: string) => toggleAlertCommentReaction(alert.id, commentId, emoji);
+
+  // Once fully reviewed, the email preview *is* the canvas — built from every reviewable offer (all of
+  // them are approved by definition of `status === 'approved'`). While still under review, only the
+  // offers whose asset has actually been approved appear, so the preview visibly builds up.
+  const emailPreviewOffers = isFullyReviewed ? reviewableOffers : reviewableOffers.filter((o) => assetReviewFor(o.id)?.status === 'approved');
+  const emailPreviewFeatured = emailPreviewOffers.find((o) => o.id === alert.featuredOfferId);
+  const emailPreviewOthers = emailPreviewOffers.filter((o) => o.id !== alert.featuredOfferId);
 
   return ReactDOM.createPortal(
     <>
@@ -484,10 +418,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-            {/* Main content: email + inline assets, with floating offer cards and a floating comment column.
-                position:relative here (not on the scrollable div below) so the approval widgets — placed as a
-                sibling of the scrollable div, not a descendant of it — stay pinned in the corner instead of
-                scrolling with the canvas's content. */}
+            {/* Main content: asset review grid (assets_review) or the finished email (Fully Reviewed/Sent),
+                with a floating comment column during review. position:relative here (not on the scrollable
+                div below) so the approval widgets — placed as a sibling of the scrollable div, not a
+                descendant of it — stay pinned in the corner instead of scrolling with the canvas's content. */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
 
               {/* Generic error/warning banner — pinned inside the gray preview area, 16px from the top/left/
@@ -536,108 +470,91 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   ...(failure ? { display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}),
                 }}
               >
-                <div ref={contentRef} style={{ position: 'relative', width: 520, margin: '0 auto' }}>
+                <div ref={contentRef} style={{ position: 'relative', width: CONTENT_WIDTH, margin: '0 auto' }}>
                   {failure ? (
                     <AlertGenerationFailedState failure={failure} onRegenerate={() => regenerateAlert(alert.id)} />
-                  ) : (
-                  <>
-                  <div
-                    ref={emailBodyRef}
-                    onMouseUp={handleEmailMouseUp}
-                    onClickCapture={dismissCursorHint}
-                    style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 520, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}
-                  >
-                    <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
-                      {alert.preheader}
-                    </p>
-                    <h1 style={{ margin: '6px 0 12px', fontSize: 18, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.3 }}>
-                      {alert.subject}
-                    </h1>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#473bab', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-                        CI
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Constellation Insights</p>
-                        <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>by {currentProject.accountName}</p>
-                      </div>
-                    </div>
-
-                    {alert.bodyParagraphs.map((p, i) => (
-                      <HighlightableParagraph
-                        key={i}
-                        text={p}
-                        paragraphIndex={i}
-                        anchors={anchorsForParagraph(i)}
-                        activeAnchorId={activeAnchorId}
-                        onHighlightClick={handleAnchorClick}
-                        registerAnchorRef={registerAnchorRef}
-                        style={{ margin: '0 0 12px', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.5 }}
-                      />
-                    ))}
-                    <HighlightableParagraph
-                      text={alert.vin}
-                      paragraphIndex={alert.bodyParagraphs.length}
-                      anchors={anchorsForParagraph(alert.bodyParagraphs.length)}
-                      activeAnchorId={activeAnchorId}
-                      onHighlightClick={handleAnchorClick}
-                      registerAnchorRef={registerAnchorRef}
-                      style={{ margin: '0 0 20px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1f1d25', letterSpacing: '0.17px' }}
+                  ) : isFullyReviewed ? (
+                    <AlertEmailPreview
+                      alert={alert}
+                      featuredOffer={emailPreviewFeatured}
+                      otherOffers={emailPreviewOthers}
+                      template={template}
+                      accountName={currentProject.accountName}
+                      bgFor={bgFor}
                     />
-
-                    {featuredOffer && template && hasBackgrounds && (
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-                          The recommended monthly payment for this YMMT to dominate this market is:
-                        </p>
-                        {renderInlineAsset(featuredOffer)}
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+                        <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', flex: 1, minWidth: 0 }}>
+                          {pendingAssetOffers.length > 0
+                            ? `${pendingAssetOffers.length} asset${pendingAssetOffers.length === 1 ? '' : 's'} needing approval`
+                            : 'Every asset has been reviewed'}
+                        </span>
+                        {pendingAssetOffers.length > 0 && (
+                          <Button
+                            variant="contained"
+                            disableElevation
+                            size="small"
+                            disabled={isArchived}
+                            startIcon={<Check style={{ fontSize: 16 }} />}
+                            onClick={handleApproveRemainingAssets}
+                            sx={{
+                              background: '#4caf50', color: '#ffffff', borderRadius: '100px', padding: '4px 14px',
+                              fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.46px',
+                              textTransform: 'none', whiteSpace: 'nowrap',
+                              '&:hover': { background: '#43a047', boxShadow: 'none' },
+                            }}
+                          >
+                            Approve all remaining
+                          </Button>
+                        )}
                       </div>
-                    )}
 
-                    <button style={{ width: '100%', border: 'none', borderRadius: 8, background: '#473bab', color: '#ffffff', padding: '10px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 600, letterSpacing: '0.46px', cursor: 'pointer', marginBottom: 20 }}>
-                      SEND TO MY PAID MEDIA TEAM
-                    </button>
-
-                    {otherOffers.length > 0 && template && hasBackgrounds && (
-                      <>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-                          These are the other YMMTs that you selected on your enrollment form that you are currently running on paid media:
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {otherOffers.map(renderInlineAsset)}
+                      {template && hasBackgrounds && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20, marginBottom: 20 }}>
+                          {pendingAssetOffers.map(renderAssetTile)}
                         </div>
-                      </>
-                    )}
+                      )}
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8 }}>
-                      <PictureAsPdfOutlined style={{ fontSize: 20, color: '#be0e1c', flexShrink: 0 }} />
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {currentProject.accountName.replace(/\s+/g, '-')}-Competitive-Intelligence-Report.pdf
-                        </p>
-                        <p style={{ margin: 0, fontSize: 10, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>PDF · Competitive Intelligence Report</p>
-                      </div>
-                    </div>
-                  </div>
+                      {reviewedAssetOffers.length > 0 && (
+                        <div>
+                          <button
+                            onClick={() => setShowReviewedAssets((v) => !v)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4, border: 'none', background: 'none',
+                              cursor: 'pointer', padding: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                              color: '#473bab', letterSpacing: '0.46px', marginBottom: 12,
+                            }}
+                          >
+                            {showReviewedAssets ? <ExpandLess style={{ fontSize: 18 }} /> : <ExpandMore style={{ fontSize: 18 }} />}
+                            {showReviewedAssets ? 'Hide' : 'Review'} approved &amp; changes-requested assets ({reviewedAssetOffers.length})
+                          </button>
+                          {showReviewedAssets && template && hasBackgrounds && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+                              {reviewedAssetOffers.map(renderAssetTile)}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                  <FloatingCommentColumn
-                    entries={showComments ? columnEntries : []}
-                    anchorRefs={anchorRefs}
-                    containerRef={contentRef}
-                    left={520 + 24}
-                    activeAnchorId={activeAnchorId}
-                    showResolved={showResolved}
-                    pendingAnchor={pendingAnchor}
-                    onCancelPending={() => setPendingAnchor(undefined)}
-                    onSendPending={handleSendComment}
-                    onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
-                    onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
-                    onJumpToAnchor={(c) => setActiveAnchorId(c.id)}
-                    registerCommentRef={registerCommentRef}
-                    onReply={handleReply}
-                    onToggleReaction={handleToggleReaction}
-                  />
-                  </>
+                      <FloatingCommentColumn
+                        entries={showComments ? columnEntries : []}
+                        anchorRefs={anchorRefs}
+                        containerRef={contentRef}
+                        left={CONTENT_WIDTH + 24}
+                        activeAnchorId={activeAnchorId}
+                        showResolved={showResolved}
+                        pendingAnchor={pendingAnchor}
+                        onCancelPending={() => setPendingAnchor(undefined)}
+                        onSendPending={handleSendComment}
+                        onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
+                        onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
+                        onJumpToAnchor={(c) => setActiveAnchorId(c.id)}
+                        registerCommentRef={registerCommentRef}
+                        onReply={handleReply}
+                        onToggleReaction={handleToggleReaction}
+                      />
+                    </>
                   )}
                 </div>
               </div>
@@ -674,77 +591,76 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 >
                   <DirectionsCarOutlined style={{ fontSize: 20, color: rightPanel === 'offers' ? '#473bab' : '#1f1d25' }} />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => setShowComments((v) => !v)}
-                  title={showComments ? 'Hide comments' : 'Show comments'}
-                  sx={{ width: 30, height: 30, padding: 0, background: showComments ? 'rgba(71,59,171,0.1)' : 'transparent', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
-                >
-                  <ModeCommentOutlined style={{ fontSize: 18, color: showComments ? '#473bab' : '#1f1d25' }} />
-                </IconButton>
-                <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ width: 30, height: 30, padding: 0 }}>
-                  <MoreVert style={{ fontSize: 20, color: '#686576' }} />
-                </IconButton>
-                <Menu
-                  anchorEl={commentsMenuAnchor}
-                  open={!!commentsMenuAnchor}
-                  onClose={() => setCommentsMenuAnchor(null)}
-                  sx={{ zIndex: 100050 }}
-                >
-                  <div
-                    onClick={() => setShowResolved((v) => !v)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', cursor: 'pointer' }}
+                {!isFullyReviewed && (
+                  <IconButton
+                    size="small"
+                    onClick={() => openRightPanel('emailPreview')}
+                    title="Email Preview"
+                    sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'emailPreview' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
                   >
-                    <Switch
+                    <DraftsOutlined style={{ fontSize: 20, color: rightPanel === 'emailPreview' ? '#473bab' : '#1f1d25' }} />
+                  </IconButton>
+                )}
+                {!isFullyReviewed && (
+                  <>
+                    <IconButton
                       size="small"
-                      checked={showResolved}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => setShowResolved((v) => !v)}
-                      sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
-                    />
-                    <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Show resolved comments</span>
-                  </div>
-                </Menu>
+                      onClick={() => setShowComments((v) => !v)}
+                      title={showComments ? 'Hide comments' : 'Show comments'}
+                      sx={{ width: 30, height: 30, padding: 0, background: showComments ? 'rgba(71,59,171,0.1)' : 'transparent', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
+                    >
+                      <ModeCommentOutlined style={{ fontSize: 18, color: showComments ? '#473bab' : '#1f1d25' }} />
+                    </IconButton>
+                    <IconButton size="small" onClick={(e) => setCommentsMenuAnchor(e.currentTarget)} sx={{ width: 30, height: 30, padding: 0 }}>
+                      <MoreVert style={{ fontSize: 20, color: '#686576' }} />
+                    </IconButton>
+                    <Menu
+                      anchorEl={commentsMenuAnchor}
+                      open={!!commentsMenuAnchor}
+                      onClose={() => setCommentsMenuAnchor(null)}
+                      sx={{ zIndex: 100050 }}
+                    >
+                      <div
+                        onClick={() => setShowResolved((v) => !v)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', cursor: 'pointer' }}
+                      >
+                        <Switch
+                          size="small"
+                          checked={showResolved}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => setShowResolved((v) => !v)}
+                          sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
+                        />
+                        <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Show resolved comments</span>
+                      </div>
+                    </Menu>
+                  </>
+                )}
               </div>
               )}
 
-              {/* Floating approval widgets — pinned bottom-right of the canvas, stacked: email (alert-wide)
-                  above assets (per-offer, individually approved) — same pinned-overlay pattern as Show Resolved.
-                  A sibling of the scrollable canvas div above (not a descendant of it), so it stays fixed in the
-                  corner instead of scrolling with the canvas's content. */}
-              <div
-                style={{
-                  position: 'absolute', bottom: 16, right: 16,
-                  zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8,
-                }}
-              >
-                <AssetApprovalWidget
-                  assets={assetEntries}
-                  approverNames={approverNames}
-                  lastApprovedTimestamp={lastApprovedTimestamp}
-                  lastRejectedActorName={lastRejectedEntry?.actorName}
-                  lastRejectedTimestamp={lastRejectedEntry?.timestamp}
-                  disabled={isArchived || isSent || !!failure}
-                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
-                  onApproveRemaining={handleApproveRemainingAssets}
-                  onUndoAllReviews={handleUndoAllAssetReviews}
-                  onSelectAsset={handleSelectAsset}
-                />
-                <EmailApprovalWidget
-                  status={alert.emailStatus}
-                  actorName={emailActivity?.actorName}
-                  timestamp={emailActivity?.timestamp}
-                  disabled={isArchived || isSent || !!failure}
-                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
-                  onApprove={() => setEmailReview(alert.id, 'approved')}
-                  onRequestChanges={() => setEmailReview(alert.id, 'rejected')}
-                  onApproveChanges={() => setEmailReview(alert.id, 'approved')}
-                  onUndo={() => setEmailReview(alert.id, 'pending')}
-                />
-              </div>
+              {/* Floating asset approval widget — pinned bottom-right of the canvas, only while there's
+                  still review to do. A sibling of the scrollable canvas div above (not a descendant of it),
+                  so it stays fixed in the corner instead of scrolling with the canvas's content. */}
+              {!isFullyReviewed && (
+                <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}>
+                  <AssetApprovalWidget
+                    assets={assetEntries}
+                    approverNames={approverNames}
+                    lastApprovedTimestamp={lastApprovedTimestamp}
+                    lastRejectedActorName={lastRejectedEntry?.actorName}
+                    lastRejectedTimestamp={lastRejectedEntry?.timestamp}
+                    disabled={isArchived || isSent || !!failure}
+                    disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
+                    onApproveRemaining={handleApproveRemainingAssets}
+                    onUndoAllReviews={handleUndoAllAssetReviews}
+                    onSelectAsset={handleSelectAsset}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Right panel — Activity History, Recipients, Offers, or the offer editor: mutually exclusive */}
+            {/* Right panel — Activity History, Recipients, Offers, Email Preview, Project Settings, or the offer editor: mutually exclusive */}
             {editingOffer && !projectLocked ? (
               <AlertOfferEditPanel
                 key={`${editingOffer.id}-${editingOfferView}`}
@@ -798,6 +714,23 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 onClose={() => setRightPanel(null)}
                 highlightRequest={highlightRequest}
               />
+            ) : rightPanel === 'emailPreview' ? (
+              <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: 16, background: '#F4F5F6' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Email Preview</span>
+                  <IconButton size="small" onClick={() => setRightPanel(null)} sx={{ padding: '4px' }}>
+                    <Close style={{ fontSize: 16, color: '#686576' }} />
+                  </IconButton>
+                </div>
+                <AlertEmailPreview
+                  alert={alert}
+                  featuredOffer={emailPreviewFeatured}
+                  otherOffers={emailPreviewOthers}
+                  template={template}
+                  accountName={currentProject.accountName}
+                  bgFor={bgFor}
+                />
+              </div>
             ) : rightPanel === 'projectSettings' ? (
               <AlertProjectSettingsPanel
                 project={currentProject}
@@ -806,10 +739,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             ) : null}
           </div>
 
-          {/* Combined footer — appears once both halves are approved, offering the final Send action */}
+          {/* Footer — appears once every asset is approved, offering the final Send action */}
           {alert.status === 'approved' && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16, padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, background: '#ffffff' }}>
-              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Email and Assets approved • Ready to Send</span>
+              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Offers and Assets fully reviewed • Ready to Send</span>
               <button onClick={onClose} style={{ ...footerButtonBase, background: 'transparent', color: '#473bab', border: '1px solid rgba(99,86,225,0.5)' }}>
                 Cancel
               </button>
@@ -825,7 +758,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           )}
           {isSent && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16, padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, background: '#ffffff' }}>
-              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Email and Assets approved • Sent</span>
+              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Offers and Assets fully reviewed • Sent</span>
               <button onClick={onClose} style={{ ...footerButtonBase, background: 'transparent', color: '#473bab', border: '1px solid rgba(99,86,225,0.5)' }}>
                 Close
               </button>
@@ -833,20 +766,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           )}
         </div>
       </div>
-
-      {/* Tooltip Chat Indicator / Tooltip Indicator */}
-      {/* {cursorHint && (
-        <div
-          style={{
-            position: 'fixed', top: cursorHint.y + 16, left: cursorHint.x + 16, zIndex: 100025, pointerEvents: 'none',
-            background: '#473bab', color: '#ffffff', padding: '6px 10px', borderRadius: 6,
-            fontSize: 12, fontFamily: 'Roboto, sans-serif', maxWidth: 240, display: 'flex', alignItems: 'top', gap: 6,
-          }}
-        >
-          <AddComment style={{ fontSize: 16}} />
-          <span>Highlight text or click anywhere on the assets to add comments.</span>
-        </div>
-      )} */}
 
       {floatingSelection && (
         <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartComment} />
@@ -871,15 +790,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           onEditOffer={(view) => editOffer(previewOffer.id, view)}
           onReply={handleReply}
           onToggleReaction={handleToggleReaction}
-          approvalStatus={alert.offerReviews?.[previewOffer.id]?.status ?? 'pending'}
+          approvalStatus={assetReviewFor(previewOffer.id)?.status ?? 'pending'}
           approvalDisabled={isArchived || isSent}
-          reviewActorName={alert.offerReviews?.[previewOffer.id]?.actorName}
-          reviewTimestamp={alert.offerReviews?.[previewOffer.id]?.timestamp}
-          onApprove={() => setOfferAssetReview(alert.id, previewOffer.id, 'approved')}
-          onReject={() => setOfferAssetReview(alert.id, previewOffer.id, 'rejected')}
-          onUndo={() => setOfferAssetReview(alert.id, previewOffer.id, 'pending')}
+          reviewActorName={assetReviewFor(previewOffer.id)?.actorName}
+          reviewTimestamp={assetReviewFor(previewOffer.id)?.timestamp}
+          onApprove={() => setAssetReview(alert.id, previewOffer.id, 'approved')}
+          onReject={() => setAssetReview(alert.id, previewOffer.id, 'rejected')}
+          onUndo={() => setAssetReview(alert.id, previewOffer.id, 'pending')}
           currentIndex={previewIndex}
-          totalCount={allAlertOffers.length}
+          totalCount={reviewableOffers.length}
           onPrev={handlePreviewPrev}
           onNext={handlePreviewNext}
         />

@@ -5,8 +5,8 @@ const DAY = 24 * 60 * 60 * 1000;
 export type AlertSortOrder = 'newest' | 'oldest';
 export type DateRangePreset = 'month' | 'quarter' | 'all' | 'custom';
 export type ApprovalFilterKey =
-  | 'approved_email' | 'pending_email' | 'rejected_email'
-  | 'approved_assets' | 'pending_assets' | 'rejected_assets';
+  | 'approved_offers' | 'pending_offers'
+  | 'approved_assets' | 'pending_assets';
 
 export interface AlertFilterState {
   sortOrder: AlertSortOrder;
@@ -50,32 +50,28 @@ export const MODEL_TYPE_OPTIONS = ['Core Models'];
 
 export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
   generated: 'Generated',
-  rejected: 'Changes Requested',
-  approved: 'Approved',
+  assets_review: 'Review Assets',
+  approved: 'Fully Reviewed',
   sent: 'Sent',
 };
 
 export const APPROVAL_LABELS: Record<ApprovalFilterKey, string> = {
-  approved_email: 'Email Approved',
-  pending_email: 'Pending Email Review',
-  rejected_email: 'Email Changes Requested',
+  approved_offers: 'Offers Approved',
+  pending_offers: 'Pending Offer Review',
   approved_assets: 'Assets Approved',
   pending_assets: 'Pending Asset Review',
-  rejected_assets: 'Asset Changes Requested',
 };
 
 /** Render order for the Approvals field, shared by the left panel and the Filter Row. */
 export const APPROVAL_OPTIONS: ApprovalFilterKey[] = [
-  'approved_email', 'approved_assets', 'pending_email', 'pending_assets', 'rejected_email', 'rejected_assets',
+  'approved_offers', 'approved_assets', 'pending_offers', 'pending_assets',
 ];
 
 const APPROVAL_PREDICATES: Record<ApprovalFilterKey, (alert: Alert) => boolean> = {
-  approved_email: (a) => a.emailStatus === 'approved',
-  pending_email: (a) => a.emailStatus === 'pending',
-  rejected_email: (a) => a.emailStatus === 'rejected',
+  approved_offers: (a) => a.offersStatus === 'approved',
+  pending_offers: (a) => a.offersStatus === 'pending',
   approved_assets: (a) => a.assetsStatus === 'approved',
   pending_assets: (a) => a.assetsStatus === 'pending',
-  rejected_assets: (a) => a.assetsStatus === 'rejected',
 };
 
 /** No "Kickoff" flag exists on Alert yet — derived from the subject line, matching how the mock lifecycle emails are written. */

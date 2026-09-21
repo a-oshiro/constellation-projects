@@ -9,12 +9,11 @@ import { Tooltip } from './Tooltip';
 const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
 
 /**
- * The two floating, bottom-right-pinned approval widgets — one for the email track (still a single
- * alert-wide decision), one for the assets track (individually decided per offer, so it shows one small
- * progress bar per asset instead of a single bar, and a title/icon that only shifts to "changes requested"
- * once a rejection exists). Both always show a title identifying which track they're for, in every state,
- * and are collapsible via the caret in their top-right corner (per CP-13922) — collapsed shows a single
- * summary row, expanded reveals the reviewer subtitle, per-asset progress, and action buttons.
+ * The floating, bottom-right-pinned asset approval widget — assets are decided individually per offer,
+ * so it shows one small progress bar per asset instead of a single bar, and a title/icon that only
+ * shifts to "changes requested" once a rejection exists. Always shows a title identifying it, in every
+ * state, and is collapsible via the caret in its top-right corner (per CP-13922) — collapsed shows a
+ * single summary row, expanded reveals the reviewer subtitle, per-asset progress, and action buttons.
  */
 
 const widgetBase: React.CSSProperties = {
@@ -75,98 +74,6 @@ const CollapseToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       : <ExpandLess style={{ fontSize: 20, color: '#686576' }} />}
   </IconButton>
 );
-
-interface EmailApprovalWidgetProps {
-  status: ReviewStatus;
-  actorName?: string;
-  timestamp?: number;
-  disabled?: boolean;
-  /** When set (alongside disabled), every action button shows this text in a tooltip on hover instead of just being inert. */
-  disabledReason?: string;
-  onApprove: () => void;
-  onRequestChanges: () => void;
-  onApproveChanges: () => void;
-  onUndo: () => void;
-}
-
-export const EmailApprovalWidget = ({
-  status, actorName, timestamp, disabled, disabledReason, onApprove, onRequestChanges, onApproveChanges, onUndo,
-}: EmailApprovalWidgetProps) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const isPending = status === 'pending';
-  const isApproved = status === 'approved';
-  const background = isApproved ? '#edf7ed' : '#ffffff';
-  const title = isApproved ? 'Email Approved' : isPending ? 'Email Approval' : 'Email Changes Requested';
-  const collapsedCaption = isApproved ? 'Approved' : isPending ? 'Pending review' : 'Changes Requested';
-
-  return (
-    <div style={{ ...widgetBase, background, display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
-        {isApproved
-          ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-          : isPending
-            ? <PendingOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />
-            : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
-        <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isApproved ? '#1b5e20' : '#1f1d25' }}>
-          {title}
-        </span>
-        {collapsed && <span style={captionStyle}>{collapsedCaption}</span>}
-        {!collapsed && !isPending && <UndoButton tooltip="Undo Review" onClick={onUndo} disabled={disabled} />}
-        <CollapseToggle collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
-      </div>
-
-      {!collapsed && !isPending && (
-        <span style={{ ...subtitleStyle, paddingLeft: 22, marginTop: 4 }}>
-          By {formatReviewerName(actorName ?? '')} • {timestamp ? formatRelativeTime(timestamp) : ''}
-        </span>
-      )}
-
-      {!collapsed && (isPending ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end', marginTop: 8 }}>
-          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
-            <span>
-              <button
-                disabled={disabled}
-                onClick={onRequestChanges}
-                style={{ ...actionPillBase, background: '#ffffff', color: 'rgb(71, 59, 171)', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                <Sync style={{ fontSize: 16 }} />
-                Request Changes
-              </button>
-            </span>
-          </Tooltip>
-          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
-            <span>
-              <button
-                disabled={disabled}
-                onClick={onApprove}
-                style={{ ...actionPillBase, background: '#4caf50', color: '#ffffff', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                <Check style={{ fontSize: 16 }} />
-                Approve Email
-              </button>
-            </span>
-          </Tooltip>
-        </div>
-      ) : !isApproved && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 22, width: '100%', justifyContent: 'flex-end' }}>
-          <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason} slotProps={tooltipPopperProps}>
-            <span>
-              <button
-                disabled={disabled}
-                onClick={onApproveChanges}
-                style={{ ...containedGreenButton, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-              >
-                <Check style={{ fontSize: 16 }} />
-                Approve
-              </button>
-            </span>
-          </Tooltip>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 interface AssetApprovalWidgetProps {
   /** One entry per offer in the alert, in the same order the assets appear in the email — drives both the

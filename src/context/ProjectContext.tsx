@@ -5,32 +5,43 @@ import type { Project } from '../data/projects';
 import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertCategory, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
 import constellationLogo from '../assets/constellation-logo.png';
 
-/** Fixed one-way lifecycle: Generated -> Approved/Rejected, Rejected -> Generated (regenerate), Approved -> Sent, Sent is terminal. */
+/** Fixed one-way lifecycle: Generated -> Review Assets -> Fully Reviewed (both auto-derived from the two review stages), Fully Reviewed -> Sent (manual), Sent is terminal. A manual rebuild can also send Generated or Review Assets back to Generated. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
-  generated: ['approved', 'rejected'],
-  rejected: ['generated'],
-  approved: ['sent'],
+  generated: ['assets_review'],
+  assets_review: ['generated', 'approved'],
+  approved: ['sent', 'generated'],
   sent: [],
 };
 
-/** The overall Kanban column is derived from the two independent review tracks: any rejection wins, both-approved is Approved, otherwise Generated. */
-function deriveAlertStatus(emailStatus: ReviewStatus, assetsStatus: ReviewStatus): AlertStatus {
-  if (emailStatus === 'rejected' || assetsStatus === 'rejected') return 'rejected';
-  if (emailStatus === 'approved' && assetsStatus === 'approved') return 'approved';
-  return 'generated';
+/** The overall Kanban column is derived from the two sequential review stages: still 'generated' until every offer has a stage-1 decision, then 'assets_review' until every surviving offer's asset is approved, then 'approved' ("Fully Reviewed"). */
+function deriveAlertStatus(offersStatus: ReviewStatus, assetsStatus: ReviewStatus): AlertStatus {
+  if (offersStatus !== 'approved') return 'generated';
+  if (assetsStatus !== 'approved') return 'assets_review';
+  return 'approved';
 }
 
-/** The offers whose assets an alert covers — the featured offer plus every "other" offer shown in the secondary grid. */
+/** The offers an alert covers — the featured offer plus every "other" offer shown in the secondary grid. */
 function offerIdsFor(alert: Alert): string[] {
   return [alert.featuredOfferId, ...alert.otherOfferIds];
 }
 
-/** Rolls up per-offer asset review state into the single `assetsStatus` scalar every other reader (Kanban, table, filters) still consumes: any rejection wins, else approved once every offer is approved, else pending. */
-function computeAssetsRollup(offerIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
-  const resolved = offerIds.map((id) => reviews?.[id]?.status ?? 'pending');
-  if (resolved.some((s) => s === 'rejected')) return 'rejected';
-  if (resolved.length > 0 && resolved.every((s) => s === 'approved')) return 'approved';
-  return 'pending';
+/** Stage-1 rollup: 'approved' (meaning "every offer has been decided") once every offer has a non-pending entry — a rejected offer still counts as decided, it just won't be part of stage 2. Otherwise 'pending'. */
+function computeOffersRollup(offerIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
+  if (offerIds.length === 0) return 'approved';
+  const allDecided = offerIds.every((id) => reviews?.[id]?.status !== undefined);
+  return allDecided ? 'approved' : 'pending';
+}
+
+/** The offers that survived stage 1 (offer review) and therefore get a stage-2 asset review — a stage-1-rejected offer never gets an asset generated for it. */
+function reviewableOfferIds(offerIds: string[], offerReviews: Record<string, OfferReviewEntry> | undefined): string[] {
+  return offerIds.filter((id) => offerReviews?.[id]?.status === 'approved');
+}
+
+/** Stage-2 rollup: 'approved' once every reviewable (stage-1-approved) offer's asset is approved, else 'pending'. Trivially 'approved' when there's nothing left to review (e.g. every offer was rejected in stage 1), so the alert isn't stuck. */
+function computeAssetsRollup(reviewableIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
+  if (reviewableIds.length === 0) return 'approved';
+  const allApproved = reviewableIds.every((id) => reviews?.[id]?.status === 'approved');
+  return allApproved ? 'approved' : 'pending';
 }
 
 export interface PendingOfferChange {
@@ -91,15 +102,13 @@ interface ProjectContextValue {
   selectProject: (id: string) => void;
   /** Only populated for Evergreen projects. */
   alerts: Alert[];
-  /** Bulk shortcut (Kanban drag-drop / quick actions): applies the same transition to both the email and assets tracks at once. No-ops on an invalid transition. */
+  /** Manual/bulk transition (Kanban drag-drop, rebuild, Send). No-ops on an invalid transition; moving back to 'generated' resets both review stages. */
   moveAlert: (id: string, newStatus: AlertStatus) => void;
-  /** Sets the email track's review state independently, recomputing the overall status. No-ops once the alert has been sent. */
-  setEmailReview: (id: string, status: ReviewStatus) => void;
-  /** Sets the assets track's review state independently, recomputing the overall status. No-ops once the alert has been sent. */
-  setAssetsReview: (id: string, status: ReviewStatus) => void;
-  /** Sets one offer's asset review state independently of the others, recomputing the `assetsStatus` rollup. No-ops once the alert has been sent. */
-  setOfferAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
-  /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Rejected. */
+  /** Sets one offer's stage-1 (offer content) review state, recomputing the `offersStatus` rollup and overall status. No-ops once the alert has been sent. */
+  setOfferReview: (id: string, offerId: string, status: ReviewStatus) => void;
+  /** Sets one offer's stage-2 (generated creative) review state, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
+  setAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
+  /** Resets both review stages to pending and moves the alert back to Generated. Only valid while the alert is in Review Assets or Fully Reviewed. */
   rebuildAlert: (id: string) => void;
   /** Clears a hard generation failure and resets both review tracks to pending, as if the alert had just been (successfully) generated. Only valid while the alert has a `generationFailure`. */
   regenerateAlert: (id: string) => void;
@@ -112,18 +121,10 @@ interface ProjectContextValue {
   /** Evergreen-only: seeds a handful of new mock Alerts (status 'generated') onto the board, drawn from the project's current offers. Returns how many were created. */
   generateAlerts: () => number;
   /**
-   * Combined review action: approves or rejects one track and saves whatever Assignee/Mentioned
-   * Teammates/Comment the reviewer entered alongside the decision — all three are optional. No-ops
-   * once the alert has been sent.
+   * Freeform, standalone commenting on the assets track: always appends a new comment — optionally
+   * anchored to a pinned point on an asset creative.
    */
-  reviewAlertTrack: (id: string, track: 'email' | 'assets', decision: Exclude<ReviewStatus, 'pending'>, input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => void;
-  /**
-   * Freeform, standalone commenting: always appends a new comment to the track's list — never
-   * finds-and-overwrites like `reviewAlertTrack` — so comments can accumulate independently of
-   * (and freely after) an Approve/Request Changes decision. Optionally anchored to a highlighted
-   * range of email text or a pinned point on an asset creative.
-   */
-  addAlertComment: (id: string, track: 'email' | 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor; parentCommentId?: string }) => void;
+  addAlertComment: (id: string, track: 'assets', input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor; parentCommentId?: string }) => void;
   /** Toggles one comment's resolved state. */
   toggleAlertCommentResolved: (id: string, commentId: string) => void;
   /** Permanently removes one comment (and any replies left on it). */
@@ -241,8 +242,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     actorAvatar: CURRENT_USER.avatarUrl,
   });
 
-  // Bulk shortcut used by the Kanban's drag-drop and quick-action buttons: applies the same
-  // decision to both tracks at once, rather than requiring two separate dialog actions.
+  // Manual/bulk transition used by the Kanban's drag-drop and the rebuild/Send actions.
   const moveAlert = useCallback((id: string, newStatus: AlertStatus) => {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || !ALERT_TRANSITIONS[a.status].includes(newStatus)) return a;
@@ -252,9 +252,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return {
           ...a,
           status: 'generated',
-          emailStatus: 'pending',
+          offersStatus: 'pending',
           assetsStatus: 'pending',
           offerReviews: {},
+          assetReviews: {},
           createdAt: timestamp, // Regenerating refreshes the "Created ... ago" clock.
           activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
         };
@@ -263,46 +264,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', timestamp)] };
       }
 
-      const reviewStatus: ReviewStatus = newStatus === 'approved' ? 'approved' : 'rejected';
-      const entries: AlertActivityEntry[] = [];
-      if (a.emailStatus !== reviewStatus) entries.push(makeActivityEntry(id, reviewStatus === 'approved' ? 'email_approved' : 'email_rejected', timestamp));
-      if (a.assetsStatus !== reviewStatus) entries.push(makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp));
-
+      // 'assets_review' — a manual drag past an incomplete offer review; treat every offer as approved.
+      const offerReviews = Object.fromEntries(offerIdsFor(a).map((oid) => [oid, { status: 'approved' as const, actorName: CURRENT_USER.name, timestamp }]));
       return {
         ...a,
-        emailStatus: reviewStatus,
-        assetsStatus: reviewStatus,
-        offerReviews: Object.fromEntries(offerIdsFor(a).map((oid) => [oid, { status: reviewStatus, actorName: CURRENT_USER.name, timestamp }])),
+        offerReviews,
+        offersStatus: 'approved',
         status: newStatus,
-        activity: [...a.activity, ...entries],
+        activity: [...a.activity, makeActivityEntry(id, 'offers_reviewed', timestamp)],
       };
     }));
   }, []);
 
-  const setEmailReview = useCallback((id: string, reviewStatus: ReviewStatus) => {
-    setAlerts((prev) => prev.map((a) => {
-      if (a.id !== id || a.status === 'sent') return a;
-      const timestamp = Date.now();
-      const activity = reviewStatus === 'pending'
-        ? a.activity
-        : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'email_approved' : 'email_rejected', timestamp)];
-      return { ...a, emailStatus: reviewStatus, status: deriveAlertStatus(reviewStatus, a.assetsStatus), activity };
-    }));
-  }, []);
-
-  const setAssetsReview = useCallback((id: string, reviewStatus: ReviewStatus) => {
-    setAlerts((prev) => prev.map((a) => {
-      if (a.id !== id || a.status === 'sent') return a;
-      const timestamp = Date.now();
-      const activity = reviewStatus === 'pending'
-        ? a.activity
-        : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp)];
-      return { ...a, assetsStatus: reviewStatus, status: deriveAlertStatus(a.emailStatus, reviewStatus), activity };
-    }));
-  }, []);
-
-  /** Sets one offer's asset review state independently of the others, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
-  const setOfferAssetReview = useCallback((id: string, offerId: string, reviewStatus: ReviewStatus) => {
+  /** Sets one offer's stage-1 (offer content) review state, recomputing the `offersStatus` rollup and overall status. No-ops once the alert has been sent. */
+  const setOfferReview = useCallback((id: string, offerId: string, reviewStatus: ReviewStatus) => {
     setAlerts((prev) => prev.map((a) => {
       if (a.id !== id || a.status === 'sent') return a;
       const timestamp = Date.now();
@@ -312,24 +287,45 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       } else {
         offerReviews[offerId] = { status: reviewStatus, actorName: CURRENT_USER.name, timestamp };
       }
-      const assetsStatus = computeAssetsRollup(offerIdsFor(a), offerReviews);
+      const offersStatus = computeOffersRollup(offerIdsFor(a), offerReviews);
+      const wasComplete = a.offersStatus === 'approved';
+      const activity = !wasComplete && offersStatus === 'approved'
+        ? [...a.activity, makeActivityEntry(id, 'offers_reviewed', timestamp)]
+        : a.activity;
+      return { ...a, offerReviews, offersStatus, status: deriveAlertStatus(offersStatus, a.assetsStatus), activity };
+    }));
+  }, []);
+
+  /** Sets one offer's stage-2 (generated creative) review state, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
+  const setAssetReview = useCallback((id: string, offerId: string, reviewStatus: ReviewStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const timestamp = Date.now();
+      const assetReviews = { ...(a.assetReviews ?? {}) };
+      if (reviewStatus === 'pending') {
+        delete assetReviews[offerId];
+      } else {
+        assetReviews[offerId] = { status: reviewStatus, actorName: CURRENT_USER.name, timestamp };
+      }
+      const assetsStatus = computeAssetsRollup(reviewableOfferIds(offerIdsFor(a), a.offerReviews), assetReviews);
       const activity = reviewStatus === 'pending'
         ? a.activity
         : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp)];
-      return { ...a, offerReviews, assetsStatus, status: deriveAlertStatus(a.emailStatus, assetsStatus), activity };
+      return { ...a, assetReviews, assetsStatus, status: deriveAlertStatus(a.offersStatus, assetsStatus), activity };
     }));
   }, []);
 
   const rebuildAlert = useCallback((id: string) => {
     setAlerts((prev) => prev.map((a) => {
-      if (a.id !== id || a.status !== 'rejected') return a;
+      if (a.id !== id || a.status === 'generated' || a.status === 'sent') return a;
       const timestamp = Date.now();
       return {
         ...a,
         status: 'generated',
-        emailStatus: 'pending',
+        offersStatus: 'pending',
         assetsStatus: 'pending',
         offerReviews: {},
+        assetReviews: {},
         createdAt: timestamp,
         activity: [...a.activity, makeActivityEntry(id, 'rebuilt', timestamp)],
       };
@@ -343,9 +339,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return {
         ...a,
         generationFailure: undefined,
-        emailStatus: 'pending',
+        offersStatus: 'pending',
         assetsStatus: 'pending',
         offerReviews: {},
+        assetReviews: {},
         createdAt: timestamp,
         activity: [...a.activity, makeActivityEntry(id, 'regenerated', timestamp)],
       };
@@ -363,58 +360,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  /**
-   * Combined review action: approves/rejects one track and, in the same update, saves whatever
-   * Assignee/Mentioned Teammates/Comment the reviewer entered alongside the decision — all three
-   * fields are optional. Undoing the decision (via setEmailReview/setAssetsReview back to 'pending')
-   * leaves the saved comment in place so the fields re-populate for editing.
-   */
-  const reviewAlertTrack = useCallback((id: string, track: 'email' | 'assets', decision: Exclude<ReviewStatus, 'pending'>, input: { text: string; assigneeName?: string; assigneeAvatar?: string; mentionedNames: string[] }) => {
-    setAlerts((prev) => prev.map((a) => {
-      if (a.id !== id || a.status === 'sent') return a;
-      const timestamp = Date.now();
-
-      const existing = a.comments ?? [];
-      const existingComment = existing.find((c) => c.track === track);
-      const hasContent = input.text.trim().length > 0 || !!input.assigneeName || input.mentionedNames.length > 0;
-      let comments = existing;
-      if (existingComment) {
-        comments = existing.map((c) => c.id !== existingComment.id ? c : {
-          ...c,
-          text: input.text,
-          assigneeName: input.assigneeName,
-          assigneeAvatar: input.assigneeAvatar,
-          mentionedNames: input.mentionedNames,
-          editedAt: timestamp,
-        });
-      } else if (hasContent) {
-        const comment: AlertComment = {
-          id: `alert-comment-${id}-${track}-${timestamp}`,
-          track,
-          text: input.text,
-          assigneeName: input.assigneeName,
-          assigneeAvatar: input.assigneeAvatar,
-          mentionedNames: input.mentionedNames,
-          authorName: CURRENT_USER.name,
-          authorAvatar: CURRENT_USER.avatarUrl,
-          timestamp,
-        };
-        comments = [...existing, comment];
-      }
-
-      const activity = [...a.activity, makeActivityEntry(id, track === 'email'
-        ? (decision === 'approved' ? 'email_approved' : 'email_rejected')
-        : (decision === 'approved' ? 'assets_approved' : 'assets_rejected'), timestamp)];
-
-      return track === 'email'
-        ? { ...a, emailStatus: decision, status: deriveAlertStatus(decision, a.assetsStatus), activity, comments }
-        : { ...a, assetsStatus: decision, status: deriveAlertStatus(a.emailStatus, decision), activity, comments };
-    }));
-  }, []);
-
   const addAlertComment = useCallback((
     id: string,
-    track: 'email' | 'assets',
+    track: 'assets',
     input: { text: string; mentionedNames: string[]; anchor?: AlertCommentAnchor; parentCommentId?: string },
   ) => {
     setAlerts((prev) => prev.map((a) => {
@@ -508,6 +456,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       return {
         id,
         category: template.category,
+        reasoning: `Constellation Insights detected a ${template.category.toLowerCase()} signal on the ${offer.vehicleName} and drafted this alert to help you respond before the competitive window closes.`,
         subject,
         preheader: 'Constellation Insights',
         bodyParagraphs: [`${subject}.`, 'Here is the VIN you need to advertise now:'],
@@ -515,7 +464,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         otherOfferIds: pool.filter((o) => o.id !== offer.id).map((o) => o.id),
         vin: offer.vin ?? `VIN-${offer.id}-${timestamp}`,
         status: 'generated',
-        emailStatus: 'pending',
+        offersStatus: 'pending',
         assetsStatus: 'pending',
         createdAt: timestamp,
         activity: [{ id: `act-${id}-generated`, action: 'generated', timestamp, actorName: 'AI AutoAgent', actorAvatar: constellationLogo }],
@@ -837,7 +786,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
+      alerts, moveAlert, setOfferReview, setAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>
