@@ -5,18 +5,16 @@ import type { Project } from '../data/projects';
 import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertCategory, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
 import constellationLogo from '../assets/constellation-logo.png';
 
-/** Fixed one-way lifecycle: Generated -> Review Assets -> Fully Reviewed (both auto-derived from the two review stages), Fully Reviewed -> Sent (manual), Sent is terminal. A manual rebuild can also send Generated or Review Assets back to Generated. */
+/** Fixed one-way lifecycle: Generated -> Approved and Sent (auto-derived from the two, now-parallel, review tracks), Approved and Sent -> Sent (manual), Sent is terminal. A manual rebuild can also send Approved back to Generated. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
-  generated: ['assets_review'],
-  assets_review: ['generated', 'approved'],
+  generated: ['approved'],
   approved: ['sent', 'generated'],
   sent: [],
 };
 
-/** The overall Kanban column is derived from the two sequential review stages: still 'generated' until every offer has a stage-1 decision, then 'assets_review' until every surviving offer's asset is approved, then 'approved' ("Fully Reviewed"). */
+/** The overall Kanban column is derived from the two review tracks, which run in parallel: still 'generated' until every offer has a stage-1 decision AND every surviving offer's asset is approved, then 'approved' ("Approved and Sent"). */
 function deriveAlertStatus(offersStatus: ReviewStatus, assetsStatus: ReviewStatus): AlertStatus {
-  if (offersStatus !== 'approved') return 'generated';
-  if (assetsStatus !== 'approved') return 'assets_review';
+  if (offersStatus !== 'approved' || assetsStatus !== 'approved') return 'generated';
   return 'approved';
 }
 
@@ -32,9 +30,9 @@ function computeOffersRollup(offerIds: string[], reviews: Record<string, OfferRe
   return allDecided ? 'approved' : 'pending';
 }
 
-/** The offers that survived stage 1 (offer review) and therefore get a stage-2 asset review — a stage-1-rejected offer never gets an asset generated for it. */
+/** The offers whose asset is reviewable — every offer except one already rejected in stage 1 (offer review). Assets are generated for every offer up front now, in parallel with offer review, so a still-pending offer's asset is reviewable too; only an explicit stage-1 rejection removes an offer's asset from stage 2. */
 function reviewableOfferIds(offerIds: string[], offerReviews: Record<string, OfferReviewEntry> | undefined): string[] {
-  return offerIds.filter((id) => offerReviews?.[id]?.status === 'approved');
+  return offerIds.filter((id) => offerReviews?.[id]?.status !== 'rejected');
 }
 
 /** Stage-2 rollup: 'approved' once every reviewable (stage-1-approved) offer's asset is approved, else 'pending'. Trivially 'approved' when there's nothing left to review (e.g. every offer was rejected in stage 1), so the alert isn't stuck. */
@@ -108,12 +106,14 @@ interface ProjectContextValue {
   setOfferReview: (id: string, offerId: string, status: ReviewStatus) => void;
   /** Sets one offer's stage-2 (generated creative) review state, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
   setAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
-  /** Resets both review stages to pending and moves the alert back to Generated. Only valid while the alert is in Review Assets or Fully Reviewed. */
+  /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Approved and Sent. */
   rebuildAlert: (id: string) => void;
   /** Clears a hard generation failure and resets both review tracks to pending, as if the alert had just been (successfully) generated. Only valid while the alert has a `generationFailure`. */
   regenerateAlert: (id: string) => void;
   /** Overwrites the alert's recipient email list. */
   setAlertRecipients: (id: string, recipients: string[]) => void;
+  /** Reorders the non-featured offers shown in the email preview. */
+  reorderAlertOffers: (id: string, otherOfferIds: string[]) => void;
   /** Marks a fully-approved alert as Sent. Only valid while the alert is Approved. */
   sendAlert: (id: string) => void;
   /** Manually removes an alert from the Kanban/Table into the Archived Alerts dialog. No-ops if already archived. */
@@ -264,14 +264,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return { ...a, status: 'sent', activity: [...a.activity, makeActivityEntry(id, 'sent', timestamp)] };
       }
 
-      // 'assets_review' — a manual drag past an incomplete offer review; treat every offer as approved.
+      // 'approved' — a manual drag past incomplete review; treat every offer and every reviewable asset as approved.
       const offerReviews = Object.fromEntries(offerIdsFor(a).map((oid) => [oid, { status: 'approved' as const, actorName: CURRENT_USER.name, timestamp }]));
+      const assetReviews = Object.fromEntries(reviewableOfferIds(offerIdsFor(a), offerReviews).map((oid) => [oid, { status: 'approved' as const, actorName: CURRENT_USER.name, timestamp }]));
       return {
         ...a,
         offerReviews,
+        assetReviews,
         offersStatus: 'approved',
+        assetsStatus: 'approved',
         status: newStatus,
-        activity: [...a.activity, makeActivityEntry(id, 'offers_reviewed', timestamp)],
+        activity: [...a.activity, makeActivityEntry(id, 'offers_reviewed', timestamp), makeActivityEntry(id, 'assets_approved', timestamp)],
       };
     }));
   }, []);
@@ -351,6 +354,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const setAlertRecipients = useCallback((id: string, recipients: string[]) => {
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, recipients } : a)));
+  }, []);
+
+  /** Reorders the non-featured offers shown in the email preview — the featured offer always stays first, so only `otherOfferIds` is ever reordered. */
+  const reorderAlertOffers = useCallback((id: string, otherOfferIds: string[]) => {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, otherOfferIds } : a)));
   }, []);
 
   const sendAlert = useCallback((id: string) => {
@@ -786,7 +794,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setOfferReview, setAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
+      alerts, moveAlert, setOfferReview, setAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, reorderAlertOffers, sendAlert, archiveAlert, generateAlerts, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>

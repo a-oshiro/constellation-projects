@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { IconButton } from '@mui/material';
-import { Check, CheckCircle, ExpandLess, ExpandMore, PendingOutlined, Sync, Undo } from '@mui/icons-material';
+import { Check, CheckCircle, DeleteOutlined, ExpandLess, ExpandMore, PendingOutlined, Undo } from '@mui/icons-material';
 import type { ReviewStatus } from '../../data/types';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { formatReviewerName } from '../../utils/alertReview';
@@ -9,11 +9,12 @@ import { Tooltip } from './Tooltip';
 const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
 
 /**
- * The floating, bottom-right-pinned asset approval widget — assets are decided individually per offer,
- * so it shows one small progress bar per asset instead of a single bar, and a title/icon that only
- * shifts to "changes requested" once a rejection exists. Always shows a title identifying it, in every
- * state, and is collapsible via the caret in its top-right corner (per CP-13922) — collapsed shows a
- * single summary row, expanded reveals the reviewer subtitle, per-asset progress, and action buttons.
+ * The floating, bottom-right-pinned approval widget — shared by the Offer Review and Asset Review tabs.
+ * Items (offers or assets) are decided individually, so it shows one small progress bar per item instead
+ * of a single bar, and a title/icon that only shifts to "removed" once a rejection exists. Always shows a
+ * title identifying it, in every state, and is collapsible via the caret in its top-right corner (per
+ * CP-13922) — collapsed shows a single summary row, expanded reveals the reviewer subtitle, per-item
+ * progress, and action buttons.
  */
 
 const widgetBase: React.CSSProperties = {
@@ -75,11 +76,19 @@ const CollapseToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   </IconButton>
 );
 
-interface AssetApprovalWidgetProps {
-  /** One entry per offer in the alert, in the same order the assets appear in the email — drives both the
-   * per-asset progress bars and every derived count below. Each bar is clickable (via onSelectAsset) so the
-   * user can jump straight to the asset it represents. */
-  assets: { offerId: string; status: ReviewStatus }[];
+/** Item-label copy, keyed by which review track the widget represents — everything else about the widget is generic. */
+const KIND_COPY: Record<'offers' | 'assets', { noun: string; approvedTitle: string; removedTitle: string; pendingTitle: string; jumpTooltip: string }> = {
+  offers: { noun: 'Offers', approvedTitle: 'All Offers Approved', removedTitle: 'Offers Removed', pendingTitle: 'Offers Approvals', jumpTooltip: 'Jump to this offer' },
+  assets: { noun: 'Assets', approvedTitle: 'All Assets Approved', removedTitle: 'Assets Removed', pendingTitle: 'Assets Approvals', jumpTooltip: 'Jump to this asset' },
+};
+
+interface ApprovalWidgetProps {
+  /** Which review track this widget represents — drives its copy only; all behavior below is identical for both. */
+  kind: 'offers' | 'assets';
+  /** One entry per offer in the alert, in the same order they appear in the email — drives both the
+   * per-item progress bars and every derived count below. Each bar is clickable (via onSelectItem) so the
+   * user can jump straight to the item it represents. */
+  items: { id: string; status: ReviewStatus }[];
   approverNames: string[];
   lastApprovedTimestamp?: number;
   lastRejectedActorName?: string;
@@ -87,26 +96,27 @@ interface AssetApprovalWidgetProps {
   disabled?: boolean;
   /** When set (alongside disabled), the Approve action shows this text in a tooltip on hover instead of just being inert. */
   disabledReason?: string;
-  /** Approves only the assets that haven't been reviewed at all yet — never touches ones already in
-   * Changes Requested, which the user has to resolve individually. */
+  /** Approves only the items that haven't been reviewed at all yet — never touches ones already
+   * removed, which the user has to resolve individually. */
   onApproveRemaining: () => void;
   onUndoAllReviews: () => void;
-  onSelectAsset: (offerId: string) => void;
+  onSelectItem: (id: string) => void;
 }
 
-export const AssetApprovalWidget = ({
-  assets, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled, disabledReason,
-  onApproveRemaining, onUndoAllReviews, onSelectAsset,
-}: AssetApprovalWidgetProps) => {
+export const ApprovalWidget = ({
+  kind, items, approverNames, lastApprovedTimestamp, lastRejectedActorName, lastRejectedTimestamp, disabled, disabledReason,
+  onApproveRemaining, onUndoAllReviews, onSelectItem,
+}: ApprovalWidgetProps) => {
   const [collapsed, setCollapsed] = useState(false);
-  const totalCount = assets.length;
-  const approvedCount = assets.filter((a) => a.status === 'approved').length;
-  const rejectedCount = assets.filter((a) => a.status === 'rejected').length;
-  const pendingCount = assets.filter((a) => a.status === 'pending').length;
+  const copy = KIND_COPY[kind];
+  const totalCount = items.length;
+  const approvedCount = items.filter((a) => a.status === 'approved').length;
+  const rejectedCount = items.filter((a) => a.status === 'rejected').length;
+  const pendingCount = items.filter((a) => a.status === 'pending').length;
   const reviewedCount = approvedCount + rejectedCount;
   const isComplete = totalCount > 0 && approvedCount === totalCount;
   const hasRejected = rejectedCount > 0;
-  const title = isComplete ? 'All Assets Approved' : hasRejected ? 'Assets Changes Requested' : 'Assets Approvals';
+  const title = isComplete ? copy.approvedTitle : hasRejected ? copy.removedTitle : copy.pendingTitle;
 
   return (
     <div style={{ ...widgetBase, background: isComplete ? '#edf7ed' : '#ffffff', display: 'flex', flexDirection: 'column', gap: collapsed ? 0 : isComplete ? 4 : 12 }}>
@@ -114,7 +124,7 @@ export const AssetApprovalWidget = ({
         {isComplete
           ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
           : hasRejected
-            ? <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />
+            ? <DeleteOutlined style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />
             : <PendingOutlined style={{ fontSize: 18, color: '#9c99a9', flexShrink: 0 }} />}
         <span style={{ ...titleStyle, flex: 1, minWidth: 0, color: isComplete ? '#1b5e20' : '#1f1d25' }}>
           {title}
@@ -138,11 +148,11 @@ export const AssetApprovalWidget = ({
       {!collapsed && !isComplete && (
         <>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%', paddingLeft: 22 }}>
-            {assets.map((a) => (
+            {items.map((a) => (
               <button
-                key={a.offerId}
-                onClick={() => onSelectAsset(a.offerId)}
-                title="Jump to this asset"
+                key={a.id}
+                onClick={() => onSelectItem(a.id)}
+                title={copy.jumpTooltip}
                 style={{
                   flex: 1, height: 4, borderRadius: 100, border: 'none', padding: 0, cursor: 'pointer',
                   background: a.status === 'approved' ? '#4caf50' : a.status === 'rejected' ? '#E17613' : 'rgba(17,16,20,0.12)',
@@ -154,7 +164,7 @@ export const AssetApprovalWidget = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end'}}>
               {reviewedCount === 0 ? (
               <span style={{ ...subtitleStyle, paddingLeft: 22 }}>
-                Assets can be approved individually
+                {copy.noun} can be approved individually
               </span>
               ) : (
               <div/>
@@ -180,7 +190,7 @@ export const AssetApprovalWidget = ({
 };
 
 interface AssetStatusBadgeProps {
-  label: 'Approved' | 'Changes Requested';
+  label: 'Approved' | 'Removed';
   actorName: string;
   timestamp: number;
   disabled?: boolean;
@@ -207,7 +217,7 @@ export const AssetStatusBadge = ({ label, actorName, timestamp, disabled, onUndo
       <div style={{ display: 'flex', gap: 4, alignItems: 'center', width: '100%' }}>
         {isApproved
           ? <CheckCircle style={{ fontSize: 18, color: '#4caf50', flexShrink: 0 }} />
-          : <Sync style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
+          : <DeleteOutlined style={{ fontSize: 18, color: '#E17613', flexShrink: 0 }} />}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <span style={{ ...titleStyle, color: isApproved ? '#1b5e20' : '#663C00', whiteSpace: 'nowrap' }}>
             {label}

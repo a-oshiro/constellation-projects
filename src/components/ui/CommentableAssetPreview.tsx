@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { IconButton } from '@mui/material';
-import { Fullscreen, Check, Sync, DescriptionOutlined, Palette, PaletteOutlined } from '@mui/icons-material';
+import { Fullscreen, Check, DeleteOutlined, DescriptionOutlined, Palette, PaletteOutlined } from '@mui/icons-material';
 import type { AssetCommentAnchor, Offer, ReviewStatus, Template } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { PENDING_ANCHOR_ID } from './AlertHighlightableText';
@@ -212,17 +212,17 @@ export const CommentableAssetPreview = ({
       )}
       {onApprove && onReject && hovered && approvalStatus === 'pending' && (
         <div style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 7, display: 'flex', gap: 6 }}>
-          <Tooltip title="Request Asset Changes" slotProps={tooltipPopperProps}>
+          <Tooltip title="Reject or Remove Asset" slotProps={tooltipPopperProps}>
             <IconButton
               disabled={approvalDisabled}
               onClick={(e) => { e.stopPropagation(); onReject(); }}
               sx={{
-                background: '#ffffff', padding: '5px', width: 36, height: 36, outline: '1px solid #473bab',
+                background: '#ffffff', padding: '5px', width: 36, height: 36, outline: '1px solid #d2323f',
                 boxShadow: '0px 1px 5px rgba(0,0,0,0.12), 0px 2px 2px rgba(0,0,0,0.14)',
-                '&:hover': { background: '#fafafa' },
+                '&:hover': { background: '#fdeded' },
               }}
             >
-              <Sync style={{ fontSize: 18, color: '#473bab' }} />
+              <DeleteOutlined style={{ fontSize: 18, color: '#d2323f' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Approve Asset" slotProps={tooltipPopperProps}>

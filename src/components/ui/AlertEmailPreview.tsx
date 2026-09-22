@@ -1,15 +1,19 @@
-import { PictureAsPdfOutlined } from '@mui/icons-material';
+import { useState } from 'react';
+import type { DragEvent } from 'react';
+import { DragIndicator, PictureAsPdfOutlined } from '@mui/icons-material';
 import type { Alert, Background, Offer, Template } from '../../data/types';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 
 interface AlertEmailPreviewProps {
   alert: Alert;
-  /** Already filtered by the caller to only what should be visible right now (e.g. stage-2-approved offers during Review Assets, or every offer once Fully Reviewed). */
+  /** Already filtered by the caller to only what should be visible right now — offers whose asset has been approved so far. */
   featuredOffer?: Offer;
   otherOffers: Offer[];
   template?: Template;
   accountName: string;
   bgFor: (offer: Offer) => Background | undefined;
+  /** When provided, `otherOffers` becomes drag-reorderable — called with the reordered list on drop. Omit for a read-only preview. */
+  onReorderOtherOffers?: (next: Offer[]) => void;
 }
 
 const renderAsset = (offer: Offer, template: Template, bgFor: (o: Offer) => Background | undefined) => {
@@ -24,11 +28,31 @@ const renderAsset = (offer: Offer, template: Template, bgFor: (o: Offer) => Back
 
 /**
  * Read-only render of the alert's email — preheader/subject/sender/body copy plus whichever assets the
- * caller passes in. Serves two roles in `AlertDialog`: a small toggleable "Email Preview" side panel
- * during asset review (passed only stage-2-approved offers, so it visibly builds up as the user
- * approves each one), and, full-width, the main canvas once every asset is approved ("Fully Reviewed").
+ * caller passes in. Used as `AlertDialog`'s always-available "Email Preview" side panel, passed only
+ * offers whose asset has been approved so far (so it visibly builds up as the user approves each one).
+ * When `onReorderOtherOffers` is supplied, the non-featured assets can be drag-reordered in place.
  */
-export const AlertEmailPreview = ({ alert, featuredOffer, otherOffers, template, accountName, bgFor }: AlertEmailPreviewProps) => (
+export const AlertEmailPreview = ({ alert, featuredOffer, otherOffers, template, accountName, bgFor, onReorderOtherOffers }: AlertEmailPreviewProps) => {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const dragHandlers = (index: number) => ({
+    onDragStart: (e: DragEvent) => { setDragIndex(index); e.dataTransfer.effectAllowed = 'move'; },
+    onDragOver: (e: DragEvent) => { e.preventDefault(); setDragOverIndex(index); },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      if (dragIndex === null || dragIndex === index) { setDragIndex(null); setDragOverIndex(null); return; }
+      const next = [...otherOffers];
+      const [moved] = next.splice(dragIndex, 1);
+      next.splice(index, 0, moved);
+      onReorderOtherOffers?.(next);
+      setDragIndex(null);
+      setDragOverIndex(null);
+    },
+    onDragEnd: () => { setDragIndex(null); setDragOverIndex(null); },
+  });
+
+  return (
   <div style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: '100%', maxWidth: 520, margin: '0 auto', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
     <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
       {alert.preheader}
@@ -70,7 +94,25 @@ export const AlertEmailPreview = ({ alert, featuredOffer, otherOffers, template,
           These are the other YMMTs that you selected on your enrollment form that you are currently running on paid media:
         </p>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {otherOffers.map((o) => renderAsset(o, template, bgFor))}
+          {otherOffers.map((o, index) => onReorderOtherOffers ? (
+            <div
+              key={o.id}
+              draggable
+              {...dragHandlers(index)}
+              style={{
+                position: 'relative',
+                borderRadius: 8,
+                outline: dragOverIndex === index && dragIndex !== index ? '2px solid #473bab' : 'none',
+                opacity: dragIndex === index ? 0.5 : 1,
+                cursor: 'grab',
+              }}
+            >
+              <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 2, display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.9)', borderRadius: 6, padding: 2 }}>
+                <DragIndicator style={{ fontSize: 18, color: '#686576' }} />
+              </div>
+              {renderAsset(o, template, bgFor)}
+            </div>
+          ) : renderAsset(o, template, bgFor))}
         </div>
       </>
     )}
@@ -85,4 +127,5 @@ export const AlertEmailPreview = ({ alert, featuredOffer, otherOffers, template,
       </div>
     </div>
   </div>
-);
+  );
+};

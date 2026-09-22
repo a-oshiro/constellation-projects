@@ -83,7 +83,7 @@ function migrateLifecycle(seedStatus: SeedStatus, offerIds: string[], legacyRevi
   }
   const offersComplete = offerIds.length > 0 && offerIds.every((id) => legacyReviews?.[id]?.status !== undefined);
   if (seedStatus === 'assets_review' || offersComplete) {
-    return { status: 'assets_review', offersStatus: 'approved', assetsStatus: 'pending', offerReviews: legacyReviews ?? allOffersReviewed(offerIds, 'approved', JOHN_DOE, timestamp) };
+    return { status: 'generated', offersStatus: 'approved', assetsStatus: 'pending', offerReviews: legacyReviews ?? allOffersReviewed(offerIds, 'approved', JOHN_DOE, timestamp) };
   }
   return { status: 'generated', offersStatus: 'pending', assetsStatus: 'pending', offerReviews: legacyReviews };
 }
@@ -182,7 +182,7 @@ interface SampleAlertSpec {
   vinPrefix: string;
 }
 
-/** One spec per generated alert, in board order (Generated -> Review Assets -> Fully Reviewed -> Sent -> Generated) so a freshly-seeded Evergreen project shows its full lifecycle at a glance. */
+/** One spec per generated alert, in board order (Generated -> Approved and Sent -> Sent -> Generated) so a freshly-seeded Evergreen project shows its full lifecycle at a glance. */
 const SAMPLE_ALERT_SPECS: SampleAlertSpec[] = [
   {
     category: 'MSRP',
@@ -385,7 +385,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     featuredOfferId: 'sea-offer-330i-sedan',
     otherOfferIds: othersExcept('sea-offer-330i-sedan'),
     vin: 'WBA5R7C05PFH23456',
-    status: 'assets_review',
+    status: 'generated',
     offersStatus: 'approved',
     assetsStatus: 'pending',
     offerReviews: allOffersReviewed(ALL_OFFER_IDS, 'approved', JOHN_DOE, now - 1 * DAY),
@@ -456,7 +456,7 @@ export const SEATTLE_ALERTS: Alert[] = [
     featuredOfferId: 'sea-offer-m340i-sedan',
     otherOfferIds: othersExcept('sea-offer-m340i-sedan'),
     vin: 'WBA53AR0XPFJ12398',
-    status: 'assets_review',
+    status: 'generated',
     offersStatus: 'approved',
     assetsStatus: 'pending',
     // Mixed stage-1 outcome (the featured offer itself was soft-rejected, the rest approved) — demonstrates

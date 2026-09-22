@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton } from '@mui/material';
-import { Check, ChevronLeft, ChevronRight, Sync, Close } from '@mui/icons-material';
+import { Check, ChevronLeft, ChevronRight, DeleteOutlined, Close } from '@mui/icons-material';
 import type { AlertComment, AssetCommentAnchor, Background, Offer, ReviewStatus, Template } from '../../data/types';
 import { CommentableAssetPreview, type AssetTextSelection } from './CommentableAssetPreview';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
@@ -152,15 +152,15 @@ export const AlertAssetPreviewModal = ({
                 disabled={approvalDisabled}
                 onClick={onReject}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #E17613', borderRadius: 100,
-                  padding: '8px 18px', background: '#ffffff', color: '#E17613', fontSize: 13, fontFamily: 'Roboto, sans-serif',
+                  display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #d2323f', borderRadius: 100,
+                  padding: '8px 18px', background: '#ffffff', color: '#d2323f', fontSize: 13, fontFamily: 'Roboto, sans-serif',
                   fontWeight: 500, letterSpacing: '0.46px',
                   cursor: approvalDisabled ? 'not-allowed' : 'pointer',
                   opacity: approvalDisabled ? 0.5 : 1,
                 }}
               >
-                <Sync style={{ fontSize: 16 }} />
-                Request Asset Changes
+                <DeleteOutlined style={{ fontSize: 16 }} />
+                Reject or Remove Asset
               </button>
               <button
                 disabled={approvalDisabled}
@@ -180,7 +180,7 @@ export const AlertAssetPreviewModal = ({
           ) : (
             <div style={{ marginLeft: 'auto' }}>
               <AssetStatusBadge
-                label={approvalStatus === 'approved' ? 'Approved' : 'Changes Requested'}
+                label={approvalStatus === 'approved' ? 'Approved' : 'Removed'}
                 actorName={reviewActorName ?? ''}
                 timestamp={reviewTimestamp ?? 0}
                 disabled={approvalDisabled}

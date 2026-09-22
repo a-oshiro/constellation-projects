@@ -15,7 +15,6 @@ import { applyAlertFilters, DATE_PRESETS } from '../../utils/alertFilters';
 import type { DateRangePreset } from '../../utils/alertFilters';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 import { AlertDialog } from './AlertDialog';
-import { AlertOfferReviewDialog } from './AlertOfferReviewDialog';
 import { AlertsTable } from './AlertsTable';
 import { FeedQc } from './FeedQc';
 import { ArchivedAlertsDialog } from './ArchivedAlertsDialog';
@@ -132,8 +131,7 @@ const AlertsPeriodToggle = ({ value, onChange }: { value: DateRangePreset; onCha
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
-  { key: 'assets_review', label: 'Review Assets' },
-  { key: 'approved', label: 'Fully Reviewed' },
+  { key: 'approved', label: 'Approved and Sent' },
   { key: 'sent', label: 'Sent' },
 ];
 
@@ -467,7 +465,7 @@ export const AlertsKanbanBoard = () => {
   }, [filtered, searchTerm]);
 
   const byColumn = useMemo(() => {
-    const map: Record<AlertStatus, Alert[]> = { generated: [], assets_review: [], approved: [], sent: [] };
+    const map: Record<AlertStatus, Alert[]> = { generated: [], approved: [], sent: [] };
     searched.forEach((a) => map[a.status].push(a));
     return map;
   }, [searched]);
@@ -703,11 +701,7 @@ export const AlertsKanbanBoard = () => {
         />
       )}
 
-      {openAlert && (
-        openAlert.status === 'generated'
-          ? <AlertOfferReviewDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />
-          : <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />
-      )}
+      {openAlert && <AlertDialog alert={openAlert} onClose={() => setOpenAlertId(null)} />}
     </div>
   );
 };
