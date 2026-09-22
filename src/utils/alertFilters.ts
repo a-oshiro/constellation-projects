@@ -50,7 +50,7 @@ export const MODEL_TYPE_OPTIONS = ['Core Models'];
 
 export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
   generated: 'Generated',
-  rejected: 'Changes Requested',
+  rejected: 'Rejected',
   approved: 'Approved',
   sent: 'Sent',
 };
@@ -58,10 +58,10 @@ export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
 export const APPROVAL_LABELS: Record<ApprovalFilterKey, string> = {
   approved_email: 'Email Approved',
   pending_email: 'Pending Email Review',
-  rejected_email: 'Email Changes Requested',
+  rejected_email: 'Email Rejected',
   approved_assets: 'Assets Approved',
   pending_assets: 'Pending Asset Review',
-  rejected_assets: 'Asset Changes Requested',
+  rejected_assets: 'Assets Rejected',
 };
 
 /** Render order for the Approvals field, shared by the left panel and the Filter Row. */

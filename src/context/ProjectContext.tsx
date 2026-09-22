@@ -25,12 +25,14 @@ function offerIdsFor(alert: Alert): string[] {
   return [alert.featuredOfferId, ...alert.otherOfferIds];
 }
 
-/** Rolls up per-offer asset review state into the single `assetsStatus` scalar every other reader (Kanban, table, filters) still consumes: any rejection wins, else approved once every offer is approved, else pending. */
+/** Rolls up per-offer asset review state into the single `assetsStatus` scalar every other reader (Kanban,
+ * table, filters) still consumes: pending while any offer is still unreviewed; once every offer has been
+ * decided, 'approved' as long as at least one was approved (the assets task is complete even if some were
+ * rejected), and 'rejected' only when every single offer was rejected. */
 function computeAssetsRollup(offerIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
   const resolved = offerIds.map((id) => reviews?.[id]?.status ?? 'pending');
-  if (resolved.some((s) => s === 'rejected')) return 'rejected';
-  if (resolved.length > 0 && resolved.every((s) => s === 'approved')) return 'approved';
-  return 'pending';
+  if (resolved.length === 0 || resolved.some((s) => s === 'pending')) return 'pending';
+  return resolved.some((s) => s === 'approved') ? 'approved' : 'rejected';
 }
 
 export interface PendingOfferChange {

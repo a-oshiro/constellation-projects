@@ -260,6 +260,63 @@ export interface QcFinding {
   actualLabel: string;
 }
 
+export type CreativeQcCheckStatus = 'passed' | 'warning';
+
+/** One named automated check within a Creative QC section (e.g. "Empty placeholders", "Text outside the canvas"). */
+export interface CreativeQcCheck {
+  id: string;
+  label: string;
+  status: CreativeQcCheckStatus;
+  /** Specific named issues found — present only when status === 'warning' (e.g. a named empty placeholder). */
+  issues?: string[];
+}
+
+/** One section of Creative QC ("Template Rules" or "Render Check"), a bundle of named checks plus when they last ran. */
+export interface CreativeQcSection {
+  id: 'template_rules' | 'render_check';
+  label: string;
+  checks: CreativeQcCheck[];
+  checkedAt: number;
+}
+
+/** Per-offer Creative QC result — an offer's asset can fail Template Rules and/or Render Check independently. */
+export interface CreativeQcResult {
+  offerId: string;
+  sections: CreativeQcSection[];
+}
+
+/** A point-in-time snapshot of the deal terms an offer was priced at when its asset was generated for this
+ * alert — the "baseline" Deal QC compares the live offer against. Deliberately its own small, display-only
+ * shape (not derived from `Offer`, which has no lender/dealerDiscount fields) since this is mock data only. */
+export interface DealQcBaselineOffer {
+  offerId: string;
+  monthlyPayment: number;
+  termMonths: number;
+  msrp: number;
+  dueAtSigning: number;
+  mileagePerYear: number;
+  dealerDiscount: number;
+  lender: string;
+}
+
+export type DealQcFieldKey =
+  | 'monthlyPayment' | 'termMonths' | 'msrp' | 'dueAtSigning' | 'mileagePerYear' | 'dealerDiscount' | 'lender';
+
+/** One offer's Deal QC comparison — the baseline it was priced at vs. which fields (if any) no longer match. */
+export interface DealQcOfferResult {
+  offerId: string;
+  baseline: DealQcBaselineOffer;
+  /** Empty means this offer passed. */
+  mismatchedFields: DealQcFieldKey[];
+}
+
+/** Alert-level Deal QC result, covering every offer used in the composed email. */
+export interface DealQcResult {
+  offers: DealQcOfferResult[];
+  rulesetVersion: string;
+  checkedAt: number;
+}
+
 export interface AlertActivityEntry {
   id: string;
   action: AlertActivityAction;
@@ -357,6 +414,10 @@ export interface Alert {
   generationFailure?: AlertGenerationFailure;
   /** Non-blocking QC issues found on one or more of this alert's offers — advisory only, never blocks approval. */
   qcFindings?: QcFinding[];
+  /** Creative QC results (Template Rules + Render Check), one entry per checked offer — advisory only. Absent/empty means no Creative QC data for this alert. */
+  creativeQc?: CreativeQcResult[];
+  /** Deal QC result for this alert's offers, checked against their stored baselines — advisory only. Absent means no Deal QC data for this alert. */
+  dealQc?: DealQcResult;
   /** Email addresses this alert will be sent to. Undefined until the user edits them, at which point the dialog's default suggestion list is persisted here. */
   recipients?: string[];
 }

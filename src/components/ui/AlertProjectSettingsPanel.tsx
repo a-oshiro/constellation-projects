@@ -6,6 +6,7 @@ import type { EnrollmentSettings } from '../../data/enrollmentSettings';
 import { getSavedEnrollmentSettings, saveEnrollmentSettings } from '../../data/enrollmentSettingsStore';
 import { EnrollmentSettingsPanel } from './enrollment/EnrollmentSettingsPanel';
 import { ProjectContentsPanel } from './ProjectContentsPanel';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 /**
  * Right-panel "Project Settings" for the alert dialog, opened from the canvas toolbar's Project Settings
@@ -25,9 +26,11 @@ const NAV_ITEMS: { id: PanelTab; label: string; icon: React.ElementType }[] = [
 interface AlertProjectSettingsPanelProps {
   project: Project;
   onClose: () => void;
+  width: number;
+  onResizeHandleMouseDown: (e: React.MouseEvent) => void;
 }
 
-export const AlertProjectSettingsPanel = ({ project, onClose }: AlertProjectSettingsPanelProps) => {
+export const AlertProjectSettingsPanel = ({ project, onClose, width, onResizeHandleMouseDown }: AlertProjectSettingsPanelProps) => {
   const [tab, setTab] = useState<PanelTab>('enrollment');
   const [saved, setSaved] = useState<EnrollmentSettings>(() => getSavedEnrollmentSettings(project.id));
   const [draft, setDraft] = useState<EnrollmentSettings>(saved);
@@ -42,7 +45,8 @@ export const AlertProjectSettingsPanel = ({ project, onClose }: AlertProjectSett
   const handleEditInProject = (path: string) => window.open(path, '_blank', 'noopener,noreferrer');
 
   return (
-    <div style={{ width: '50%', flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', overflow: 'hidden' }}>
+      <PanelResizeHandle onMouseDown={onResizeHandleMouseDown} />
       {/* ── Vertical tab rail ────────────────────────────────────────── */}
       <nav style={{ width: 88, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: 4, padding: '16px 8px' }}>
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {

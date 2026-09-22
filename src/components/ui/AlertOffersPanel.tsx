@@ -6,7 +6,7 @@ import { getOfferTypeDisplayFields } from './OfferCard';
 import { OfferIdentityCard } from './OfferIdentityCard';
 import { OutOfStockBadge } from './OutOfStockBadge';
 import { Tooltip } from './Tooltip';
-import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
+import { PanelResizeHandle } from './PanelResizeHandle';
 import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
 
 /** Tooltips nested inside this dialog's right panel need a z-index above the dialog's own panel (100001)
@@ -42,6 +42,8 @@ interface AlertOffersPanelProps {
   onClose: () => void;
   /** Set from the canvas's per-asset "Offer Info" button — switches to the Selected tab and scrolls/flashes that offer's card. */
   highlightRequest?: OfferHighlightRequest | null;
+  width: number;
+  onResizeHandleMouseDown: (e: React.MouseEvent) => void;
 }
 
 const panelHeaderStyle: React.CSSProperties = {
@@ -140,11 +142,10 @@ const modelHeaderStyle: React.CSSProperties = {
 const isEnrolledOffer = (o: Offer) => o.id.startsWith('sea-offer-');
 const modelKey = (o: Offer) => `${o.model} · ${o.year}`;
 
-export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, onClose, highlightRequest }: AlertOffersPanelProps) => {
+export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, onClose, highlightRequest, width, onResizeHandleMouseDown }: AlertOffersPanelProps) => {
   const [tab, setTab] = useState<'selected' | 'models'>('selected');
   const [expandedModelKeys, setExpandedModelKeys] = useState<Set<string>>(new Set());
   const [flashOfferId, setFlashOfferId] = useState<string | null>(null);
-  const panelWidth = useResponsivePanelWidth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const offerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const registerOfferRef = (id: string, el: HTMLDivElement | null) => {
@@ -182,7 +183,8 @@ export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, o
   const offersForModel = (key: string) => offers.filter((o) => modelKey(o) === key);
 
   return (
-    <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <PanelResizeHandle onMouseDown={onResizeHandleMouseDown} />
       <div style={panelHeaderStyle}>
         <span style={{ flex: 1, fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Alert Offers</span>
         <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>

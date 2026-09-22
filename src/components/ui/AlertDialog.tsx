@@ -2,28 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { IconButton, Menu, Switch } from '@mui/material';
 import {
-  Close, HistoryOutlined, MoreVert, PictureAsPdfOutlined, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
-  MailOutlined, DirectionsCarOutlined,
+  Close, HistoryOutlined, MoreVert, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
+  MailOutlined, DirectionsCarOutlined, ChevronRight,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertComment, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, OfferReviewEntry, ReviewStatus } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import { backgroundForOffer } from '../../utils/overviewAssets';
-import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
-import { HighlightableParagraph, FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
-import { CommentableAssetPreview } from './CommentableAssetPreview';
-import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
+import { useResizableWidth } from '../../hooks/useResizableWidth';
+import { FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
+import type { ColumnEntry } from './FloatingCommentColumn';
 import { AlertOfferEditPanel } from './AlertOfferEditPanel';
-import { AlertAssetPreviewModal } from './AlertAssetPreviewModal';
-import { EmailApprovalWidget, AssetApprovalWidget, AssetStatusBadge } from './AlertApprovalWidgets';
+import { AlertAssetDetailsDialog } from './AlertAssetDetailsDialog';
+import { AlertAssetFocusView, qcTagAnchorId } from './AlertAssetFocusView';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
-import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
-import { AlertRecipientsPanel } from './AlertRecipientsPanel';
+import { AlertEmailPreviewPanel } from './AlertEmailPreviewPanel';
+import { AssetsFooterWidget, EmailFooterWidget } from './AlertFooterWidgets';
+import { AlertQcPanel } from './AlertQcPanel';
 import { AlertOffersPanel, type OfferHighlightRequest } from './AlertOffersPanel';
 import { AlertProjectSettingsPanel } from './AlertProjectSettingsPanel';
 import { ProjectOverviewIcon } from './ProjectOverviewIcon';
-import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
   generated: 'Generated',
@@ -38,12 +37,6 @@ const ACTION_LABEL: Record<AlertActivityEntry['action'], string> = {
 };
 
 const DISABLED_TOOLTIP_REASON = 'Alert generation failed. Regenerate Alert to proceed with review.';
-
-/** Most recent activity entry for a given review track — powers both the footer badge and the Undo action. */
-function lastActivityFor(alert: Alert, track: 'email' | 'assets'): AlertActivityEntry | undefined {
-  const actions = track === 'email' ? ['email_approved', 'email_rejected'] : ['assets_approved', 'assets_rejected'];
-  return [...alert.activity].reverse().find((e) => actions.includes(e.action));
-}
 
 const footerButtonBase: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer',
@@ -68,7 +61,15 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     offers, currentProject, locked, setEmailReview, setOfferAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
-  const [rightPanel, setRightPanel] = useState<'history' | 'recipients' | 'offers' | 'projectSettings' | null>(null);
+
+  const findOffer = (id: string) => offers.find((o) => o.id === id);
+  const featuredOffer = findOffer(alert.featuredOfferId);
+  const otherOffers = alert.otherOfferIds.map(findOffer).filter((o): o is Offer => Boolean(o));
+  const allAlertOffers = featuredOffer ? [featuredOffer, ...otherOffers] : otherOffers;
+
+  // The email preview opens by default — it's the first thing the user should see, since sending the
+  // email is the whole point of reviewing the alert.
+  const [rightPanel, setRightPanel] = useState<'history' | 'emailPreview' | 'offers' | 'qc' | 'projectSettings' | null>('emailPreview');
   const [showComments, setShowComments] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
@@ -76,15 +77,34 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   /** Which editor the Offer Edit panel opens into — set alongside `editingOfferId` by whichever "Offer Card" row was clicked. */
   const [editingOfferView, setEditingOfferView] = useState<'vehicle' | 'offer'>('offer');
   const panelWidth = useResponsivePanelWidth();
-  const [previewOfferId, setPreviewOfferId] = useState<string | null>(null);
+  // Resizable right panels: each keeps the same default width as before, but the user can drag its left
+  // edge to resize it (persists while the dialog stays open, even if the panel is toggled closed and back).
+  const [projectSettingsDefaultWidth, setProjectSettingsDefaultWidth] = useState(() => Math.round((window.innerWidth - 32) * 0.5));
+  useEffect(() => {
+    const onResize = () => setProjectSettingsDefaultWidth(Math.round((window.innerWidth - 32) * 0.5));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  // Email/Offers/QC share one width so switching between them never jumps the layout — default 480px,
+  // independent of which of the three is actually open. Project Settings keeps its own (wider) default.
+  const sharedRightPanel = useResizableWidth(480, 400, 900);
+  const projectSettingsPanel = useResizableWidth(projectSettingsDefaultWidth, 280, 900);
+  /** Which offer's asset is expanded into the Asset Details dialog — the alert dialog stays mounted
+   * underneath, so closing it (setDetailsOfferId(null)) needs no extra state to "return" to. */
+  const [detailsOfferId, setDetailsOfferId] = useState<string | null>(null);
+  /** Which offer's asset is shown at full size in the main asset-focus view. */
+  const [focusedOfferId, setFocusedOfferId] = useState<string | null>(() => allAlertOffers[0]?.id ?? null);
   /** Set by an asset's "Offer Info" button — opens the Alert Offers panel on the Selected tab and
    * scrolls/flashes that offer's card there. `token` is a nonce so re-clicking the same asset's button
    * retriggers the scroll/flash even when `offerId` is unchanged. */
   const [highlightRequest, setHighlightRequest] = useState<OfferHighlightRequest | null>(null);
-  const [activeQcFindingId, setActiveQcFindingId] = useState<string | null>(null);
+  /** Which QC side-card is open next to the focused asset — one of `legacy:{findingId}`, `creative:{offerId}`, or `deal:{offerId}`. One open at a time; click-outside closes it. */
+  const [activeSideCardKey, setActiveSideCardKey] = useState<string | null>(null);
+  /** When on, the carousel (and the offer this dialog can focus) is limited to offers still awaiting review. */
+  const [pendingOnlyFilter, setPendingOnlyFilter] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
-  const qcCardRef = useRef<HTMLDivElement>(null);
+  const sideCardRef = useRef<HTMLDivElement>(null);
 
   // Margin commenting: a highlight/pin the user just created but hasn't sent a comment for yet, and the id
   // of a comment whose highlight/pin was just clicked (or vice versa) for a brief jump/emphasis.
@@ -92,8 +112,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
   const [floatingSelection, setFloatingSelection] = useState<FloatingSelection | null>(null);
   const emailBodyRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const anchorRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerCommentRef = (id: string, el: HTMLDivElement | null) => {
@@ -106,13 +124,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (previewOfferId) { setPreviewOfferId(null); return; }
+      if (detailsOfferId) { setDetailsOfferId(null); return; }
       if (editingOfferId) { setEditingOfferId(null); return; }
       onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, previewOfferId, editingOfferId]);
+  }, [onClose, detailsOfferId, editingOfferId]);
 
   // Bidirectional jump/emphasis: scroll both the comment card and its highlight/pin into view, then clear
   // the emphasis after a beat — no new dependency, just scrollIntoView + a timed state reset.
@@ -145,26 +163,25 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       clearTimeout(autoHideTimer);
     };
   }, [canShowCursorHint]);
-  const dismissCursorHint = () => {
-    hintDismissedRef.current = true;
-    setCursorHint(null);
-  };
 
-  const findOffer = (id: string) => offers.find((o) => o.id === id);
-  const featuredOffer = findOffer(alert.featuredOfferId);
-  const otherOffers = alert.otherOfferIds.map(findOffer).filter((o): o is Offer => Boolean(o));
-
-  // Generation-failed state: a hard failure blocks the normal email preview entirely and disables every
-  // approve/request-changes control. QC findings are a separate, non-blocking overlay on the normal view.
+  // Generation-failed state: a hard failure blocks the normal asset/email views entirely and disables
+  // every approve/reject control. QC findings are a separate, non-blocking overlay on the normal view.
   const failure = alert.generationFailure;
   const qcFindings = alert.qcFindings ?? [];
   const qcFindingsForOffer = (offerId: string) => qcFindings.filter((f) => f.offerId === offerId);
-  const activeQcFinding = activeQcFindingId ? qcFindings.find((f) => f.id === activeQcFindingId) : undefined;
-  const qcCardAnchorId = (findingId: string) => `qc-tag-${findingId}`;
+  const creativeQcResults = alert.creativeQc ?? [];
+  const creativeQcForOffer = (offerId: string) => creativeQcResults.find((r) => r.offerId === offerId);
+  const dealQc = alert.dealQc;
+  const dealQcForOffer = (offerId: string) => dealQc?.offers.find((o) => o.offerId === offerId);
+  const hasQcIssues =
+    qcFindings.length > 0 ||
+    creativeQcResults.some((r) => r.sections.some((s) => s.checks.some((c) => c.status === 'warning'))) ||
+    !!dealQc?.offers.some((o) => o.mismatchedFields.length > 0);
 
-  // Banner takes priority over the Recipients/comments controls' usual top-left/top-right slot — when
-  // visible, those get pushed down below it instead of overlapping.
-  const bannerVisible = !bannerDismissed && (!!failure || qcFindings.length > 0);
+  // Banner takes priority over the icon cluster's usual top-right slot — when visible, that cluster gets
+  // pushed down below it instead of overlapping. Only the hard-failure banner remains here; non-blocking QC
+  // issues are surfaced by the QC panel opening by default instead of a banner.
+  const bannerVisible = !bannerDismissed && !!failure;
   const overlayTopOffset = bannerVisible ? 64 : 16;
 
   // Recipients: persisted once the user edits them; otherwise a plausible default drawn from the account name.
@@ -178,25 +195,24 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const historyEntries = [...alert.activity].reverse();
 
-  const emailActivity = lastActivityFor(alert, 'email');
   const isSent = alert.status === 'sent';
   const isArchived = !!alert.archivedAt;
 
   const handleSend = () => { sendAlert(alert.id); onClose(); };
-  // The right panel is mutually exclusive: opening History/Recipients/Offers/Project Settings cancels an
+  // The right panel is mutually exclusive: opening History/Email/Offers/QC/Project Settings cancels an
   // in-progress offer edit, and (via onEditOffer below) starting an offer edit closes whichever of these
   // was open.
-  const openRightPanel = (panel: 'history' | 'recipients' | 'offers' | 'projectSettings') => {
+  const openRightPanel = (panel: 'history' | 'emailPreview' | 'offers' | 'qc' | 'projectSettings') => {
     setEditingOfferId(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
+  const focusAsset = (offerId: string) => setFocusedOfferId(offerId);
   const editOffer = (offerId: string, view: 'vehicle' | 'offer') => {
     setEditingOfferId(offerId);
     setEditingOfferView(view);
     setRightPanel(null);
-    // Scroll the email preview so the offer being edited is visible — lets the user watch their edits
-    // land on the asset while they make them.
-    handleSelectAsset(offerId);
+    // Focus the offer being edited so the user can see its asset while they make changes.
+    focusAsset(offerId);
   };
   // Opens the Alert Offers panel (always, never toggling it closed) on the offer's card, per the canvas
   // asset's "Offer Info" button. `token` just needs to change on every call (even for the same offerId) so
@@ -211,12 +227,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
   const allComments = alert.comments ?? [];
   // A resolved comment's highlight/pin is hidden from the email/asset unless "Show Resolved" is on — the
-  // comment *card* itself still respects this independently inside FloatingCommentColumn.
+  // comment *card* itself still respects this independently in FloatingCommentColumn.
   const highlightableComments = allComments.filter((c) => showResolved || !c.resolved);
 
-  /** Every comment anchored to one offer's asset (plus their replies), regardless of resolved state — used by the preview modal, which always shows its full history. */
-  const commentsForOffer = (offerId: string): AlertComment[] => {
-    const anchored = allComments.filter((c): c is AlertComment & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId);
+  /** Every comment anchored to one offer's asset (plus their replies), regardless of resolved state — used by the Asset Details dialog, which always shows its full history. */
+  const commentsForOffer = (offerId: string) => {
+    const anchored = allComments.filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId);
     const anchoredIds = new Set(anchored.map((c) => c.id));
     const replies = allComments.filter((c) => c.parentCommentId && anchoredIds.has(c.parentCommentId));
     return [...anchored, ...replies];
@@ -225,11 +241,22 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   /** Same, but respecting the resolved-highlight visibility rule — used for the inline pin/highlight overlay. */
   const pinsForOffer = (offerId: string) =>
     highlightableComments
-      .filter((c): c is AlertComment & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
+      .filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
       .map((c) => ({ anchor: c.anchor, commentId: c.id }));
 
+  /** Top-level comment thread anchored to one offer's asset, for the floating comment column next to the focused asset. */
+  const assetColumnEntriesFor = (offerId: string): ColumnEntry[] =>
+    allComments
+      .filter((c) => !c.parentCommentId && c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
+      .map((c) => ({ id: c.id, comment: c, replies: allComments.filter((r) => r.parentCommentId === c.id) }));
+
+  /** Top-level comment thread anchored to the email body text, for the floating comment column in the Email Preview panel. */
+  const emailColumnEntries: ColumnEntry[] = allComments
+    .filter((c) => !c.parentCommentId && c.anchor?.kind === 'email')
+    .map((c) => ({ id: c.id, comment: c, replies: allComments.filter((r) => r.parentCommentId === c.id) }));
+
   const emailAnchors = highlightableComments
-    .filter((c): c is AlertComment & { anchor: EmailCommentAnchor } => c.anchor?.kind === 'email')
+    .filter((c): c is typeof allComments[number] & { anchor: EmailCommentAnchor } => c.anchor?.kind === 'email')
     .map((c) => ({ anchor: c.anchor, commentId: c.id }));
   // A highlight the user just made but hasn't sent a comment for yet — shown immediately, non-interactive,
   // and removed the moment it's cancelled or sent.
@@ -291,155 +318,107 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setShowComments(true);
   };
 
-  const assetStatusAnchorId = (offerId: string) => `asset-status-${offerId}`;
-
-  // Clicking anywhere in the dialog other than the open QC finding card or the tag that opened it closes
-  // it — the gray background, a different asset, or the email body text all count as "outside".
+  // Clicking anywhere in the dialog other than the open QC side-card or the tag that opened it closes it —
+  // the gray background, a different asset, or the email body text all count as "outside".
   const handleDialogClick = (e: React.MouseEvent) => {
     const target = e.target as Node;
 
-    if (activeQcFindingId) {
-      const insideCard = qcCardRef.current?.contains(target);
-      const insideTag = anchorRefs.current.get(qcCardAnchorId(activeQcFindingId))?.contains(target);
-      if (!insideCard && !insideTag) setActiveQcFindingId(null);
+    if (activeSideCardKey) {
+      const insideCard = sideCardRef.current?.contains(target);
+      const insideTag = anchorRefs.current.get(qcTagAnchorId(activeSideCardKey))?.contains(target);
+      if (!insideCard && !insideTag) setActiveSideCardKey(null);
     }
   };
 
-  const renderInlineAsset = (offer: Offer) => {
-    const bg = bgFor(offer);
-    if (!template || !bg) return null;
-    const pins = pinsForOffer(offer.id);
-    const pendingForThis = pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === offer.id ? pendingAnchor : undefined;
-    const reviewEntry = alert.offerReviews?.[offer.id];
-    const approvalStatus = reviewEntry?.status ?? 'pending';
-    const findingsForThisOffer = qcFindingsForOffer(offer.id);
-
-    return (
-      <div
-        key={offer.id}
-        ref={(el) => registerAnchorRef(assetStatusAnchorId(offer.id), el)}
-        style={{ position: 'relative', marginBottom: 20 }}
-      >
-        <div style={{ position: 'relative', width: '100%', aspectRatio: `${template.width} / ${template.height}` }}>
-          <CommentableAssetPreview
-            offer={offer}
-            template={template}
-            backgroundUrl={bg.url}
-            pins={pins}
-            pendingAnchor={pendingForThis}
-            activeAnchorId={activeAnchorId}
-            onPinClick={handleAnchorClick}
-            registerAnchorRef={registerAnchorRef}
-            onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
-            onTextSelected={setFloatingSelection}
-            onRequestPreview={() => setPreviewOfferId(offer.id)}
-            onShowOfferCard={() => { setActiveQcFindingId(null); showOfferInOffersPanel(offer.id); }}
-            approvalStatus={approvalStatus}
-            approvalDisabled={isArchived}
-            onApprove={() => setOfferAssetReview(alert.id, offer.id, 'approved')}
-            onReject={() => setOfferAssetReview(alert.id, offer.id, 'rejected')}
-          />
-          {reviewEntry && (
-            <AssetStatusBadge
-              label={reviewEntry.status === 'approved' ? 'Approved' : 'Changes Requested'}
-              actorName={reviewEntry.actorName}
-              timestamp={reviewEntry.timestamp}
-              disabled={isArchived}
-              onUndo={() => setOfferAssetReview(alert.id, offer.id, 'pending')}
-            />
-          )}
-          {findingsForThisOffer.length > 0 && (
-            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-              {findingsForThisOffer.map((finding) => {
-                const FindingIcon = QC_FINDING_ICON[finding.type];
-                const isActive = activeQcFindingId === finding.id;
-                return (
-                  <button
-                    key={finding.id}
-                    ref={(el) => registerAnchorRef(qcCardAnchorId(finding.id), el)}
-                    onClick={(e) => { e.stopPropagation(); setActiveOfferCardOfferId(null); setActiveQcFindingId((id) => (id === finding.id ? null : finding.id)); }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none',
-                      background: '#FDF4EC', borderRadius: 8, padding: '3px 8px 3px 6px',
-                      outline: isActive ? '2px solid #c45500' : 'none',
-                    }}
-                  >
-                    <FindingIcon style={{ fontSize: 14, color: '#c45500', flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#c45500', letterSpacing: '0.4px', whiteSpace: 'nowrap', opacity: 0.75 }}>
-                      {QC_FINDING_LABEL[finding.type]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        {activeQcFinding && activeQcFinding.offerId === offer.id && (
-          <div ref={qcCardRef}>
-            <AlertQcFindingCard finding={activeQcFinding} />
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const editingOffer = editingOfferId ? offers.find((o) => o.id === editingOfferId) : undefined;
-  const previewOffer = previewOfferId ? offers.find((o) => o.id === previewOfferId) : undefined;
-  const previewBg = previewOffer ? bgFor(previewOffer) : undefined;
+  const detailsOffer = detailsOfferId ? offers.find((o) => o.id === detailsOfferId) : undefined;
+  const detailsBg = detailsOffer ? bgFor(detailsOffer) : undefined;
+  const focusedOffer = focusedOfferId ? offers.find((o) => o.id === focusedOfferId) : undefined;
+  const focusedBg = focusedOffer ? bgFor(focusedOffer) : undefined;
 
-  const allAlertOffers = featuredOffer ? [featuredOffer, ...otherOffers] : otherOffers;
   const offerReviewFor = (offerId: string) => alert.offerReviews?.[offerId];
+  const isOfferApproved = (offerId: string) => offerReviewFor(offerId)?.status === 'approved';
 
-  const columnEntries: ColumnEntry[] = allComments
-    .filter((c) => !c.parentCommentId)
-    .map((c) => ({
-      id: c.id,
-      comment: c,
-      replies: allComments.filter((r) => r.parentCommentId === c.id),
-    }));
-
-  const assetEntries: { offerId: string; status: ReviewStatus }[] = allAlertOffers.map((o) => ({ offerId: o.id, status: offerReviewFor(o.id)?.status ?? 'pending' }));
-  const approvedOfferEntries = allAlertOffers
-    .map((o) => offerReviewFor(o.id))
-    .filter((e): e is OfferReviewEntry => !!e && e.status === 'approved');
-  const rejectedOfferEntries = allAlertOffers
-    .map((o) => offerReviewFor(o.id))
-    .filter((e): e is OfferReviewEntry => !!e && e.status === 'rejected');
-  const approverNames = [...new Set(approvedOfferEntries.map((e) => e.actorName))];
-  const lastApprovedTimestamp = approvedOfferEntries.length
-    ? Math.max(...approvedOfferEntries.map((e) => e.timestamp))
-    : undefined;
-  const lastRejectedEntry = rejectedOfferEntries.length
-    ? rejectedOfferEntries.reduce((latest, e) => (e.timestamp > latest.timestamp ? e : latest))
-    : undefined;
-
-  const handleUndoAllAssetReviews = () => {
-    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
+  // The pending-only filter narrows the carousel to offers still awaiting review — toggling it on while
+  // focused on an already-reviewed asset jumps focus to the first still-pending one, if any.
+  const pendingAlertOffers = allAlertOffers.filter((o) => (offerReviewFor(o.id)?.status ?? 'pending') === 'pending');
+  const carouselOffers = pendingOnlyFilter ? pendingAlertOffers : allAlertOffers;
+  const handleTogglePendingOnlyFilter = () => {
+    setPendingOnlyFilter((v) => {
+      const next = !v;
+      if (next && focusedOfferId && !pendingAlertOffers.some((o) => o.id === focusedOfferId) && pendingAlertOffers[0]) {
+        setFocusedOfferId(pendingAlertOffers[0].id);
+      }
+      return next;
+    });
   };
-  // Only approves assets that haven't been reviewed at all — an asset already in Changes Requested is left
-  // alone, since that decision has to be resolved individually (Approve Changes / Undo on its own card).
+  // Steps focus to the previous/next offer within whatever's currently in the carousel (respecting the
+  // pending-only filter), wrapping at either end — shared by the flanking arrow buttons and the arrow-key
+  // shortcut below.
+  const stepFocusedOffer = (direction: 1 | -1) => {
+    if (carouselOffers.length < 2 || !focusedOfferId) return;
+    const idx = carouselOffers.findIndex((o) => o.id === focusedOfferId);
+    if (idx === -1) return;
+    const nextIdx = (idx + direction + carouselOffers.length) % carouselOffers.length;
+    setFocusedOfferId(carouselOffers[nextIdx].id);
+  };
+
+  // Approving/rejecting the focused asset auto-advances to the next one in the carousel, so the user can
+  // keep reviewing without clicking back into the carousel each time.
+  const reviewFocusedOfferAndAdvance = (offerId: string, reviewStatus: 'approved' | 'rejected') => {
+    setOfferAssetReview(alert.id, offerId, reviewStatus);
+    if (carouselOffers.length < 2) return;
+    const idx = carouselOffers.findIndex((o) => o.id === offerId);
+    if (idx === -1) return;
+    const nextIdx = (idx + 1) % carouselOffers.length;
+    setFocusedOfferId(carouselOffers[nextIdx].id);
+  };
+
+  // Left/right arrow keys step through the carousel too — ignored while the user is typing anywhere
+  // (comment composer, recipient field, enrollment settings, etc.) so it never hijacks normal text editing.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      stepFocusedOffer(e.key === 'ArrowLeft' ? -1 : 1);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carouselOffers, focusedOfferId]);
+
+  // Footer progress readout ("6 of 7 approved") and the assets progress ring's green/red split.
+  const assetsTotalCount = allAlertOffers.length;
+  const assetsApprovedCount = allAlertOffers.filter((o) => offerReviewFor(o.id)?.status === 'approved').length;
+  const assetsRejectedCount = allAlertOffers.filter((o) => offerReviewFor(o.id)?.status === 'rejected').length;
+  // Both tracks approved — the footer swaps its message and reveals the Send action.
+  const readyToSend = alert.status === 'approved';
+
+  // Only approves assets that haven't been reviewed at all — a rejected asset is left alone, since that
+  // decision has to be resolved individually (Approve / Undo on its own card).
   const handleApproveRemainingAssets = () => {
     allAlertOffers.forEach((o) => {
       if (!offerReviewFor(o.id)) setOfferAssetReview(alert.id, o.id, 'approved');
     });
   };
-  const handleSelectAsset = (offerId: string) => {
-    const container = scrollContainerRef.current;
-    const target = anchorRefs.current.get(assetStatusAnchorId(offerId));
-    if (container && target) scrollElementIntoViewCentered(container, target);
+  // Resets every offer's review back to pending — the footer's "Undo reviews" action once assets are done.
+  const handleUndoAllAssetReviews = () => {
+    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
   };
 
-  // Carousel within the enlarged asset preview — steps through allAlertOffers in order, wrapping at the ends.
-  const previewIndex = previewOffer ? allAlertOffers.findIndex((o) => o.id === previewOffer.id) : -1;
-  const handlePreviewPrev = () => {
-    if (allAlertOffers.length === 0 || previewIndex === -1) return;
-    const nextIndex = (previewIndex - 1 + allAlertOffers.length) % allAlertOffers.length;
-    setPreviewOfferId(allAlertOffers[nextIndex].id);
+  // Carousel within the Asset Details dialog — steps through allAlertOffers in order, wrapping at the ends.
+  const detailsIndex = detailsOffer ? allAlertOffers.findIndex((o) => o.id === detailsOffer.id) : -1;
+  const handleDetailsPrev = () => {
+    if (allAlertOffers.length === 0 || detailsIndex === -1) return;
+    const nextIndex = (detailsIndex - 1 + allAlertOffers.length) % allAlertOffers.length;
+    setDetailsOfferId(allAlertOffers[nextIndex].id);
   };
-  const handlePreviewNext = () => {
-    if (allAlertOffers.length === 0 || previewIndex === -1) return;
-    const nextIndex = (previewIndex + 1) % allAlertOffers.length;
-    setPreviewOfferId(allAlertOffers[nextIndex].id);
+  const handleDetailsNext = () => {
+    if (allAlertOffers.length === 0 || detailsIndex === -1) return;
+    const nextIndex = (detailsIndex + 1) % allAlertOffers.length;
+    setDetailsOfferId(allAlertOffers[nextIndex].id);
   };
 
   const handleReply = (parentCommentId: string, text: string, mentionedNames: string[]) => {
@@ -448,6 +427,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setShowComments(true);
   };
   const handleToggleReaction = (commentId: string, emoji: string) => toggleAlertCommentReaction(alert.id, commentId, emoji);
+
+  const focusedDealQcResult = focusedOffer ? dealQcForOffer(focusedOffer.id) : undefined;
 
   return ReactDOM.createPortal(
     <>
@@ -484,44 +465,34 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-            {/* Main content: email + inline assets, with floating offer cards and a floating comment column.
-                position:relative here (not on the scrollable div below) so the approval widgets — placed as a
-                sibling of the scrollable div, not a descendant of it — stay pinned in the corner instead of
-                scrolling with the canvas's content. */}
+            {/* Main content: the focused asset + carousel, with floating QC/offer cards and a floating
+                comment column. position:relative here (not on the scrollable div below) so the approval
+                widgets — placed as a sibling of the scrollable div, not a descendant of it — stay pinned in
+                the corner instead of scrolling with the canvas's content. */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
 
-              {/* Generic error/warning banner — pinned inside the gray preview area, 16px from the top/left/
-                  right edges. Red for a hard generation failure (with a Regenerate Alert action), amber for
-                  non-blocking QC findings (advisory only, no action). Dismissible; resets each time the dialog
-                  is (re)opened since bannerDismissed lives in local state. */}
+              {/* Hard-failure banner only — pinned inside the gray preview area, 16px from the top/left/right
+                  edges. Non-blocking QC issues no longer get a banner here; the QC panel opens by default
+                  instead. Dismissible; resets each time the dialog is (re)opened since bannerDismissed lives
+                  in local state. */}
               {bannerVisible && (
                 <div
                   style={{
                     position: 'absolute', top: 16, left: 16, right: 16, zIndex: 7,
                     display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 16px', borderRadius: 4,
-                    background: failure ? '#FDEDED' : '#FFF4E5', color: failure ? '#5f2120' : '#663C00',
+                    background: '#FDEDED', color: '#5f2120',
                   }}
                 >
-                  {failure
-                    ? <ErrorOutlined style={{ fontSize: 22, flexShrink: 0 }} />
-                    : <WarningAmberOutlined style={{ fontSize: 22, flexShrink: 0 }} />}
+                  <ErrorOutlined style={{ fontSize: 22, flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px', lineHeight: 1.43 }}>
-                    {failure ? (
-                      <>
-                        Failed alert generation. Please attempt to{' '}
-                        <button
-                          onClick={() => regenerateAlert(alert.id)}
-                          style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit', fontWeight: 700, textDecoration: 'underline' }}
-                        >
-                          Regenerate Alert
-                        </button>
-                        . If the error persists, contact the Product team.
-                      </>
-                    ) : (
-                      <>
-                        This Alert contains <b>{qcFindings.length} QC Finding{qcFindings.length === 1 ? '' : 's'}.</b> These are <b>advisory only</b> – you may still approve and send this Alert forward.
-                      </>
-                    )}
+                    Failed alert generation. Please attempt to{' '}
+                    <button
+                      onClick={() => regenerateAlert(alert.id)}
+                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit', fontWeight: 700, textDecoration: 'underline' }}
+                    >
+                      Regenerate Alert
+                    </button>
+                    . If the error persists, contact the Product team.
                   </span>
                   <IconButton size="small" onClick={() => setBannerDismissed(true)} sx={{ padding: '4px', flexShrink: 0 }}>
                     <Close style={{ fontSize: 16, color: 'inherit' }} />
@@ -530,123 +501,71 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               )}
 
               <div
-                ref={scrollContainerRef}
                 style={{
                   flex: 1, overflow: 'auto', background: '#F4F5F6', padding: '24px 16px', position: 'relative',
                   ...(failure ? { display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}),
                 }}
               >
-                <div ref={contentRef} style={{ position: 'relative', width: 520, margin: '0 auto' }}>
-                  {failure ? (
-                    <AlertGenerationFailedState failure={failure} onRegenerate={() => regenerateAlert(alert.id)} />
-                  ) : (
-                  <>
-                  <div
-                    ref={emailBodyRef}
-                    onMouseUp={handleEmailMouseUp}
-                    onClickCapture={dismissCursorHint}
-                    style={{ background: '#ffffff', borderRadius: 8, padding: '20px 20px 32px', width: 520, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', height: 'fit-content' }}
-                  >
-                    <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', letterSpacing: '0.4px' }}>
-                      {alert.preheader}
-                    </p>
-                    <h1 style={{ margin: '6px 0 12px', fontSize: 18, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.3 }}>
-                      {alert.subject}
-                    </h1>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#473bab', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-                        CI
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Constellation Insights</p>
-                        <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>by {currentProject.accountName}</p>
-                      </div>
-                    </div>
-
-                    {alert.bodyParagraphs.map((p, i) => (
-                      <HighlightableParagraph
-                        key={i}
-                        text={p}
-                        paragraphIndex={i}
-                        anchors={anchorsForParagraph(i)}
-                        activeAnchorId={activeAnchorId}
-                        onHighlightClick={handleAnchorClick}
-                        registerAnchorRef={registerAnchorRef}
-                        style={{ margin: '0 0 12px', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.5 }}
-                      />
-                    ))}
-                    <HighlightableParagraph
-                      text={alert.vin}
-                      paragraphIndex={alert.bodyParagraphs.length}
-                      anchors={anchorsForParagraph(alert.bodyParagraphs.length)}
-                      activeAnchorId={activeAnchorId}
-                      onHighlightClick={handleAnchorClick}
-                      registerAnchorRef={registerAnchorRef}
-                      style={{ margin: '0 0 20px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1f1d25', letterSpacing: '0.17px' }}
-                    />
-
-                    {featuredOffer && template && hasBackgrounds && (
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-                          The recommended monthly payment for this YMMT to dominate this market is:
-                        </p>
-                        {renderInlineAsset(featuredOffer)}
-                      </div>
-                    )}
-
-                    <button style={{ width: '100%', border: 'none', borderRadius: 8, background: '#473bab', color: '#ffffff', padding: '10px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 600, letterSpacing: '0.46px', cursor: 'pointer', marginBottom: 20 }}>
-                      SEND TO MY PAID MEDIA TEAM
-                    </button>
-
-                    {otherOffers.length > 0 && template && hasBackgrounds && (
-                      <>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-                          These are the other YMMTs that you selected on your enrollment form that you are currently running on paid media:
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {otherOffers.map(renderInlineAsset)}
-                        </div>
-                      </>
-                    )}
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8 }}>
-                      <PictureAsPdfOutlined style={{ fontSize: 20, color: '#be0e1c', flexShrink: 0 }} />
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {currentProject.accountName.replace(/\s+/g, '-')}-Competitive-Intelligence-Report.pdf
-                        </p>
-                        <p style={{ margin: 0, fontSize: 10, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>PDF · Competitive Intelligence Report</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <FloatingCommentColumn
-                    entries={showComments ? columnEntries : []}
-                    anchorRefs={anchorRefs}
-                    containerRef={contentRef}
-                    left={520 + 24}
+                {failure ? (
+                  <AlertGenerationFailedState failure={failure} onRegenerate={() => regenerateAlert(alert.id)} />
+                ) : focusedOffer && template && focusedBg ? (
+                  <AlertAssetFocusView
+                    offer={focusedOffer}
+                    template={template}
+                    backgroundUrl={focusedBg.url}
+                    title={focusedOffer.vehicleName}
+                    dimensions={`${template.width} x ${template.height}`}
+                    pins={pinsForOffer(focusedOffer.id)}
+                    pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === focusedOffer.id ? pendingAnchor : undefined}
                     activeAnchorId={activeAnchorId}
+                    onPinClick={handleAnchorClick}
+                    registerAnchorRef={registerAnchorRef}
+                    anchorRefsMap={anchorRefs}
+                    onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
+                    onTextSelected={setFloatingSelection}
+                    approvalStatus={offerReviewFor(focusedOffer.id)?.status ?? 'pending'}
+                    approvalDisabled={isArchived}
+                    onApprove={() => reviewFocusedOfferAndAdvance(focusedOffer.id, 'approved')}
+                    onReject={() => reviewFocusedOfferAndAdvance(focusedOffer.id, 'rejected')}
+                    onUndo={() => setOfferAssetReview(alert.id, focusedOffer.id, 'pending')}
+                    onRequestPreview={() => setDetailsOfferId(focusedOffer.id)}
+                    onShowOfferCard={() => { setActiveSideCardKey(null); showOfferInOffersPanel(focusedOffer.id); }}
+                    legacyFindings={qcFindingsForOffer(focusedOffer.id)}
+                    creativeQc={creativeQcForOffer(focusedOffer.id)}
+                    dealQc={focusedDealQcResult && dealQc ? { result: focusedDealQcResult, checkedAt: dealQc.checkedAt, rulesetVersion: dealQc.rulesetVersion } : undefined}
+                    activeSideCardKey={activeSideCardKey}
+                    onToggleSideCard={(key) => setActiveSideCardKey((k) => (k === key ? null : key))}
+                    sideCardRef={sideCardRef}
+                    carouselOffers={carouselOffers}
+                    hasMultipleOffers={allAlertOffers.length > 1}
+                    bgFor={bgFor}
+                    onSelectOffer={focusAsset}
+                    reviewFor={(offerId) => offerReviewFor(offerId)?.status ?? 'pending'}
+                    pendingOnlyFilter={pendingOnlyFilter}
+                    onTogglePendingOnlyFilter={handleTogglePendingOnlyFilter}
+                    onPrevOffer={() => stepFocusedOffer(-1)}
+                    onNextOffer={() => stepFocusedOffer(1)}
+                    hasPendingAssets={assetsApprovedCount + assetsRejectedCount < assetsTotalCount}
+                    onApproveAllAssets={handleApproveRemainingAssets}
+                    showComments={showComments}
                     showResolved={showResolved}
-                    pendingAnchor={pendingAnchor}
-                    onCancelPending={() => setPendingAnchor(undefined)}
-                    onSendPending={handleSendComment}
+                    commentEntries={assetColumnEntriesFor(focusedOffer.id)}
+                    registerCommentRef={registerCommentRef}
+                    onCancelPendingComment={() => setPendingAnchor(undefined)}
+                    onSendPendingComment={handleSendComment}
                     onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
                     onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
-                    onJumpToAnchor={(c) => setActiveAnchorId(c.id)}
-                    registerCommentRef={registerCommentRef}
+                    onJumpToAnchor={(commentId) => setActiveAnchorId(commentId)}
                     onReply={handleReply}
                     onToggleReaction={handleToggleReaction}
                   />
-                  </>
-                  )}
-                </div>
+                ) : null}
               </div>
 
-              {/* Recipients/Offers/Comments controls — pinned top-right of the canvas, a sibling of the
-                  scrollable div (not a descendant of it) so it stays fixed in the corner instead of
-                  scrolling with the canvas's content. Hidden while generation failed: there's nothing to
-                  act on. Recipients/Offers sit here (not the dialog header) per CP-13922, grouped with the
-                  comments toggle — every icon in this group is a uniform 30x30px button. */}
+              {/* Project Settings/Email Preview/Offers/QC/Comments controls — pinned top-right of the canvas,
+                  a sibling of the scrollable div (not a descendant of it) so it stays fixed in the corner
+                  instead of scrolling with the canvas's content. Hidden while generation failed: there's
+                  nothing to act on. Every icon in this group is a uniform 30x30px button. */}
               {!failure && (
               <div style={{
                 position: 'absolute', top: overlayTopOffset, right: 16, zIndex: 6, display: 'flex', alignItems: 'center', gap: 8,
@@ -662,17 +581,37 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 </IconButton>
                 <IconButton
                   size="small"
-                  onClick={() => openRightPanel('recipients')}
-                  sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'recipients' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
+                  onClick={() => openRightPanel('emailPreview')}
+                  title="Email Preview"
+                  sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'emailPreview' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
                 >
-                  <MailOutlined style={{ fontSize: 20, color: rightPanel === 'recipients' ? '#473bab' : '#1f1d25' }} />
+                  <MailOutlined style={{ fontSize: 20, color: rightPanel === 'emailPreview' ? '#473bab' : '#1f1d25' }} />
                 </IconButton>
                 <IconButton
                   size="small"
                   onClick={() => openRightPanel('offers')}
+                  title="Offers"
                   sx={{ width: 30, height: 30, padding: 0, background: rightPanel === 'offers' ? 'rgba(71,59,171,0.1)' : 'transparent' }}
                 >
                   <DirectionsCarOutlined style={{ fontSize: 20, color: rightPanel === 'offers' ? '#473bab' : '#1f1d25' }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => openRightPanel('qc')}
+                  title="QC warnings"
+                  sx={{
+                    width: 30, height: 30, padding: 0,
+                    background: rightPanel === 'qc'
+                      ? (hasQcIssues ? '#c45500' : 'rgba(71,59,171,0.1)')
+                      : (hasQcIssues ? '#FFF4E5' : 'transparent'),
+                  }}
+                >
+                  <WarningAmberOutlined style={{
+                    fontSize: 20,
+                    color: rightPanel === 'qc'
+                      ? (hasQcIssues ? '#FFCC80' : '#473bab')
+                      : (hasQcIssues ? '#663C00' : '#1f1d25'),
+                  }} />
                 </IconButton>
                 <IconButton
                   size="small"
@@ -708,43 +647,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               </div>
               )}
 
-              {/* Floating approval widgets — pinned bottom-right of the canvas, stacked: email (alert-wide)
-                  above assets (per-offer, individually approved) — same pinned-overlay pattern as Show Resolved.
-                  A sibling of the scrollable canvas div above (not a descendant of it), so it stays fixed in the
-                  corner instead of scrolling with the canvas's content. */}
-              <div
-                style={{
-                  position: 'absolute', bottom: 16, right: 16,
-                  zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8,
-                }}
-              >
-                <AssetApprovalWidget
-                  assets={assetEntries}
-                  approverNames={approverNames}
-                  lastApprovedTimestamp={lastApprovedTimestamp}
-                  lastRejectedActorName={lastRejectedEntry?.actorName}
-                  lastRejectedTimestamp={lastRejectedEntry?.timestamp}
-                  disabled={isArchived || isSent || !!failure}
-                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
-                  onApproveRemaining={handleApproveRemainingAssets}
-                  onUndoAllReviews={handleUndoAllAssetReviews}
-                  onSelectAsset={handleSelectAsset}
-                />
-                <EmailApprovalWidget
-                  status={alert.emailStatus}
-                  actorName={emailActivity?.actorName}
-                  timestamp={emailActivity?.timestamp}
-                  disabled={isArchived || isSent || !!failure}
-                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
-                  onApprove={() => setEmailReview(alert.id, 'approved')}
-                  onRequestChanges={() => setEmailReview(alert.id, 'rejected')}
-                  onApproveChanges={() => setEmailReview(alert.id, 'approved')}
-                  onUndo={() => setEmailReview(alert.id, 'pending')}
-                />
-              </div>
             </div>
 
-            {/* Right panel — Activity History, Recipients, Offers, or the offer editor: mutually exclusive */}
+            {/* Right panel — Activity History, Email Preview, Offers, QC warnings, or the offer editor: mutually exclusive */}
             {editingOffer && !projectLocked ? (
               <AlertOfferEditPanel
                 key={`${editingOffer.id}-${editingOfferView}`}
@@ -752,7 +657,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 initialView={editingOfferView}
                 onBack={() => { setEditingOfferId(null); setRightPanel('offers'); }}
                 onClose={() => setEditingOfferId(null)}
-                onFocusAsset={() => handleSelectAsset(editingOffer.id)}
+                onFocusAsset={() => focusAsset(editingOffer.id)}
               />
             ) : rightPanel === 'history' ? (
               <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
@@ -783,11 +688,44 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   ))}
                 </div>
               </div>
-            ) : rightPanel === 'recipients' ? (
-              <AlertRecipientsPanel
+            ) : rightPanel === 'emailPreview' ? (
+              <AlertEmailPreviewPanel
+                subject={alert.subject}
+                preheader={alert.preheader}
+                bodyParagraphs={alert.bodyParagraphs}
+                vin={alert.vin}
+                accountName={currentProject.accountName}
+                featuredOffer={featuredOffer}
+                otherOffers={otherOffers}
+                template={template}
+                hasBackgrounds={hasBackgrounds}
+                bgFor={bgFor}
+                isOfferApproved={isOfferApproved}
                 recipients={recipients}
-                onChange={(next) => setAlertRecipients(alert.id, next)}
+                onRecipientsChange={(next) => setAlertRecipients(alert.id, next)}
+                emailBodyRef={emailBodyRef}
+                onEmailMouseUp={handleEmailMouseUp}
+                anchorsForParagraph={anchorsForParagraph}
+                activeAnchorId={activeAnchorId}
+                onHighlightClick={handleAnchorClick}
+                registerAnchorRef={registerAnchorRef}
+                anchorRefsMap={anchorRefs}
+                showComments={showComments}
+                showResolved={showResolved}
+                commentEntries={emailColumnEntries}
+                registerCommentRef={registerCommentRef}
+                pendingAnchor={pendingAnchor?.kind === 'email' ? pendingAnchor : undefined}
+                onCancelPendingComment={() => setPendingAnchor(undefined)}
+                onSendPendingComment={handleSendComment}
+                onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
+                onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
+                onJumpToAnchor={(commentId) => setActiveAnchorId(commentId)}
+                onReply={handleReply}
+                onToggleReaction={handleToggleReaction}
                 onClose={() => setRightPanel(null)}
+                panelWidth={sharedRightPanel.width}
+                onResizeHandleMouseDown={sharedRightPanel.onResizeHandleMouseDown}
+                emailStatus={alert.emailStatus}
               />
             ) : rightPanel === 'offers' ? (
               <AlertOffersPanel
@@ -797,30 +735,70 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 onEditOffer={editOffer}
                 onClose={() => setRightPanel(null)}
                 highlightRequest={highlightRequest}
+                width={sharedRightPanel.width}
+                onResizeHandleMouseDown={sharedRightPanel.onResizeHandleMouseDown}
+              />
+            ) : rightPanel === 'qc' ? (
+              <AlertQcPanel
+                creativeQc={alert.creativeQc}
+                dealQc={alert.dealQc}
+                offers={allAlertOffers}
+                onClose={() => setRightPanel(null)}
+                panelWidth={sharedRightPanel.width}
+                onResizeHandleMouseDown={sharedRightPanel.onResizeHandleMouseDown}
               />
             ) : rightPanel === 'projectSettings' ? (
               <AlertProjectSettingsPanel
                 project={currentProject}
                 onClose={() => setRightPanel(null)}
+                width={projectSettingsPanel.width}
+                onResizeHandleMouseDown={projectSettingsPanel.onResizeHandleMouseDown}
               />
             ) : null}
           </div>
 
-          {/* Combined footer — appears once both halves are approved, offering the final Send action */}
-          {alert.status === 'approved' && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16, padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, background: '#ffffff' }}>
-              <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Email and Assets approved • Ready to Send</span>
-              <button onClick={onClose} style={{ ...footerButtonBase, background: 'transparent', color: '#473bab', border: '1px solid rgba(99,86,225,0.5)' }}>
-                Cancel
-              </button>
-              <button
-                disabled={isArchived}
-                onClick={handleSend}
-                style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff', opacity: isArchived ? 0.5 : 1, cursor: isArchived ? 'not-allowed' : 'pointer' }}
-              >
-                <Send style={{ fontSize: 16 }} />
-                Send
-              </button>
+          {/* Footer — always visible so review progress reads at a glance even before either track is
+              done; once both are approved it becomes the existing "ready to send" bar below. */}
+          {/* Footer — always visible so review progress and the final Send action all live in one place. */}
+          {!isSent && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 16px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0, background: '#ffffff' }}>
+              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', flexShrink: 0 }}>
+                {readyToSend ? 'Everything is approved. Send to the client when ready.' : 'Approve the assets and the email to send to the client.'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                <AssetsFooterWidget
+                  approvedCount={assetsApprovedCount}
+                  rejectedCount={assetsRejectedCount}
+                  totalCount={assetsTotalCount}
+                  status={alert.assetsStatus}
+                  disabled={isArchived || !!failure}
+                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
+                  onApproveAll={handleApproveRemainingAssets}
+                  onUndoAll={handleUndoAllAssetReviews}
+                />
+                <ChevronRight style={{ fontSize: 18, color: '#cac9cf', flexShrink: 0 }} />
+                <EmailFooterWidget
+                  status={alert.emailStatus}
+                  disabled={isArchived || !!failure}
+                  disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
+                  onApprove={() => setEmailReview(alert.id, 'approved')}
+                  onReject={() => setEmailReview(alert.id, 'rejected')}
+                  onUndo={() => setEmailReview(alert.id, 'pending')}
+                />
+                {readyToSend && (
+                  <>
+                    <ChevronRight style={{ fontSize: 18, color: '#cac9cf', flexShrink: 0 }} />
+                    <button
+                      disabled={isArchived}
+                      onClick={handleSend}
+                      style={{ ...footerButtonBase, background: '#473bab', color: '#ffffff', opacity: isArchived ? 0.5 : 1, cursor: isArchived ? 'not-allowed' : 'pointer' }}
+                    >
+                      <Send style={{ fontSize: 16 }} />
+                      Send
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           )}
           {isSent && (
@@ -852,36 +830,34 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartComment} />
       )}
 
-      {previewOffer && template && previewBg && (
-        <AlertAssetPreviewModal
-          key={previewOffer.id}
-          offer={previewOffer}
+      {detailsOffer && template && detailsBg && (
+        <AlertAssetDetailsDialog
+          key={detailsOffer.id}
+          offer={detailsOffer}
           template={template}
-          backgroundUrl={previewBg.url}
-          background={previewBg}
+          backgroundUrl={detailsBg.url}
+          background={detailsBg}
           projectId={currentProject.id}
           locked={!!projectLocked}
-          comments={commentsForOffer(previewOffer.id)}
+          comments={commentsForOffer(detailsOffer.id)}
           activeAnchorId={activeAnchorId}
-          onClose={() => setPreviewOfferId(null)}
+          onClose={() => setDetailsOfferId(null)}
           onAddComment={(text, mentionedNames, anchor) => { addAlertComment(alert.id, 'assets', { text, mentionedNames, anchor }); setShowComments(true); }}
           onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
           onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
           onAnchorClick={handleAnchorClick}
-          onEditOffer={(view) => editOffer(previewOffer.id, view)}
+          onEditOffer={(view) => editOffer(detailsOffer.id, view)}
           onReply={handleReply}
           onToggleReaction={handleToggleReaction}
-          approvalStatus={alert.offerReviews?.[previewOffer.id]?.status ?? 'pending'}
+          approvalStatus={alert.offerReviews?.[detailsOffer.id]?.status ?? 'pending'}
           approvalDisabled={isArchived || isSent}
-          reviewActorName={alert.offerReviews?.[previewOffer.id]?.actorName}
-          reviewTimestamp={alert.offerReviews?.[previewOffer.id]?.timestamp}
-          onApprove={() => setOfferAssetReview(alert.id, previewOffer.id, 'approved')}
-          onReject={() => setOfferAssetReview(alert.id, previewOffer.id, 'rejected')}
-          onUndo={() => setOfferAssetReview(alert.id, previewOffer.id, 'pending')}
-          currentIndex={previewIndex}
+          onApprove={() => setOfferAssetReview(alert.id, detailsOffer.id, 'approved')}
+          onReject={() => setOfferAssetReview(alert.id, detailsOffer.id, 'rejected')}
+          onUndo={() => setOfferAssetReview(alert.id, detailsOffer.id, 'pending')}
+          currentIndex={detailsIndex}
           totalCount={allAlertOffers.length}
-          onPrev={handlePreviewPrev}
-          onNext={handlePreviewNext}
+          onPrev={handleDetailsPrev}
+          onNext={handleDetailsNext}
         />
       )}
     </>,

@@ -288,6 +288,51 @@ export const SEATTLE_ALERTS: Alert[] = [
       { id: 'act-2-email-rejected', action: 'email_rejected', timestamp: now - 3 * DAY, ...MICHAEL_STUART },
     ],
     comments: [DEMO_EMAIL_REJECTION_COMMENT],
+    creativeQc: [
+      {
+        offerId: 'sea-offer-x3-30xdrive',
+        sections: [
+          {
+            id: 'template_rules',
+            label: 'Template Rules',
+            checkedAt: now - 19 * 60 * 1000,
+            checks: [
+              { id: 'empty-placeholders', label: 'Empty placeholders', status: 'passed' },
+            ],
+          },
+          {
+            id: 'render_check',
+            label: 'Render Check',
+            checkedAt: now - 19 * 60 * 1000,
+            checks: [
+              { id: 'text-outside-canvas', label: 'Text outside the canvas', status: 'passed' },
+              { id: 'overlapping-text', label: 'Overlapping text', status: 'passed' },
+              { id: 'low-contrast-text', label: 'Low contrast text', status: 'passed' },
+            ],
+          },
+        ],
+      },
+    ],
+    dealQc: {
+      rulesetVersion: 'v3',
+      checkedAt: now - 19 * 60 * 1000,
+      offers: [
+        {
+          offerId: 'sea-offer-x3-30xdrive',
+          baseline: {
+            offerId: 'sea-offer-x3-30xdrive',
+            monthlyPayment: 569,
+            termMonths: 36,
+            msrp: 53300,
+            dueAtSigning: 3799,
+            mileagePerYear: 10000,
+            dealerDiscount: 3500,
+            lender: 'BMW Financial Services',
+          },
+          mismatchedFields: [],
+        },
+      ],
+    },
   },
   {
     id: 'sea-alert-irvine-beating-x1',
@@ -698,6 +743,26 @@ export const SEATTLE_ALERTS: Alert[] = [
         actualLabel: 'N/A',
       },
     ],
+    dealQc: {
+      rulesetVersion: 'v3',
+      checkedAt: now - 19 * 60 * 1000,
+      offers: [
+        {
+          offerId: 'sea-offer-x3-30xdrive',
+          baseline: {
+            offerId: 'sea-offer-x3-30xdrive',
+            monthlyPayment: 569,
+            termMonths: 36,
+            msrp: 53854,
+            dueAtSigning: 5840.65,
+            mileagePerYear: 10000,
+            dealerDiscount: 3500,
+            lender: 'BMW Financial Services',
+          },
+          mismatchedFields: ['monthlyPayment', 'msrp', 'dueAtSigning'],
+        },
+      ],
+    },
   },
   {
     id: 'sea-alert-warning-x5-50e-mileage',
@@ -735,6 +800,39 @@ export const SEATTLE_ALERTS: Alert[] = [
         message: 'The stored offer has no MSRP, so the expected selling price could not be derived.',
         expectedLabel: 'A derivable expected selling price',
         actualLabel: 'N/A',
+      },
+    ],
+    creativeQc: [
+      {
+        offerId: 'sea-offer-x5-xdrive50e',
+        sections: [
+          {
+            id: 'template_rules',
+            label: 'Template Rules',
+            checkedAt: now - 3 * 60 * 60 * 1000,
+            checks: [
+              {
+                id: 'empty-placeholders',
+                label: 'Empty placeholders',
+                status: 'warning',
+                issues: [
+                  'placeholder-1: logoSecondary placeholder is empty',
+                  'SEL Placeholder: logoSalesEvent placeholder is empty',
+                ],
+              },
+            ],
+          },
+          {
+            id: 'render_check',
+            label: 'Render Check',
+            checkedAt: now - 3 * 60 * 60 * 1000,
+            checks: [
+              { id: 'text-outside-canvas', label: 'Text outside the canvas', status: 'passed' },
+              { id: 'overlapping-text', label: 'Overlapping text', status: 'passed' },
+              { id: 'low-contrast-text', label: 'Low contrast text', status: 'passed' },
+            ],
+          },
+        ],
       },
     ],
   },

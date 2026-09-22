@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
-  Close, Check, Replay, Search, Send, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
+  Close, Check, Cancel, Replay, Search, Send, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
   WarningAmberOutlined, ImageNotSupportedOutlined,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
@@ -131,7 +131,7 @@ const AlertsPeriodToggle = ({ value, onChange }: { value: DateRangePreset; onCha
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
-  { key: 'rejected', label: 'Changes Requested' },
+  { key: 'rejected', label: 'Rejected' },
   { key: 'approved', label: 'Approved' },
   { key: 'sent', label: 'Sent' },
 ];
@@ -168,7 +168,7 @@ const CARD_MENU_ACTION_LABEL: Partial<Record<AlertStatus, string>> = {
 const APPROVAL_CHIP_STYLE: Record<ReviewStatus, { Icon: React.ElementType; color: string }> = {
   pending: { Icon: PendingOutlined, color: '#9c99a9' },
   approved: { Icon: CheckCircleOutlined, color: '#4caf50' },
-  rejected: { Icon: Replay, color: '#e65100' },
+  rejected: { Icon: Cancel, color: '#be0e1c' },
 };
 
 const ApprovalStatusChip = ({ icon: Icon, color, label }: { icon: React.ElementType; color: string; label: string }) => (
@@ -457,6 +457,11 @@ export const AlertsKanbanBoard = () => {
   // Archived alerts are pulled off the board entirely — they only show up in the Archived Alerts dialog.
   const activeAlerts = useMemo(() => alerts.filter((a) => !a.archivedAt), [alerts]);
   const archivedAlerts = useMemo(() => alerts.filter((a) => a.archivedAt), [alerts]);
+  // The Rejected column only earns a spot on the board once this project actually has a rejected alert —
+  // otherwise it's just permanent empty-column clutter. Based on the full active set, not the current
+  // search/filter view, so the column doesn't flicker in and out as the user types.
+  const hasRejectedAlerts = useMemo(() => activeAlerts.some((a) => a.status === 'rejected'), [activeAlerts]);
+  const visibleColumns = useMemo(() => COLUMNS.filter((col) => col.key !== 'rejected' || hasRejectedAlerts), [hasRejectedAlerts]);
 
   const filtered = useMemo(
     () => applyAlertFilters(activeAlerts, offers, alertFilterState),
@@ -620,7 +625,7 @@ export const AlertsKanbanBoard = () => {
         <AlertsTable alerts={searched} assetsByAlertId={assetsByAlertId} onOpenAlert={setOpenAlertId} onArchive={archiveAndDeselect} />
       ) : (
       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', height: 'fit-content' }}>
-        {COLUMNS.map((col) => {
+        {visibleColumns.map((col) => {
           const columnAlerts = byColumn[col.key];
           const selectedInColumn = columnAlerts.filter((a) => selectedIds.has(a.id));
           const bulkActive = selectedInColumn.length > 0;
