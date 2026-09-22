@@ -3,6 +3,8 @@
 // live in an in-memory store (see enrollmentSettingsStore.ts) that persists only for the
 // current browser session.
 
+import type { DisclosureReplacement } from '../utils/disclosureSnippetColors';
+
 export interface VehicleModelYear {
   id: string;
   model: string;
@@ -40,12 +42,33 @@ export interface AdditionalFee {
   amount: number | null;
 }
 
+/** Metadata for a disclosure block once it's been turned into a reusable text snippet via the Disclosure Snippet Builder. */
+export interface DisclosureSnippetMeta {
+  id: string;
+  name: string;
+  tags: string[];
+  folder: string;
+  brands: string[];
+  expirationDate: string | null;
+  websiteDescription: string;
+  websiteNotes: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  /** The raw disclosure text as originally pasted in, before AI templatization — powers the comparison view. */
+  sourceText: string;
+  /** Which {variable} replaced which exact substring of `sourceText`, as reported by the AI generation call — powers the comparison view's color-matching. */
+  replacements: DisclosureReplacement[];
+}
+
 export interface DisclosureBlock {
   id: 'lease' | 'cash' | 'finance';
   label: string;
   optional: boolean;
   enabled: boolean;
   text: string;
+  /** Present once this block's disclosure has been generated into a snippet template. */
+  snippet?: DisclosureSnippetMeta;
 }
 
 export interface EnrollmentSettings {
@@ -61,9 +84,6 @@ export interface EnrollmentSettings {
   docFee: number | null;
   additionalFees: AdditionalFee[];
 }
-
-const LEASE_DISCLOSURE_DEFAULT =
-  '${totalDueAtSigning} due at signing which includes an ${docFee} document fee and any dealer ad-on\'s, {milesPerYear} annual miles, ${centsPerMile} per mile thereafter, no security deposit required. Subject to credit approval by BMW Financial. Lease terms based on {vin} with MSRP of ${msrp} less ${dealerDiscount} dealer participation for total MSRP of ${vehicleSalesPrice}. Excludes taxes, license, registration, and government fees. Prices may vary depending on vehicle. *Loyalty Credit Offers available to qualified customers who have leased or financed a BMW vehicle through BMW Financial Services NA, LLC in the last 12 months. To qualify for a BMW Loyalty Offer, loyal current or former BMW owners or lessees must show proof of ownership or BMW Financial Services account number and qualify for credit approval. Visit your authorized BMW Center for important details. Offer expires {leaseExpirationDate}. Subject to prior sale.';
 
 function vehicle(id: string, model: string, year: number, selected: boolean): VehicleModelYear {
   return { id, model, year, selected, trimsMode: 'core', offerMode: 'oem' };
@@ -114,7 +134,7 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: true, text: LEASE_DISCLOSURE_DEFAULT },
+      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: false, text: '' },
       { id: 'cash', label: 'Cash Disclosure', optional: true, enabled: false, text: '' },
       { id: 'finance', label: 'Finance Disclosure', optional: true, enabled: false, text: '' },
     ],

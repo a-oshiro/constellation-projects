@@ -99,7 +99,7 @@ export const ProjectContentDialog = ({ project, onClose, onNavigate }: ProjectCo
 
         {/* ── Body ──────────────────────────────────────────────────── */}
         {tab === 'enrollment' ? (
-          <EnrollmentSettingsPanel settings={draft} onChange={handleChange} />
+          <EnrollmentSettingsPanel settings={draft} onChange={handleChange} accountName={project.accountName} accountBrand={project.brandTag} />
         ) : (
           <div style={{ flex: 1, minHeight: 0, padding: '0 12px', overflow: 'hidden', display: 'flex' }}>
             <ProjectContentsPanel project={project} onEditInProject={handleEditInProject} />

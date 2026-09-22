@@ -76,6 +76,11 @@ export const DealershipTab = ({ account }: DealershipTabProps) => {
       <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
         <Breadcrumbs items={['Settings', 'Accounts', account.name, 'Dealership']} />
       </div>
+      <div style={{ padding: '10px 16px 12px', flexShrink: 0 }}>
+        <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
+          Dealership
+        </h1>
+      </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
