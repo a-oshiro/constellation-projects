@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Switch } from '@mui/material';
 import { Check, CheckCircle, DeleteOutlined, MoreVert, Replay } from '@mui/icons-material';
 import type { ReviewStatus } from '../../data/types';
-import { formatRelativeTime } from '../../utils/relativeTime';
-import { formatReviewerName } from '../../utils/alertReview';
 import { Tooltip } from './Tooltip';
 
 const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
