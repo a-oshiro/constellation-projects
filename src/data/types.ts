@@ -229,7 +229,7 @@ export type AlertCategory = 'Conquest' | 'Aging' | 'MSRP' | 'Offers' | 'De-Listi
  * Overall Kanban column — derived from the two review tracks, which now run in parallel (offers and
  * assets are both reviewable as soon as the alert is generated), except 'sent' which is set explicitly:
  * 'generated' (offer and/or asset review still in progress) -> 'approved' (every offer and every
- * surviving asset approved — shown to users as "Approved and Sent") -> 'sent'.
+ * surviving asset decided, approved or rejected — shown to users as "Reviewed") -> 'sent'.
  */
 export type AlertStatus = 'generated' | 'approved' | 'sent';
 /** Per-item review state. Used independently for a stage-1 offer decision and a stage-2 asset decision. */

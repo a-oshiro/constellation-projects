@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { IconButton, TextField } from '@mui/material';
 import { Close, ArrowUpward, Add, DeleteOutlined } from '@mui/icons-material';
-import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 
 /**
- * Right-panel content listing an alert's recipient emails, opened from the dialog header's Recipients
+ * Left-panel content listing an alert's recipient emails, opened from the dialog header's Recipients
  * icon button. Each row shows the email plus an X to remove it; "+ Add Recipient" swaps itself for a
  * text field + submit (arrow-up) button — Enter or the button adds the typed address to the list.
  */
@@ -23,7 +22,6 @@ const rowStyle: React.CSSProperties = {
 export const AlertRecipientsPanel = ({ recipients, onChange, onClose }: AlertRecipientsPanelProps) => {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
-  const panelWidth = useResponsivePanelWidth();
 
   const removeAt = (index: number) => onChange(recipients.filter((_, i) => i !== index));
 
@@ -36,9 +34,9 @@ export const AlertRecipientsPanel = ({ recipients, onChange, onClose }: AlertRec
   };
 
   return (
-    <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-        <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Recipients</span>
+        <span style={{ fontSize: 15, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Recipients</span>
         <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>
           <Close style={{ fontSize: 18, color: '#686576' }} />
         </IconButton>

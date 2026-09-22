@@ -5,14 +5,14 @@ import type { Project } from '../data/projects';
 import type { Background, Asset, AssetStatus, Offer, Template, AssetVersion, AssetComment, Alert, AlertCategory, AlertStatus, AlertActivityEntry, AlertActivityAction, AlertComment, AlertCommentAnchor, OfferReviewEntry, ReviewStatus } from '../data/types';
 import constellationLogo from '../assets/constellation-logo.png';
 
-/** Fixed one-way lifecycle: Generated -> Approved and Sent (auto-derived from the two, now-parallel, review tracks), Approved and Sent -> Sent (manual), Sent is terminal. A manual rebuild can also send Approved back to Generated. */
+/** Fixed one-way lifecycle: Generated -> Reviewed (auto-derived from the two, now-parallel, review tracks), Reviewed -> Sent (manual), Sent is terminal. A manual rebuild can also send Approved back to Generated. */
 const ALERT_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
   generated: ['approved'],
   approved: ['sent', 'generated'],
   sent: [],
 };
 
-/** The overall Kanban column is derived from the two review tracks, which run in parallel: still 'generated' until every offer has a stage-1 decision AND every surviving offer's asset is approved, then 'approved' ("Approved and Sent"). */
+/** The overall Kanban column is derived from the two review tracks, which run in parallel: still 'generated' until every offer and every surviving offer's asset has been decided (approved or rejected — a decision either way counts as reviewed), then 'approved' ("Reviewed"). */
 function deriveAlertStatus(offersStatus: ReviewStatus, assetsStatus: ReviewStatus): AlertStatus {
   if (offersStatus !== 'approved' || assetsStatus !== 'approved') return 'generated';
   return 'approved';
@@ -35,11 +35,11 @@ function reviewableOfferIds(offerIds: string[], offerReviews: Record<string, Off
   return offerIds.filter((id) => offerReviews?.[id]?.status !== 'rejected');
 }
 
-/** Stage-2 rollup: 'approved' once every reviewable (stage-1-approved) offer's asset is approved, else 'pending'. Trivially 'approved' when there's nothing left to review (e.g. every offer was rejected in stage 1), so the alert isn't stuck. */
+/** Stage-2 rollup: 'approved' (meaning "every reviewable asset has been decided") once every reviewable offer's asset has a non-pending entry — a rejected asset still counts as decided, same as stage-1's rollup. Trivially 'approved' when there's nothing left to review (e.g. every offer was rejected in stage 1), so the alert isn't stuck. */
 function computeAssetsRollup(reviewableIds: string[], reviews: Record<string, OfferReviewEntry> | undefined): ReviewStatus {
   if (reviewableIds.length === 0) return 'approved';
-  const allApproved = reviewableIds.every((id) => reviews?.[id]?.status === 'approved');
-  return allApproved ? 'approved' : 'pending';
+  const allDecided = reviewableIds.every((id) => reviews?.[id]?.status !== undefined);
+  return allDecided ? 'approved' : 'pending';
 }
 
 export interface PendingOfferChange {
@@ -106,7 +106,7 @@ interface ProjectContextValue {
   setOfferReview: (id: string, offerId: string, status: ReviewStatus) => void;
   /** Sets one offer's stage-2 (generated creative) review state, recomputing the `assetsStatus` rollup and overall status. No-ops once the alert has been sent. */
   setAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
-  /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Approved and Sent. */
+  /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Reviewed. */
   rebuildAlert: (id: string) => void;
   /** Clears a hard generation failure and resets both review tracks to pending, as if the alert had just been (successfully) generated. Only valid while the alert has a `generationFailure`. */
   regenerateAlert: (id: string) => void;

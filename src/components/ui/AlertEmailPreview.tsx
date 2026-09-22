@@ -75,14 +75,23 @@ export const AlertEmailPreview = ({ alert, featuredOffer, otherOffers, template,
     ))}
     <p style={{ margin: '0 0 20px', fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1f1d25', letterSpacing: '0.17px' }}>{alert.vin}</p>
 
-    {featuredOffer && template && (
-      <div style={{ marginBottom: 16 }}>
-        <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
-          The recommended monthly payment for this YMMT to dominate this market is:
-        </p>
-        {renderAsset(featuredOffer, template, bgFor)}
-      </div>
-    )}
+    <div style={{ marginBottom: 16 }}>
+      <p style={{ margin: '0 0 8px', fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px' }}>
+        The recommended monthly payment for this YMMT to dominate this market is:
+      </p>
+      {featuredOffer && template ? renderAsset(featuredOffer, template, bgFor) : (
+        <div
+          style={{
+            width: '100%', aspectRatio: template ? `${template.width} / ${template.height}` : '1 / 1',
+            borderRadius: 8, background: '#1f1d25', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box',
+          }}
+        >
+          <span style={{ color: '#ffffff', opacity: 0.8, fontSize: 13, fontFamily: 'Roboto, sans-serif', textAlign: 'center', lineHeight: 1.4 }}>
+            Approved assets will be added to the email.
+          </span>
+        </div>
+      )}
+    </div>
 
     <button style={{ width: '100%', border: 'none', borderRadius: 8, background: '#473bab', color: '#ffffff', padding: '10px 12px', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 600, letterSpacing: '0.46px', cursor: 'default', marginBottom: 20 }}>
       SEND TO MY PAID MEDIA TEAM

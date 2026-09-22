@@ -71,7 +71,7 @@ export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFoc
         <IconButton size="small" onClick={() => guardedNavigate(onBack)} sx={{ padding: '4px' }}>
           <ArrowBack style={{ fontSize: 18, color: '#686576' }} />
         </IconButton>
-        <span style={{ flex: 1, fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+        <span style={{ flex: 1, fontSize: 15, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
           {view === 'vehicle' ? 'Edit Vehicle Information' : 'Edit Offer'}
         </span>
         <IconButton size="small" onClick={() => guardedNavigate(onClose)} sx={{ padding: '4px' }}>

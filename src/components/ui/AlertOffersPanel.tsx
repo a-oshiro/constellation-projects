@@ -1,32 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton } from '@mui/material';
-import { Close, InfoOutlined, ExpandMore, ChevronRight } from '@mui/icons-material';
-import type { Offer } from '../../data/types';
+import { InfoOutlined, ExpandMore, ChevronRight, MoreVert, Close } from '@mui/icons-material';
+import type { Offer, ReviewStatus } from '../../data/types';
 import { getOfferTypeDisplayFields } from './OfferCard';
 import { OfferIdentityCard } from './OfferIdentityCard';
+import { OfferReviewCard } from './OfferReviewCard';
 import { OutOfStockBadge } from './OutOfStockBadge';
 import { Tooltip } from './Tooltip';
-import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
+import { ReviewVisibilityMenu } from './AlertApprovalWidgets';
 import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
+import { REVIEW_DECISION_STYLE } from '../../utils/alertReview';
 
-/** Tooltips nested inside this dialog's right panel need a z-index above the dialog's own panel (100001)
- * to escape being clipped by it — 100050 is the convention already used elsewhere in this dialog's subtree. */
+/** Tooltips nested inside this panel need a z-index above the dialog's own panel (100001) to escape being
+ * clipped by it — 100050 is the convention already used elsewhere in this dialog's subtree. */
 const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
 
 /**
- * Right-panel content opened from the dialog header's Offers (car) icon button. Two tabs:
- * - Selected: the offers actually used in this alert's email. Each card's pricing row is clickable
- *   (while the project is unlocked) to open the Offer Edit panel for that offer.
+ * The Review Offers tab's body, embedded in the alert dialog's big right panel. Two inner tabs:
+ * - Review Offers: every offer in this alert, approve/remove-capable. Clicking a card's identity row
+ *   opens the Vehicle Info editor; clicking its pricing row opens the offer/lease editor.
  * - Models: an informational list of the models enrolled for this Evergreen dealer, each annotated
  *   with how many offers from that model are present in this email — there's no real "enrollment"
  *   persistence layer in this app, so this is derived/display-only.
- * Width matches every other right-panel in this dialog via `useResponsivePanelWidth` (360px, or 400px on
- * very wide viewports).
  */
 
-/** A request to jump to and briefly highlight one offer's card in the Selected tab — `token` is a nonce so
- * re-requesting the same offer (e.g. clicking its canvas asset's Offer Info button again) still retriggers
- * the scroll/flash even though `offerId` hasn't changed. */
+/** A request to jump to and briefly highlight one offer's card in the Review Offers tab — `token` is a
+ * nonce so re-requesting the same offer (e.g. clicking its canvas asset's Offer Info button again) still
+ * retriggers the scroll/flash even though `offerId` hasn't changed. */
 export interface OfferHighlightRequest {
   offerId: string;
   token: number;
@@ -39,14 +39,22 @@ interface AlertOffersPanelProps {
   locked: boolean;
   /** `view` picks which editor opens: the Vehicle Info form (clicked the identity/vehicle row) or the offer/lease form (clicked the pricing row). */
   onEditOffer: (offerId: string, view: 'vehicle' | 'offer') => void;
-  onClose: () => void;
-  /** Set from the canvas's per-asset "Offer Info" button — switches to the Selected tab and scrolls/flashes that offer's card. */
+  /** Set from the canvas's per-asset "Offer Info" button — switches to the Review Offers tab and scrolls/flashes that offer's card. */
   highlightRequest?: OfferHighlightRequest | null;
+  reviewStatusFor: (offerId: string) => ReviewStatus;
+  approvalDisabled: boolean;
+  onApproveOffer: (offerId: string) => void;
+  onRejectOffer: (offerId: string) => void;
+  onUndoOfferReview: (offerId: string) => void;
+  /** The show/hide-approved/rejected filter — applies only to the Review Offers list, never to Models' counting. */
+  isOfferVisible: (offerId: string) => boolean;
+  showApproved: boolean;
+  showRejected: boolean;
+  onToggleShowApproved: () => void;
+  onToggleShowRejected: () => void;
+  /** Closes the whole (collapsible) review panel — the header's X, same action as the canvas's "Reviews" toggle. */
+  onClosePanel: () => void;
 }
-
-const panelHeaderStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', flexShrink: 0,
-};
 
 const tabButtonStyle = (active: boolean): React.CSSProperties => ({
   flex: 1, border: 'none', background: 'none', cursor: 'pointer', padding: '10px 8px',
@@ -112,10 +120,14 @@ const OfferRow = ({ offer, locked, onEdit }: { offer: Offer; locked: boolean; on
  * Offer Edit panel itself. `highlighted` briefly tints the card to call out a card jumped-to from the
  * canvas — purely visual, fades via the background-color transition.
  */
-export const OfferListCard = ({ offer, locked, onEditVehicle, onEditOffer, highlighted }: { offer: Offer; locked: boolean; onEditVehicle: () => void; onEditOffer: () => void; highlighted?: boolean }) => (
+export const OfferListCard = ({
+  offer, locked, onEditVehicle, onEditOffer, highlighted, reviewStatus,
+}: { offer: Offer; locked: boolean; onEditVehicle: () => void; onEditOffer: () => void; highlighted?: boolean; reviewStatus?: 'approved' | 'rejected' }) => (
   <div style={{
-    background: highlighted ? 'rgba(99,86,225,0.12)' : '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden',
+    background: reviewStatus ? REVIEW_DECISION_STYLE[reviewStatus].background : (highlighted ? 'rgba(99,86,225,0.12)' : '#ffffff'),
+    border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden',
     transition: 'background-color 0.3s ease',
+    ...(reviewStatus ? { outline: REVIEW_DECISION_STYLE[reviewStatus].outline, outlineOffset: REVIEW_DECISION_STYLE[reviewStatus].outlineOffset } : {}),
   }}>
     <OfferIdentityCard offer={offer} bordered={false} onClick={onEditVehicle} locked={locked} />
     <OfferRow offer={offer} locked={locked} onEdit={onEditOffer} />
@@ -140,11 +152,15 @@ const modelHeaderStyle: React.CSSProperties = {
 const isEnrolledOffer = (o: Offer) => o.id.startsWith('sea-offer-');
 const modelKey = (o: Offer) => `${o.model} · ${o.year}`;
 
-export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, onClose, highlightRequest }: AlertOffersPanelProps) => {
+export const AlertOffersPanel = ({
+  offers, projectOffers, locked, onEditOffer, highlightRequest, reviewStatusFor, approvalDisabled,
+  onApproveOffer, onRejectOffer, onUndoOfferReview, isOfferVisible, showApproved, showRejected,
+  onToggleShowApproved, onToggleShowRejected, onClosePanel,
+}: AlertOffersPanelProps) => {
   const [tab, setTab] = useState<'selected' | 'models'>('selected');
   const [expandedModelKeys, setExpandedModelKeys] = useState<Set<string>>(new Set());
   const [flashOfferId, setFlashOfferId] = useState<string | null>(null);
-  const panelWidth = useResponsivePanelWidth();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const offerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const registerOfferRef = (id: string, el: HTMLDivElement | null) => {
@@ -180,34 +196,51 @@ export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, o
   });
   const modelKeys = [...new Set(projectOffers.filter(isEnrolledOffer).map(modelKey))];
   const offersForModel = (key: string) => offers.filter((o) => modelKey(o) === key);
+  const visibleOffers = offers.filter((o) => isOfferVisible(o.id));
 
   return (
-    <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={panelHeaderStyle}>
-        <span style={{ flex: 1, fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>Alert Offers</span>
-        <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+        <span style={{ flex: 1, fontSize: 15, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>Review Offers</span>
+        <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)} sx={{ padding: '4px' }}>
+          <MoreVert style={{ fontSize: 20, color: '#686576' }} />
+        </IconButton>
+        <ReviewVisibilityMenu
+          anchorEl={menuAnchor}
+          onClose={() => setMenuAnchor(null)}
+          showApproved={showApproved}
+          showRejected={showRejected}
+          onToggleShowApproved={onToggleShowApproved}
+          onToggleShowRejected={onToggleShowRejected}
+        />
+        <IconButton size="small" onClick={onClosePanel} title="Close" sx={{ padding: '4px' }}>
           <Close style={{ fontSize: 18, color: '#686576' }} />
         </IconButton>
       </div>
-      <div style={{ display: 'flex', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-        <button style={tabButtonStyle(tab === 'selected')} onClick={() => setTab('selected')}>Selected</button>
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+        <button style={tabButtonStyle(tab === 'selected')} onClick={() => setTab('selected')}>Review Offers</button>
         <button style={tabButtonStyle(tab === 'models')} onClick={() => setTab('models')}>Models</button>
       </div>
 
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {tab === 'selected' ? (
-          offers.length === 0 ? (
-            <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>No offers in this alert.</span>
+          visibleOffers.length === 0 ? (
+            <span style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>No offers to show — use the menu above to reveal approved or rejected offers.</span>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {offers.map((offer) => (
+              {visibleOffers.map((offer) => (
                 <div key={offer.id} ref={(el) => registerOfferRef(offer.id, el)}>
-                  <OfferListCard
+                  <OfferReviewCard
                     offer={offer}
                     locked={locked}
+                    approvalStatus={reviewStatusFor(offer.id)}
+                    approvalDisabled={approvalDisabled}
+                    highlighted={flashOfferId === offer.id}
                     onEditVehicle={() => onEditOffer(offer.id, 'vehicle')}
                     onEditOffer={() => onEditOffer(offer.id, 'offer')}
-                    highlighted={flashOfferId === offer.id}
+                    onApprove={() => onApproveOffer(offer.id)}
+                    onReject={() => onRejectOffer(offer.id)}
+                    onUndo={() => onUndoOfferReview(offer.id)}
                   />
                 </div>
               ))}

@@ -95,18 +95,20 @@ interface CommentableAssetPreviewProps {
   offer: Offer;
   template: Template;
   backgroundUrl: string;
-  pins: { anchor: AssetCommentAnchor; commentId: string }[];
+  /** Commenting props are all optional — omit every one of them (as every current caller does; the
+   * margin-commenting UI has no home in the current layout yet) to render a plain, non-annotatable asset. */
+  pins?: { anchor: AssetCommentAnchor; commentId: string }[];
   pendingAnchor?: AssetCommentAnchor;
-  activeAnchorId: string | null;
-  onPinClick: (commentId: string) => void;
-  registerAnchorRef: (commentId: string, el: HTMLElement | null) => void;
-  onCreatePin: (anchor: AssetCommentAnchor) => void;
-  onTextSelected: (selection: AssetTextSelection | null) => void;
+  activeAnchorId?: string | null;
+  onPinClick?: (commentId: string) => void;
+  registerAnchorRef?: (commentId: string, el: HTMLElement | null) => void;
+  onCreatePin?: (anchor: AssetCommentAnchor) => void;
+  onTextSelected?: (selection: AssetTextSelection | null) => void;
   /** When passed, a small preview/zoom button appears on hover (top-right) — omitted inside the preview modal itself. */
   onRequestPreview?: () => void;
   /** When passed, a small "show offer info" button appears on hover, immediately to the left of the preview/zoom button — omitted inside the preview modal itself. */
   onShowOfferCard?: () => void;
-  /** When passed (along with onApprove/onReject), hovering while `approvalStatus === 'pending'` reveals Approve/Request changes icon buttons bottom-right. Omitted where per-asset approval doesn't apply. */
+  /** When passed (along with onApprove/onReject), Approve/Reject icon buttons show bottom-right while `approvalStatus === 'pending'`. Omitted where per-asset approval doesn't apply. */
   approvalStatus?: ReviewStatus;
   onApprove?: () => void;
   onReject?: () => void;
@@ -114,14 +116,15 @@ interface CommentableAssetPreviewProps {
 }
 
 export const CommentableAssetPreview = ({
-  offer, template, backgroundUrl, pins, pendingAnchor, activeAnchorId, onPinClick,
-  registerAnchorRef, onCreatePin, onTextSelected, onRequestPreview, onShowOfferCard,
+  offer, template, backgroundUrl, pins = [], pendingAnchor, activeAnchorId = null, onPinClick = () => {},
+  registerAnchorRef = () => {}, onCreatePin, onTextSelected, onRequestPreview, onShowOfferCard,
   approvalStatus, onApprove, onReject, approvalDisabled,
 }: CommentableAssetPreviewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onTextSelected) return;
     // The asset can sit inside the email body (which has its own onMouseUp for email-text highlighting) —
     // stop the event there so that handler doesn't also run, see no `data-paragraph-index` ancestor, and
     // clear the selection state this handler is about to set.
@@ -152,6 +155,7 @@ export const CommentableAssetPreview = ({
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onCreatePin) return;
     // A just-completed drag-selection is handled by handleMouseUp's floating-button flow instead — a plain
     // click (no selection) is what drops a pin.
     const selection = window.getSelection();
@@ -173,7 +177,7 @@ export const CommentableAssetPreview = ({
       onMouseLeave={() => setHovered(false)}
       onMouseUp={handleMouseUp}
       onClick={handleClick}
-      style={{ position: 'relative', width: '100%', height: '100%', cursor: 'crosshair', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4' }}
+      style={{ position: 'relative', width: '100%', height: '100%', cursor: onCreatePin ? 'crosshair' : 'default', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4' }}
     >
       <FilledTemplatePreview template={template} offer={offer} backgroundUrl={backgroundUrl} />
       <AssetAnnotationOverlay
@@ -210,9 +214,9 @@ export const CommentableAssetPreview = ({
           <Fullscreen style={{ fontSize: 18, color: '#222222' }} />
         </IconButton>
       )}
-      {onApprove && onReject && hovered && approvalStatus === 'pending' && (
+      {onApprove && onReject && approvalStatus === 'pending' && (
         <div style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 7, display: 'flex', gap: 6 }}>
-          <Tooltip title="Reject or Remove Asset" slotProps={tooltipPopperProps}>
+          <Tooltip title="Reject Asset" slotProps={tooltipPopperProps}>
             <IconButton
               disabled={approvalDisabled}
               onClick={(e) => { e.stopPropagation(); onReject(); }}

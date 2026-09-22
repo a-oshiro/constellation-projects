@@ -8,11 +8,12 @@ import { EnrollmentSettingsPanel } from './enrollment/EnrollmentSettingsPanel';
 import { ProjectContentsPanel } from './ProjectContentsPanel';
 
 /**
- * Right-panel "Project Settings" for the alert dialog, opened from the canvas toolbar's Project Settings
+ * Left-panel "Project Settings" for the alert dialog, opened from the dialog header's Project Settings
  * icon. Reuses the exact same Enrollment/Contents content as the standalone `ProjectContentDialog` shown
  * from a project card's own Project Settings action — just switched between via a vertical icon rail
- * (instead of that dialog's horizontal tabs) and sized to half the alert dialog's width. Enrollment stays
- * editable (Save/Discard, same session-only store); Contents stays the read-only summary it already is.
+ * (instead of that dialog's horizontal tabs). Fills whatever width its caller gives it (the alert dialog
+ * wraps it in a resizable, 600px-max container). Enrollment stays editable (Save/Discard, same
+ * session-only store); Contents stays the read-only summary it already is.
  */
 
 type PanelTab = 'enrollment' | 'contents';
@@ -42,7 +43,7 @@ export const AlertProjectSettingsPanel = ({ project, onClose }: AlertProjectSett
   const handleEditInProject = (path: string) => window.open(path, '_blank', 'noopener,noreferrer');
 
   return (
-    <div style={{ width: '50%', flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', display: 'flex', overflow: 'hidden' }}>
+    <div style={{ width: '100%', display: 'flex', overflow: 'hidden' }}>
       {/* ── Vertical tab rail ────────────────────────────────────────── */}
       <nav style={{ width: 88, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: 4, padding: '16px 8px' }}>
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
@@ -69,7 +70,7 @@ export const AlertProjectSettingsPanel = ({ project, onClose }: AlertProjectSett
       {/* ── Active tab ───────────────────────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
+          <span style={{ fontSize: 15, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
             {tab === 'enrollment' ? 'Enrollment Settings' : 'Project Contents'}
           </span>
           <IconButton size="small" onClick={onClose} sx={{ padding: '4px' }}>

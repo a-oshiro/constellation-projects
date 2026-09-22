@@ -182,7 +182,7 @@ interface SampleAlertSpec {
   vinPrefix: string;
 }
 
-/** One spec per generated alert, in board order (Generated -> Approved and Sent -> Sent -> Generated) so a freshly-seeded Evergreen project shows its full lifecycle at a glance. */
+/** One spec per generated alert, in board order (Generated -> Reviewed -> Sent -> Generated) so a freshly-seeded Evergreen project shows its full lifecycle at a glance. */
 const SAMPLE_ALERT_SPECS: SampleAlertSpec[] = [
   {
     category: 'MSRP',

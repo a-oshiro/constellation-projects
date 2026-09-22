@@ -50,7 +50,7 @@ export const MODEL_TYPE_OPTIONS = ['Core Models'];
 
 export const LIFECYCLE_STEP_LABELS: Record<AlertStatus, string> = {
   generated: 'Generated',
-  approved: 'Approved and Sent',
+  approved: 'Reviewed',
   sent: 'Sent',
 };
 

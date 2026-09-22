@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button, Checkbox, IconButton, InputAdornment, Menu, MenuItem, ListItemIcon, TextField } from '@mui/material';
 import {
   Send, Replay, Search, CheckCircleOutlined, PendingOutlined, MoreVert, Inventory2Outlined, PlayArrow,
-  WarningAmberOutlined, ImageNotSupportedOutlined,
+  WarningAmberOutlined, ImageNotSupportedOutlined, Delete,
 } from '@mui/icons-material';
 import type { Alert, AlertStatus, ReviewStatus, Asset } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
@@ -131,7 +131,7 @@ const AlertsPeriodToggle = ({ value, onChange }: { value: DateRangePreset; onCha
 
 const COLUMNS: { key: AlertStatus; label: string }[] = [
   { key: 'generated', label: 'Generated' },
-  { key: 'approved', label: 'Approved and Sent' },
+  { key: 'approved', label: 'Reviewed' },
   { key: 'sent', label: 'Sent' },
 ];
 
@@ -173,23 +173,47 @@ const ApprovalStatusChip = ({ icon: Icon, color, label }: { icon: React.ElementT
   </div>
 );
 
+const offerIdsForAlert = (alert: Alert): string[] => [alert.featuredOfferId, ...alert.otherOfferIds];
+
+/** True once every offer on this alert has been individually rejected (not just "decided" — a mix of approved/rejected doesn't count). */
+const allOffersRejected = (alert: Alert): boolean => {
+  const ids = offerIdsForAlert(alert);
+  return ids.length > 0 && ids.every((id) => alert.offerReviews?.[id]?.status === 'rejected');
+};
+
+/** Same, for the asset track — only counts offers still reviewable (not already rejected in stage 1), matching the asset rollup's own pool. */
+const allAssetsRejected = (alert: Alert): boolean => {
+  const ids = offerIdsForAlert(alert).filter((id) => alert.offerReviews?.[id]?.status !== 'rejected');
+  return ids.length > 0 && ids.every((id) => alert.assetReviews?.[id]?.status === 'rejected');
+};
+
 /**
- * Offers/Assets review status, shown side by side — collapses into a single "Sent" chip once the
- * alert has gone out, since the two stages no longer matter individually at that point. Never shows
- * who made the approval/change request (not even on hover) — only the current status.
+ * Offers/Assets review status, shown side by side while the alert is still Generated — a card in the
+ * Reviewed or Sent column shows neither (there's nothing left to track once the review is done or the
+ * alert is out). If every offer (or every reviewable asset) was individually rejected, that track's chip
+ * swaps to a filled red trash icon instead of the usual pending/approved icon, so a fully-rejected track
+ * reads clearly at a glance. Never shows who made the approval/change request (not even on hover) — only
+ * the current status.
  */
-export const AlertApprovalChips = ({ alert }: { alert: Alert }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    {alert.status === 'sent' ? (
-      <ApprovalStatusChip icon={Send} color="#4caf50" label="Sent" />
-    ) : (
-      <>
+export const AlertApprovalChips = ({ alert }: { alert: Alert }) => {
+  if (alert.status !== 'generated') return null;
+  const offersRejected = allOffersRejected(alert);
+  const assetsRejected = allAssetsRejected(alert);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {offersRejected ? (
+        <ApprovalStatusChip icon={Delete} color="#d32f2f" label="Offers" />
+      ) : (
         <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.offersStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.offersStatus].color} label="Offers" />
+      )}
+      {assetsRejected ? (
+        <ApprovalStatusChip icon={Delete} color="#d32f2f" label="Assets" />
+      ) : (
         <ApprovalStatusChip icon={APPROVAL_CHIP_STYLE[alert.assetsStatus].Icon} color={APPROVAL_CHIP_STYLE[alert.assetsStatus].color} label="Assets" />
-      </>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
+};
 
 /** Red pill shown in place of the Email/Assets approval chips whenever an alert's generation failed outright — used by both the card and the table row's Approvals cell. */
 export const GenerationFailedChip = () => (
