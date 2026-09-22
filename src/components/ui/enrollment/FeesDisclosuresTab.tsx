@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Button, Checkbox, CircularProgress, IconButton, InputAdornment, TextField } from '@mui/material';
-import { Add, AutoAwesome, Close, DescriptionOutlined, EditOutlined, RemoveCircleOutlineOutlined } from '@mui/icons-material';
+import { Add, Autorenew, AutoAwesome, Close, DescriptionOutlined, EditOutlined, RemoveCircleOutlineOutlined } from '@mui/icons-material';
 import type { AdditionalFee, DisclosureBlock, DisclosureSnippetMeta, EnrollmentSettings } from '../../../data/enrollmentSettings';
 import { BODY_TEXT_STYLE, FIELD_LABEL_STYLE, HELPER_TEXT_STYLE, LINK_BUTTON_STYLE, TEXT_FIELD_SX } from './shared';
 import { generateDisclosureSnippet } from '../../../utils/disclosureSnippetAI';
@@ -8,6 +8,7 @@ import type { DisclosureReplacement } from '../../../utils/disclosureSnippetColo
 import { CURRENT_USER } from '../../../data/mockData';
 import { DisclosureSnippetDialog } from './DisclosureSnippetDialog';
 import { RemoveSnippetDialog } from './RemoveSnippetDialog';
+import { ReplaceSnippetDialog } from './ReplaceSnippetDialog';
 
 /** "Select Snippet" action icon — a document with a small link/select badge, no equivalent shape in the MUI icon set. */
 const SelectSnippetIcon = () => (
@@ -72,6 +73,9 @@ export const FeesDisclosuresTab = ({ settings, onChange, accountName, accountBra
   // from unchecking a block that already has a snippet (block also becomes unchecked) — both destroy the
   // snippet + text, so both are gated behind the same confirmation dialog.
   const [removalRequest, setRemovalRequest] = useState<{ id: DisclosureBlock['id']; uncheck: boolean } | null>(null);
+  // A pending replacement, requested from the "Replace" link — detaches the snippet and drops the
+  // block straight into text entry so the user can provide new disclosure text and generate a fresh snippet.
+  const [replaceRequest, setReplaceRequest] = useState<DisclosureBlock['id'] | null>(null);
   // Blocks where the user has clicked "Use Client-Provided Disclosure" — shows the text field instead
   // of the CTA chooser. Selecting a disclosure type always lands on the CTAs first, even if it already
   // has text behind the scenes — see `showTextEntry` below. Unchecking a block always clears it back out,
@@ -140,6 +144,7 @@ export const FeesDisclosuresTab = ({ settings, onChange, accountName, accountBra
 
   const editingBlock = settings.disclosures.find((d) => d.id === editingId);
   const removalBlock = settings.disclosures.find((d) => d.id === removalRequest?.id);
+  const replaceBlock = settings.disclosures.find((d) => d.id === replaceRequest);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -175,6 +180,9 @@ export const FeesDisclosuresTab = ({ settings, onChange, accountName, accountBra
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <button style={LINK_BUTTON_STYLE} onClick={() => setEditingId(d.id)}>
                     <EditOutlined style={{ fontSize: 15 }} /> Edit
+                  </button>
+                  <button style={LINK_BUTTON_STYLE} onClick={() => setReplaceRequest(d.id)}>
+                    <Autorenew style={{ fontSize: 15 }} /> Replace
                   </button>
                   <button style={LINK_BUTTON_STYLE} onClick={() => setRemovalRequest({ id: d.id, uncheck: false })}>
                     <RemoveCircleOutlineOutlined style={{ fontSize: 15 }} /> Remove
@@ -353,6 +361,19 @@ export const FeesDisclosuresTab = ({ settings, onChange, accountName, accountBra
             });
           }
           setRemovalRequest(null);
+        }}
+      />
+
+      <ReplaceSnippetDialog
+        open={!!replaceBlock?.snippet}
+        snippetName={replaceBlock?.snippet?.name ?? ''}
+        onCancel={() => setReplaceRequest(null)}
+        onConfirm={() => {
+          if (replaceRequest) {
+            setTextEntryStarted((prev) => new Set(prev).add(replaceRequest));
+            updateDisclosure(replaceRequest, { text: '', snippet: undefined });
+          }
+          setReplaceRequest(null);
         }}
       />
     </div>
