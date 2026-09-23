@@ -1,4 +1,5 @@
 import type { Offer, Template, Background, Asset, Alert } from '../data/types';
+import type { Project } from '../data/projects';
 
 /**
  * Deterministically varies which background an offer's preview asset uses, so different offers
@@ -9,6 +10,57 @@ export function backgroundForOffer(offer: Offer, offers: Offer[], backgrounds: B
   if (backgrounds.length === 0) return undefined;
   const index = offers.findIndex((o) => o.id === offer.id);
   return backgrounds[(index < 0 ? 0 : index) % backgrounds.length];
+}
+
+/** One asset shown in an Alert dialog's carousel — either the "primary" asset (project.templates[0], the
+ * only one ever included in the email) or an "extra" asset generated from one of the project's other
+ * templates. `key` is what `Alert.offerReviews`/`Alert.extraAssetReviews` are keyed by: a bare offer id for
+ * primary entries (unchanged from today), or a composite id for extra entries. */
+export interface AlertAssetEntry {
+  key: string;
+  offer: Offer;
+  template: Template;
+  background: Background;
+  isPrimary: boolean;
+}
+
+export const extraAssetKey = (offerId: string, templateId: string, backgroundId: string): string =>
+  `${offerId}::${templateId}::${backgroundId}`;
+
+/**
+ * Every asset an Alert's offers can show, across every template the project defines. `project.templates[0]`
+ * keeps today's exact one-background-per-offer behavior (via `backgroundForOffer`); every additional
+ * template contributes one asset per offer per background in that template's scope. For any project with
+ * only one template (every Evergreen project except BMW Seattle today) this returns exactly the primary
+ * entries, identical to current behavior.
+ */
+export function buildAlertAssetEntries(alertOffers: Offer[], allOffers: Offer[], project: Project): AlertAssetEntry[] {
+  const [primaryTemplate, ...extraTemplates] = project.templates;
+  if (!primaryTemplate) return [];
+
+  const entries: AlertAssetEntry[] = [];
+
+  alertOffers.forEach((offer) => {
+    const bg = backgroundForOffer(offer, allOffers, project.backgrounds);
+    if (bg) entries.push({ key: offer.id, offer, template: primaryTemplate, background: bg, isPrimary: true });
+  });
+
+  extraTemplates.forEach((template) => {
+    const templateBackgrounds = project.backgrounds.filter((b) => b.templateId === template.id);
+    alertOffers.forEach((offer) => {
+      templateBackgrounds.forEach((background) => {
+        entries.push({
+          key: extraAssetKey(offer.id, template.id, background.id),
+          offer,
+          template,
+          background,
+          isPrimary: false,
+        });
+      });
+    });
+  });
+
+  return entries;
 }
 
 export interface PreviewAdShell {

@@ -2,8 +2,9 @@ import { useRef } from 'react';
 import { IconButton, Switch } from '@mui/material';
 import { ChevronLeft, ChevronRight, TaskAlt } from '@mui/icons-material';
 import type {
-  AssetCommentAnchor, Background, CreativeQcResult, DealQcOfferResult, Offer, QcFinding, ReviewStatus, Template,
+  AssetCommentAnchor, CreativeQcResult, DealQcOfferResult, Offer, QcFinding, ReviewStatus, Template,
 } from '../../data/types';
+import type { AlertAssetEntry } from '../../utils/overviewAssets';
 import { CommentableAssetPreview, type AssetTextSelection } from './CommentableAssetPreview';
 import { AssetStatusBadge } from './AlertApprovalWidgets';
 import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
@@ -59,16 +60,21 @@ interface AlertAssetFocusViewProps {
   activeSideCardKey: string | null;
   onToggleSideCard: (key: string) => void;
   sideCardRef: React.RefObject<HTMLDivElement | null>;
-  carouselOffers: Offer[];
-  /** Whether the alert has more than one offer at all (unaffected by the pending-only filter) — controls whether the carousel section (and its toggle) renders. */
-  hasMultipleOffers: boolean;
-  bgFor: (offer: Offer) => Background | undefined;
-  onSelectOffer: (offerId: string) => void;
-  reviewFor: (offerId: string) => ReviewStatus;
+  /** The focused asset's own key — highlights its thumbnail in the carousel. */
+  focusedKey: string;
+  /** Every asset currently visible in the carousel, grouped by vehicle or by template (per `groupBy`) and
+   * already filtered by the pending-only toggle. Empty groups are omitted. */
+  carouselGroups: { label: string; entries: AlertAssetEntry[] }[];
+  /** Whether the alert has more than one asset at all (unaffected by the pending-only filter) — controls whether the carousel section (and its toggle row) renders. */
+  hasMultipleAssets: boolean;
+  onSelectEntry: (key: string) => void;
+  reviewForEntry: (entry: AlertAssetEntry) => ReviewStatus;
+  groupBy: 'vehicle' | 'template';
+  onChangeGroupBy: (groupBy: 'vehicle' | 'template') => void;
   pendingOnlyFilter: boolean;
   onTogglePendingOnlyFilter: () => void;
-  onPrevOffer: () => void;
-  onNextOffer: () => void;
+  onPrevAsset: () => void;
+  onNextAsset: () => void;
   /** Whether any offer across the whole alert (not just the filtered carousel) is still unreviewed — controls the "Approve All Assets" button. */
   hasPendingAssets: boolean;
   onApproveAllAssets: () => void;
@@ -90,8 +96,9 @@ export const AlertAssetFocusView = ({
   offer, template, backgroundUrl, title, dimensions, pins, pendingAnchor, activeAnchorId, onPinClick,
   registerAnchorRef, anchorRefsMap, onCreatePin, onTextSelected, approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
   onRequestPreview, onShowOfferCard, legacyFindings, creativeQc, dealQc, activeSideCardKey, onToggleSideCard,
-  sideCardRef, carouselOffers, hasMultipleOffers, bgFor, onSelectOffer, reviewFor, pendingOnlyFilter, onTogglePendingOnlyFilter,
-  onPrevOffer, onNextOffer, hasPendingAssets, onApproveAllAssets, showComments, showResolved, commentEntries,
+  sideCardRef, focusedKey, carouselGroups, hasMultipleAssets, onSelectEntry, reviewForEntry, groupBy, onChangeGroupBy,
+  pendingOnlyFilter, onTogglePendingOnlyFilter,
+  onPrevAsset, onNextAsset, hasPendingAssets, onApproveAllAssets, showComments, showResolved, commentEntries,
   registerCommentRef, onCancelPendingComment, onSendPendingComment, onToggleResolved, onDeleteComment,
   onJumpToAnchor, onReply, onToggleReaction,
 }: AlertAssetFocusViewProps) => {
@@ -104,10 +111,11 @@ export const AlertAssetFocusView = ({
     : undefined;
   const showCreativeCard = activeSideCardKey === `creative:${offer.id}` && creativeQc;
   const showDealCard = activeSideCardKey === `deal:${offer.id}` && dealQc;
+  const totalCarouselEntries = carouselGroups.reduce((n, g) => n + g.entries.length, 0);
   // Toggling "pending only" can hide the currently-focused asset entirely (it's reviewed and filtered
   // out) — rather than show a reviewed asset the carousel below no longer lists, swap in this message.
-  const showAllReviewedMessage = pendingOnlyFilter && carouselOffers.length === 0;
-  const canStepOffers = carouselOffers.length > 1;
+  const showAllReviewedMessage = pendingOnlyFilter && totalCarouselEntries === 0;
+  const canStepAssets = totalCarouselEntries > 1;
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
@@ -118,7 +126,7 @@ export const AlertAssetFocusView = ({
             All assets reviewed.
           </p>
           <p style={{ margin: 0, fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#686576', maxWidth: 320 }}>
-            Click on "Show pending assets only" below to display reviewed assets.
+            Click on "Pending only" below to display reviewed assets.
           </p>
         </div>
       ) : (
@@ -133,9 +141,9 @@ export const AlertAssetFocusView = ({
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      {canStepOffers && (
+      {canStepAssets && (
         <IconButton
-          onClick={onPrevOffer}
+          onClick={onPrevAsset}
           title="Previous asset"
           sx={{
             flexShrink: 0, width: 36, height: 36, background: '#ffffff',
@@ -270,9 +278,9 @@ export const AlertAssetFocusView = ({
         onToggleReaction={onToggleReaction}
       />
       </div>
-      {canStepOffers && (
+      {canStepAssets && (
         <IconButton
-          onClick={onNextOffer}
+          onClick={onNextAsset}
           title="Next asset"
           sx={{
             flexShrink: 0, width: 36, height: 36, background: '#ffffff',
@@ -286,24 +294,46 @@ export const AlertAssetFocusView = ({
       </>
       )}
 
-      {hasMultipleOffers && (
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <Switch
-              size="small"
-              checked={pendingOnlyFilter}
-              onChange={onTogglePendingOnlyFilter}
-              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
-            />
-            <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Show pending assets only</span>
-          </label>
+      {hasMultipleAssets && (
+        <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Group by</span>
+              <div style={{ display: 'inline-flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 100, padding: 2 }}>
+                {([
+                  { value: 'vehicle', label: 'Vehicle' },
+                  { value: 'template', label: 'Template' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => onChangeGroupBy(opt.value)}
+                    style={{
+                      border: 'none', cursor: 'pointer', borderRadius: 100, padding: '3px 12px',
+                      fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                      background: groupBy === opt.value ? '#473bab' : 'transparent',
+                      color: groupBy === opt.value ? '#ffffff' : '#686576',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
+              <Switch
+                size="small"
+                checked={pendingOnlyFilter}
+                onChange={onTogglePendingOnlyFilter}
+                sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
+              />
+              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Pending only</span>
+            </label>
+          </div>
           <AlertAssetCarousel
-            offers={carouselOffers}
-            template={template}
-            bgFor={bgFor}
-            focusedOfferId={offer.id}
-            onSelect={onSelectOffer}
-            reviewFor={reviewFor}
+            groups={carouselGroups}
+            focusedKey={focusedKey}
+            onSelect={onSelectEntry}
+            reviewFor={reviewForEntry}
           />
         </div>
       )}

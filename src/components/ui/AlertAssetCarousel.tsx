@@ -1,37 +1,49 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton } from '@mui/material';
 import { Cancel, CheckCircle, ChevronLeft, ChevronRight } from '@mui/icons-material';
-import type { Offer, ReviewStatus, Template } from '../../data/types';
+import type { ReviewStatus } from '../../data/types';
+import type { AlertAssetEntry } from '../../utils/overviewAssets';
 import { FilledTemplatePreview } from './FilledTemplatePreview';
 
 /**
- * Horizontal strip of 100x100 thumbnails, one per offer in the alert — click to change which asset is
- * shown at full size in AlertAssetFocusView. Unlike the focused asset (which shows no colored
- * overlay/outline — that state is read from the AssetStatusBadge instead), a reviewed thumbnail gets a
- * 2px colored outline, a matching color tint, and a small check/cancel badge in its bottom-right corner,
- * so review state reads at a glance across every asset without opening each one.
+ * Horizontal strip of thumbnails, grouped (by vehicle or by template — see AlertDialog's `groupBy`), one
+ * thumbnail per asset — click to change which asset is shown at full size in AlertAssetFocusView. Unlike
+ * the focused asset (which shows no colored overlay/outline — that state is read from the AssetStatusBadge
+ * instead), a reviewed thumbnail gets a 2px colored outline, a matching color tint, and a small
+ * check/cancel badge in its bottom-right corner, so review state reads at a glance across every asset
+ * without opening each one.
  *
- * The strip isn't clamped to the focused asset's width: it fills up to the available canvas width,
- * centering itself (and its thumbnails) when everything fits, or filling the canvas and exposing
- * left/right arrow controls to step through the rest when it doesn't.
+ * Every group is laid out side by side in one continuous horizontally-scrolling row — the strip isn't
+ * clamped to the focused asset's width, it fills the full canvas width, centering itself when everything
+ * fits, or filling the canvas and exposing left/right arrow controls to manually nudge the scroll when it
+ * doesn't. Focus moving (keyboard arrows / the large flanking chevrons beside the focused asset) auto-
+ * scrolls the strip to keep the newly-focused thumbnail in view.
  */
 
-const THUMB_SIZE = 100;
-const GAP = 10;
-const STEP = THUMB_SIZE + GAP;
+const GROUP_GAP = 28;
+const ITEM_GAP = 10;
+const THUMB_HEIGHT = 100;
+const MAX_THUMB_WIDTH = 220;
+const NUDGE = 300;
 
-interface AlertAssetCarouselProps {
-  offers: Offer[];
-  template: Template;
-  bgFor: (offer: Offer) => { url: string } | undefined;
-  focusedOfferId: string | null;
-  onSelect: (offerId: string) => void;
-  reviewFor: (offerId: string) => ReviewStatus;
+interface AlertAssetCarouselGroup {
+  label: string;
+  entries: AlertAssetEntry[];
 }
 
-export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, onSelect, reviewFor }: AlertAssetCarouselProps) => {
+interface AlertAssetCarouselProps {
+  groups: AlertAssetCarouselGroup[];
+  focusedKey: string | null;
+  onSelect: (key: string) => void;
+  reviewFor: (entry: AlertAssetEntry) => ReviewStatus;
+}
+
+export const AlertAssetCarousel = ({ groups, focusedKey, onSelect, reviewFor }: AlertAssetCarouselProps) => {
   const outerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const entryRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [availableWidth, setAvailableWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
 
   useEffect(() => {
@@ -44,7 +56,18 @@ export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, on
     return () => ro.disconnect();
   }, []);
 
-  const contentWidth = offers.length > 0 ? offers.length * STEP - GAP : 0;
+  // Content width is measured (rather than computed analytically) since thumbnail width now varies per
+  // entry's template aspect ratio instead of being a fixed square.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const update = () => setContentWidth(el.scrollWidth);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    update();
+    return () => ro.disconnect();
+  }, [groups]);
+
   const overflowing = contentWidth > availableWidth && availableWidth > 0;
   const maxOffset = Math.max(0, contentWidth - availableWidth);
 
@@ -52,7 +75,23 @@ export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, on
     setScrollOffset((v) => Math.min(v, maxOffset));
   }, [maxOffset]);
 
-  if (offers.length <= 1) return null;
+  // Keep the focused thumbnail in view whenever focus changes — combined with the infinite-loop focus
+  // stepping in AlertDialog, moving past the last asset jumps back to the first and the strip scrolls with it.
+  useEffect(() => {
+    if (!focusedKey || !overflowing) return;
+    const el = entryRefs.current.get(focusedKey);
+    if (!el) return;
+    const entryLeft = el.offsetLeft;
+    const entryRight = entryLeft + el.offsetWidth;
+    setScrollOffset((v) => {
+      if (entryLeft < v) return Math.max(0, entryLeft - 16);
+      if (entryRight > v + availableWidth) return Math.min(maxOffset, entryRight - availableWidth + 16);
+      return v;
+    });
+  }, [focusedKey, overflowing, availableWidth, maxOffset]);
+
+  const totalEntries = groups.reduce((n, g) => n + g.entries.length, 0);
+  if (totalEntries <= 1) return null;
 
   const canScrollLeft = overflowing && scrollOffset > 0;
   const canScrollRight = overflowing && scrollOffset < maxOffset;
@@ -67,44 +106,58 @@ export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, on
         }}
       >
         <div
+          ref={contentRef}
           style={{
-            display: 'flex', gap: GAP, flexShrink: 0,
+            display: 'flex', gap: GROUP_GAP, flexShrink: 0,
             transform: overflowing ? `translateX(-${scrollOffset}px)` : undefined,
             transition: 'transform 0.2s ease',
           }}
         >
-          {offers.map((offer) => {
-            const bg = bgFor(offer);
-            if (!bg) return null;
-            const isFocused = offer.id === focusedOfferId;
-            const status = reviewFor(offer.id);
-            const reviewColor = status === 'approved' ? '#4caf50' : status === 'rejected' ? '#be0e1c' : undefined;
-            const ringColor = reviewColor ?? (isFocused ? '#473bab' : undefined);
+          {groups.map((group) => (
+            <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', whiteSpace: 'nowrap' }}>
+                {group.label}
+              </span>
+              <div style={{ display: 'flex', gap: ITEM_GAP }}>
+                {group.entries.map((entry) => {
+                  const aspect = entry.template.width / entry.template.height;
+                  const width = Math.min(MAX_THUMB_WIDTH, Math.round(THUMB_HEIGHT * aspect));
+                  const isFocused = entry.key === focusedKey;
+                  const status = reviewFor(entry);
+                  const reviewColor = status === 'approved' ? '#4caf50' : status === 'rejected' ? '#be0e1c' : undefined;
+                  const ringColor = reviewColor ?? (isFocused ? '#473bab' : undefined);
 
-            return (
-              <button
-                key={offer.id}
-                onClick={() => onSelect(offer.id)}
-                title={offer.vehicleName}
-                style={{
-                  position: 'relative', flexShrink: 0, width: THUMB_SIZE, height: THUMB_SIZE, padding: 0, cursor: 'pointer',
-                  border: 'none', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
-                  boxShadow: ringColor ? `inset 0 0 0 2px ${ringColor}` : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
-                }}
-              >
-                <FilledTemplatePreview template={template} offer={offer} backgroundUrl={bg.url} />
-                {reviewColor && (
-                  <div style={{ position: 'absolute', inset: 0, background: status === 'approved' ? 'rgba(76,175,80,0.22)' : 'rgba(190,14,28,0.22)', pointerEvents: 'none' }} />
-                )}
-                {status === 'approved' && (
-                  <CheckCircle style={{ position: 'absolute', bottom: 3, right: 3, fontSize: 18, color: '#4caf50', background: '#ffffff', borderRadius: '50%' }} />
-                )}
-                {status === 'rejected' && (
-                  <Cancel style={{ position: 'absolute', bottom: 3, right: 3, fontSize: 18, color: '#be0e1c', background: '#ffffff', borderRadius: '50%' }} />
-                )}
-              </button>
-            );
-          })}
+                  return (
+                    <button
+                      key={entry.key}
+                      ref={(el) => {
+                        if (el) entryRefs.current.set(entry.key, el);
+                        else entryRefs.current.delete(entry.key);
+                      }}
+                      onClick={() => onSelect(entry.key)}
+                      title={entry.offer.vehicleName}
+                      style={{
+                        position: 'relative', flexShrink: 0, width, height: THUMB_HEIGHT, padding: 0, cursor: 'pointer',
+                        border: 'none', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
+                        boxShadow: ringColor ? `inset 0 0 0 2px ${ringColor}` : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
+                      }}
+                    >
+                      <FilledTemplatePreview template={entry.template} offer={entry.offer} backgroundUrl={entry.background.url} />
+                      {reviewColor && (
+                        <div style={{ position: 'absolute', inset: 0, background: status === 'approved' ? 'rgba(76,175,80,0.22)' : 'rgba(190,14,28,0.22)', pointerEvents: 'none' }} />
+                      )}
+                      {status === 'approved' && (
+                        <CheckCircle style={{ position: 'absolute', bottom: 3, right: 3, fontSize: 18, color: '#4caf50', background: '#ffffff', borderRadius: '50%' }} />
+                      )}
+                      {status === 'rejected' && (
+                        <Cancel style={{ position: 'absolute', bottom: 3, right: 3, fontSize: 18, color: '#be0e1c', background: '#ffffff', borderRadius: '50%' }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -113,7 +166,7 @@ export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, on
           <IconButton
             size="small"
             disabled={!canScrollLeft}
-            onClick={() => scrollBy(-STEP)}
+            onClick={() => scrollBy(-NUDGE)}
             sx={{
               position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
               width: 28, height: 28, background: 'rgba(255,255,255,0.92)', boxShadow: '0px 1px 4px rgba(0,0,0,0.2)',
@@ -126,7 +179,7 @@ export const AlertAssetCarousel = ({ offers, template, bgFor, focusedOfferId, on
           <IconButton
             size="small"
             disabled={!canScrollRight}
-            onClick={() => scrollBy(STEP)}
+            onClick={() => scrollBy(NUDGE)}
             sx={{
               position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
               width: 28, height: 28, background: 'rgba(255,255,255,0.92)', boxShadow: '0px 1px 4px rgba(0,0,0,0.2)',

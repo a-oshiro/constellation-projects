@@ -101,6 +101,8 @@ interface ProjectContextValue {
   setAssetsReview: (id: string, status: ReviewStatus) => void;
   /** Sets one offer's asset review state independently of the others, recomputing the `assetsStatus` rollup. No-ops once the alert has been sent. */
   setOfferAssetReview: (id: string, offerId: string, status: ReviewStatus) => void;
+  /** Sets one "extra" (non-primary-template) asset's review state, keyed by its composite AlertAssetEntry key. Purely advisory — unlike setOfferAssetReview, never touches `assetsStatus`/`status`. No-ops once the alert has been sent. */
+  setExtraAssetReview: (id: string, key: string, status: ReviewStatus) => void;
   /** Resets both review tracks to pending and moves the alert back to Generated. Only valid while the alert is Rejected. */
   rebuildAlert: (id: string) => void;
   /** Clears a hard generation failure and resets both review tracks to pending, as if the alert had just been (successfully) generated. Only valid while the alert has a `generationFailure`. */
@@ -319,6 +321,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ? a.activity
         : [...a.activity, makeActivityEntry(id, reviewStatus === 'approved' ? 'assets_approved' : 'assets_rejected', timestamp)];
       return { ...a, offerReviews, assetsStatus, status: deriveAlertStatus(a.emailStatus, assetsStatus), activity };
+    }));
+  }, []);
+
+  /** Sets one "extra" asset's review state (keyed by its composite AlertAssetEntry key). Purely advisory —
+   * doesn't recompute `assetsStatus`/`status` or log activity, since these assets never gate send-readiness
+   * or appear in the email. No-ops once the alert has been sent. */
+  const setExtraAssetReview = useCallback((id: string, key: string, reviewStatus: ReviewStatus) => {
+    setAlerts((prev) => prev.map((a) => {
+      if (a.id !== id || a.status === 'sent') return a;
+      const extraAssetReviews = { ...(a.extraAssetReviews ?? {}) };
+      if (reviewStatus === 'pending') {
+        delete extraAssetReviews[key];
+      } else {
+        extraAssetReviews[key] = { status: reviewStatus, actorName: CURRENT_USER.name, timestamp: Date.now() };
+      }
+      return { ...a, extraAssetReviews };
     }));
   }, []);
 
@@ -839,7 +857,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       locked, setLocked,
       destinationUrls, setDestinationUrl, bulkSetDestinationUrls,
       currentProject, selectedProjectId, selectProject,
-      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
+      alerts, moveAlert, setEmailReview, setAssetsReview, setOfferAssetReview, setExtraAssetReview, rebuildAlert, regenerateAlert, setAlertRecipients, sendAlert, archiveAlert, generateAlerts, reviewAlertTrack, addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
     }}>
       {children}
     </ProjectContext.Provider>

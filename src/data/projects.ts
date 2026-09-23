@@ -249,8 +249,12 @@ const HAND_WRITTEN_PROJECTS: Project[] = [
     // The Alerts Lifecycle board only ever references SEATTLE_OFFERS ids, so those stay first;
     // the rest of the BMW catalog is appended purely to give the Overview's Preview panel more assets.
     offers: [...SEATTLE_OFFERS, ...OFFERS.filter((o) => !o.swapOnly)],
-    templates: [templateById('tmpl-2')],
-    backgrounds: byTemplateIds(['tmpl-2']).filter((b) => ['bg-4', 'bg-5', 'bg-13', 'bg-14'].includes(b.id)),
+    // tmpl-2 (the 1080x1080 square) must stay first — it's the only template ever used for the outbound
+    // email and for every other Evergreen project's single-asset flow. tmpl-3/tmpl-4 are extra horizontal
+    // templates: their assets are approvable in the Alert dialog's carousel but never appear in the email.
+    templates: [templateById('tmpl-2'), templateById('tmpl-3'), templateById('tmpl-4')],
+    backgrounds: byTemplateIds(['tmpl-2', 'tmpl-3', 'tmpl-4']).filter((b) =>
+      ['bg-4', 'bg-5', 'bg-13', 'bg-14', 'bg-7', 'bg-8', 'bg-9', 'bg-10', 'bg-11', 'bg-12'].includes(b.id)),
     alerts: SEATTLE_ALERTS,
     sectionStatus: {
       offers: 'done',

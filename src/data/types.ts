@@ -403,6 +403,12 @@ export interface Alert {
   assetsStatus: ReviewStatus;
   /** Per-offer (featuredOfferId + otherOfferIds) review state, keyed by offer id. Absent entries default to 'pending'. */
   offerReviews?: Record<string, OfferReviewEntry>;
+  /** Review state for "extra" assets — every asset generated from a project template beyond `templates[0]`
+   * (e.g. BMW Seattle's additional horizontal templates), keyed by the composite `AlertAssetEntry.key`
+   * (`${offerId}::${templateId}::${backgroundId}`). Purely advisory: unlike `offerReviews`, this never feeds
+   * `assetsStatus`/`status` and never affects the email, which only ever uses `templates[0]`. Absent entries
+   * default to 'pending'. */
+  extraAssetReviews?: Record<string, OfferReviewEntry>;
   createdAt: number;
   /** Ordered oldest -> newest. */
   activity: AlertActivityEntry[];

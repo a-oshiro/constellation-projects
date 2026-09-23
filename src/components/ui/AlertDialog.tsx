@@ -5,10 +5,10 @@ import {
   Close, HistoryOutlined, MoreVert, Send, AddComment, ErrorOutlined, WarningAmberOutlined, ModeCommentOutlined,
   MailOutlined, DirectionsCarOutlined, ChevronRight,
 } from '@mui/icons-material';
-import type { Alert, AlertActivityEntry, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer } from '../../data/types';
+import type { Alert, AlertActivityEntry, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, ReviewStatus } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import { backgroundForOffer } from '../../utils/overviewAssets';
+import { backgroundForOffer, buildAlertAssetEntries, type AlertAssetEntry } from '../../utils/overviewAssets';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 import { useResizableWidth } from '../../hooks/useResizableWidth';
 import { FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
@@ -58,7 +58,7 @@ interface AlertDialogProps {
 
 export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const {
-    offers, currentProject, locked, setEmailReview, setOfferAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
+    offers, currentProject, locked, setEmailReview, setOfferAssetReview, setExtraAssetReview, sendAlert, regenerateAlert, setAlertRecipients,
     addAlertComment, toggleAlertCommentResolved, deleteAlertComment, toggleAlertCommentReaction,
   } = useProject();
 
@@ -92,8 +92,18 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   /** Which offer's asset is expanded into the Asset Details dialog — the alert dialog stays mounted
    * underneath, so closing it (setDetailsOfferId(null)) needs no extra state to "return" to. */
   const [detailsOfferId, setDetailsOfferId] = useState<string | null>(null);
-  /** Which offer's asset is shown at full size in the main asset-focus view. */
-  const [focusedOfferId, setFocusedOfferId] = useState<string | null>(() => allAlertOffers[0]?.id ?? null);
+  // Every asset this alert's offers can show — the "primary" one per offer (project.templates[0], the only
+  // one ever used by the email) plus one "extra" entry per offer per background for every other template
+  // the project defines. For every project except BMW Seattle today, templates.length === 1, so this is
+  // exactly the old one-asset-per-offer list. `allAlertOffers` is a fresh array every render, so there's no
+  // real memoization win from useMemo here — just compute it plainly.
+  const assetEntries = buildAlertAssetEntries(allAlertOffers, offers, currentProject);
+  const entryByKey = new Map(assetEntries.map((e) => [e.key, e]));
+  /** Whether the carousel groups by vehicle (default) or by template/size. */
+  const [groupBy, setGroupBy] = useState<'vehicle' | 'template'>('vehicle');
+  /** Which asset is shown at full size in the main asset-focus view — `AlertAssetEntry.key` (a bare offer id
+   * for the primary asset, or a composite key for an extra asset). */
+  const [focusedAssetKey, setFocusedAssetKey] = useState<string | null>(() => assetEntries[0]?.key ?? null);
   /** Set by an asset's "Offer Info" button — opens the Alert Offers panel on the Selected tab and
    * scrolls/flashes that offer's card there. `token` is a nonce so re-clicking the same asset's button
    * retriggers the scroll/flash even when `offerId` is unchanged. */
@@ -206,7 +216,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setEditingOfferId(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
-  const focusAsset = (offerId: string) => setFocusedOfferId(offerId);
+  // The primary asset's key is always the bare offer id (see buildAlertAssetEntries), so focusing "an
+  // offer's asset" (from the Offer Edit panel, etc.) just means focusing that key.
+  const focusAsset = (offerId: string) => setFocusedAssetKey(offerId);
   const editOffer = (offerId: string, view: 'vehicle' | 'offer') => {
     setEditingOfferId(offerId);
     setEditingOfferView(view);
@@ -333,45 +345,69 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const editingOffer = editingOfferId ? offers.find((o) => o.id === editingOfferId) : undefined;
   const detailsOffer = detailsOfferId ? offers.find((o) => o.id === detailsOfferId) : undefined;
   const detailsBg = detailsOffer ? bgFor(detailsOffer) : undefined;
-  const focusedOffer = focusedOfferId ? offers.find((o) => o.id === focusedOfferId) : undefined;
-  const focusedBg = focusedOffer ? bgFor(focusedOffer) : undefined;
+  const focusedEntry = focusedAssetKey ? entryByKey.get(focusedAssetKey) : undefined;
 
   const offerReviewFor = (offerId: string) => alert.offerReviews?.[offerId];
   const isOfferApproved = (offerId: string) => offerReviewFor(offerId)?.status === 'approved';
+  const extraReviewFor = (key: string) => alert.extraAssetReviews?.[key];
+  // Every asset (primary or extra) is reviewed/read through these two, so the carousel/focus view never
+  // needs to know which underlying review map a given entry lives in.
+  const reviewForEntry = (entry: AlertAssetEntry): ReviewStatus =>
+    (entry.isPrimary ? offerReviewFor(entry.offer.id) : extraReviewFor(entry.key))?.status ?? 'pending';
+  const setEntryReview = (entry: AlertAssetEntry, status: ReviewStatus) => {
+    if (entry.isPrimary) setOfferAssetReview(alert.id, entry.offer.id, status);
+    else setExtraAssetReview(alert.id, entry.key, status);
+  };
 
-  // The pending-only filter narrows the carousel to offers still awaiting review — toggling it on while
+  // The pending-only filter narrows the carousel to assets still awaiting review — toggling it on while
   // focused on an already-reviewed asset jumps focus to the first still-pending one, if any.
-  const pendingAlertOffers = allAlertOffers.filter((o) => (offerReviewFor(o.id)?.status ?? 'pending') === 'pending');
-  const carouselOffers = pendingOnlyFilter ? pendingAlertOffers : allAlertOffers;
+  const pendingEntries = assetEntries.filter((e) => reviewForEntry(e) === 'pending');
+  const visibleEntries = pendingOnlyFilter ? pendingEntries : assetEntries;
+
+  // Grouped + ordered list for the carousel: by vehicle (allAlertOffers order, i.e. featured first) or by
+  // template (project.templates order, i.e. the email/primary template first). Empty groups (everything in
+  // them filtered out by pendingOnlyFilter) are dropped entirely.
+  const carouselGroups: { label: string; entries: AlertAssetEntry[] }[] = groupBy === 'vehicle'
+    ? allAlertOffers
+      .map((offer) => ({ label: offer.vehicleName, entries: visibleEntries.filter((e) => e.offer.id === offer.id) }))
+      .filter((g) => g.entries.length > 0)
+    : currentProject.templates
+      .map((template) => ({
+        label: `${template.name} — ${template.width} x ${template.height}`,
+        entries: visibleEntries.filter((e) => e.template.id === template.id),
+      }))
+      .filter((g) => g.entries.length > 0);
+  const flatVisibleEntries = carouselGroups.flatMap((g) => g.entries);
+
   const handleTogglePendingOnlyFilter = () => {
     setPendingOnlyFilter((v) => {
       const next = !v;
-      if (next && focusedOfferId && !pendingAlertOffers.some((o) => o.id === focusedOfferId) && pendingAlertOffers[0]) {
-        setFocusedOfferId(pendingAlertOffers[0].id);
+      if (next && focusedAssetKey && !pendingEntries.some((e) => e.key === focusedAssetKey) && pendingEntries[0]) {
+        setFocusedAssetKey(pendingEntries[0].key);
       }
       return next;
     });
   };
-  // Steps focus to the previous/next offer within whatever's currently in the carousel (respecting the
-  // pending-only filter), wrapping at either end — shared by the flanking arrow buttons and the arrow-key
+  // Steps focus to the previous/next asset within whatever's currently in the (grouped, filtered) carousel,
+  // wrapping at either end — an infinite loop shared by the flanking arrow buttons and the arrow-key
   // shortcut below.
-  const stepFocusedOffer = (direction: 1 | -1) => {
-    if (carouselOffers.length < 2 || !focusedOfferId) return;
-    const idx = carouselOffers.findIndex((o) => o.id === focusedOfferId);
+  const stepFocusedAsset = (direction: 1 | -1) => {
+    if (flatVisibleEntries.length < 2 || !focusedAssetKey) return;
+    const idx = flatVisibleEntries.findIndex((e) => e.key === focusedAssetKey);
     if (idx === -1) return;
-    const nextIdx = (idx + direction + carouselOffers.length) % carouselOffers.length;
-    setFocusedOfferId(carouselOffers[nextIdx].id);
+    const nextIdx = (idx + direction + flatVisibleEntries.length) % flatVisibleEntries.length;
+    setFocusedAssetKey(flatVisibleEntries[nextIdx].key);
   };
 
   // Approving/rejecting the focused asset auto-advances to the next one in the carousel, so the user can
   // keep reviewing without clicking back into the carousel each time.
-  const reviewFocusedOfferAndAdvance = (offerId: string, reviewStatus: 'approved' | 'rejected') => {
-    setOfferAssetReview(alert.id, offerId, reviewStatus);
-    if (carouselOffers.length < 2) return;
-    const idx = carouselOffers.findIndex((o) => o.id === offerId);
+  const reviewFocusedAssetAndAdvance = (entry: AlertAssetEntry, reviewStatus: 'approved' | 'rejected') => {
+    setEntryReview(entry, reviewStatus);
+    if (flatVisibleEntries.length < 2) return;
+    const idx = flatVisibleEntries.findIndex((e) => e.key === entry.key);
     if (idx === -1) return;
-    const nextIdx = (idx + 1) % carouselOffers.length;
-    setFocusedOfferId(carouselOffers[nextIdx].id);
+    const nextIdx = (idx + 1) % flatVisibleEntries.length;
+    setFocusedAssetKey(flatVisibleEntries[nextIdx].key);
   };
 
   // Left/right arrow keys step through the carousel too — ignored while the user is typing anywhere
@@ -382,12 +418,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-      stepFocusedOffer(e.key === 'ArrowLeft' ? -1 : 1);
+      stepFocusedAsset(e.key === 'ArrowLeft' ? -1 : 1);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carouselOffers, focusedOfferId]);
+  }, [flatVisibleEntries, focusedAssetKey]);
 
   // Footer progress readout ("6 of 7 approved") and the assets progress ring's green/red split.
   const assetsTotalCount = allAlertOffers.length;
@@ -428,7 +464,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   };
   const handleToggleReaction = (commentId: string, emoji: string) => toggleAlertCommentReaction(alert.id, commentId, emoji);
 
-  const focusedDealQcResult = focusedOffer ? dealQcForOffer(focusedOffer.id) : undefined;
+  const focusedDealQcResult = focusedEntry ? dealQcForOffer(focusedEntry.offer.id) : undefined;
 
   return ReactDOM.createPortal(
     <>
@@ -508,48 +544,50 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               >
                 {failure ? (
                   <AlertGenerationFailedState failure={failure} onRegenerate={() => regenerateAlert(alert.id)} />
-                ) : focusedOffer && template && focusedBg ? (
+                ) : focusedEntry ? (
                   <AlertAssetFocusView
-                    offer={focusedOffer}
-                    template={template}
-                    backgroundUrl={focusedBg.url}
-                    title={focusedOffer.vehicleName}
-                    dimensions={`${template.width} x ${template.height}`}
-                    pins={pinsForOffer(focusedOffer.id)}
-                    pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === focusedOffer.id ? pendingAnchor : undefined}
+                    offer={focusedEntry.offer}
+                    template={focusedEntry.template}
+                    backgroundUrl={focusedEntry.background.url}
+                    title={focusedEntry.offer.vehicleName}
+                    dimensions={`${focusedEntry.template.width} x ${focusedEntry.template.height}`}
+                    pins={pinsForOffer(focusedEntry.offer.id)}
+                    pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === focusedEntry.offer.id ? pendingAnchor : undefined}
                     activeAnchorId={activeAnchorId}
                     onPinClick={handleAnchorClick}
                     registerAnchorRef={registerAnchorRef}
                     anchorRefsMap={anchorRefs}
                     onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
                     onTextSelected={setFloatingSelection}
-                    approvalStatus={offerReviewFor(focusedOffer.id)?.status ?? 'pending'}
+                    approvalStatus={reviewForEntry(focusedEntry)}
                     approvalDisabled={isArchived}
-                    onApprove={() => reviewFocusedOfferAndAdvance(focusedOffer.id, 'approved')}
-                    onReject={() => reviewFocusedOfferAndAdvance(focusedOffer.id, 'rejected')}
-                    onUndo={() => setOfferAssetReview(alert.id, focusedOffer.id, 'pending')}
-                    onRequestPreview={() => setDetailsOfferId(focusedOffer.id)}
-                    onShowOfferCard={() => { setActiveSideCardKey(null); showOfferInOffersPanel(focusedOffer.id); }}
-                    legacyFindings={qcFindingsForOffer(focusedOffer.id)}
-                    creativeQc={creativeQcForOffer(focusedOffer.id)}
+                    onApprove={() => reviewFocusedAssetAndAdvance(focusedEntry, 'approved')}
+                    onReject={() => reviewFocusedAssetAndAdvance(focusedEntry, 'rejected')}
+                    onUndo={() => setEntryReview(focusedEntry, 'pending')}
+                    onRequestPreview={() => setDetailsOfferId(focusedEntry.offer.id)}
+                    onShowOfferCard={() => { setActiveSideCardKey(null); showOfferInOffersPanel(focusedEntry.offer.id); }}
+                    legacyFindings={qcFindingsForOffer(focusedEntry.offer.id)}
+                    creativeQc={creativeQcForOffer(focusedEntry.offer.id)}
                     dealQc={focusedDealQcResult && dealQc ? { result: focusedDealQcResult, checkedAt: dealQc.checkedAt, rulesetVersion: dealQc.rulesetVersion } : undefined}
                     activeSideCardKey={activeSideCardKey}
                     onToggleSideCard={(key) => setActiveSideCardKey((k) => (k === key ? null : key))}
                     sideCardRef={sideCardRef}
-                    carouselOffers={carouselOffers}
-                    hasMultipleOffers={allAlertOffers.length > 1}
-                    bgFor={bgFor}
-                    onSelectOffer={focusAsset}
-                    reviewFor={(offerId) => offerReviewFor(offerId)?.status ?? 'pending'}
+                    focusedKey={focusedEntry.key}
+                    carouselGroups={carouselGroups}
+                    hasMultipleAssets={assetEntries.length > 1}
+                    onSelectEntry={setFocusedAssetKey}
+                    reviewForEntry={reviewForEntry}
+                    groupBy={groupBy}
+                    onChangeGroupBy={setGroupBy}
                     pendingOnlyFilter={pendingOnlyFilter}
                     onTogglePendingOnlyFilter={handleTogglePendingOnlyFilter}
-                    onPrevOffer={() => stepFocusedOffer(-1)}
-                    onNextOffer={() => stepFocusedOffer(1)}
+                    onPrevAsset={() => stepFocusedAsset(-1)}
+                    onNextAsset={() => stepFocusedAsset(1)}
                     hasPendingAssets={assetsApprovedCount + assetsRejectedCount < assetsTotalCount}
                     onApproveAllAssets={handleApproveRemainingAssets}
                     showComments={showComments}
                     showResolved={showResolved}
-                    commentEntries={assetColumnEntriesFor(focusedOffer.id)}
+                    commentEntries={assetColumnEntriesFor(focusedEntry.offer.id)}
                     registerCommentRef={registerCommentRef}
                     onCancelPendingComment={() => setPendingAnchor(undefined)}
                     onSendPendingComment={handleSendComment}
