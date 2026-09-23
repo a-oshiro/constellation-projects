@@ -16,7 +16,7 @@ import { PENDING_ANCHOR_ID } from './AlertHighlightableText';
  */
 
 const GAP = 12;
-const COLUMN_WIDTH = 280;
+export const COLUMN_WIDTH = 280;
 const EMOJI_PALETTE = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 interface ReactionsRowProps {

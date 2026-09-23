@@ -115,6 +115,7 @@ export const AlertAssetDetailsDialog = ({
               offer={offer}
               template={template}
               backgroundUrl={backgroundUrl}
+              assetKey={offer.id}
               pins={displayPins}
               pendingAnchor={pendingAnchor}
               activeAnchorId={activeAnchorId}

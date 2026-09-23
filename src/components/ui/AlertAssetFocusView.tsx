@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IconButton, Switch } from '@mui/material';
 import { ChevronLeft, ChevronRight, TaskAlt } from '@mui/icons-material';
 import type {
@@ -15,14 +15,25 @@ import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn
 import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 /**
- * The dialog's main content: one asset shown at 600x600 (title + dimensions left-aligned above it), with
- * QC warning tags + their floating detail cards to the left, and a carousel of every other asset below —
- * replaces the old inline-email-canvas as the dialog's primary view. Comment-by-click/drag-highlight is
+ * The dialog's main content: one asset, contain-fit within an 800x600 box so it never exceeds that in
+ * either dimension while keeping the template's own proportions (title + dimensions left-aligned above it),
+ * with QC warning tags + their floating detail cards to the left, and a carousel of every other asset below
+ * — replaces the old inline-email-canvas as the dialog's primary view. Comment-by-click/drag-highlight is
  * unchanged (same CommentableAssetPreview mechanism); this component just focuses it on one offer at a
  * time instead of stacking every offer's asset in a scrolling email.
+ *
+ * The asset is always centered in the stage; the comment column sits a fixed 20px to the right of it,
+ * scrolled into view (via the stage's own overflow:auto) rather than pulling the asset off-center when the
+ * canvas is too narrow to show both at once.
  */
 
-const FOCUS_SIZE = 600;
+const MAX_ASSET_WIDTH = 800;
+const MAX_ASSET_HEIGHT = 600;
+const COMMENT_GAP = 20;
+/** Width reserved by the flanking prev/next chevrons (36px button + 12px gap) on each side of the asset,
+ * when they're rendered — the asset itself (not the chevrons) is what gets centered/shifted, so this offset
+ * is subtracted back out when positioning the row that wraps both chevrons and the asset. */
+const CHEVRON_SPACE = 48;
 
 export const qcTagAnchorId = (key: string) => `qc-tag-${key}`;
 
@@ -103,8 +114,20 @@ export const AlertAssetFocusView = ({
   onJumpToAnchor, onReply, onToggleReaction,
 }: AlertAssetFocusViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageWidth, setStageWidth] = useState(0);
   const creativeHasWarning = !!creativeQc?.sections.some((s) => s.checks.some((c) => c.status === 'warning'));
   const dealHasMismatch = !!dealQc && dealQc.result.mismatchedFields.length > 0;
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const update = () => setStageWidth(el.clientWidth);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    update();
+    return () => ro.disconnect();
+  }, []);
 
   const activeLegacyFinding = activeSideCardKey?.startsWith('legacy:')
     ? legacyFindings.find((f) => `legacy:${f.id}` === activeSideCardKey)
@@ -117,15 +140,28 @@ export const AlertAssetFocusView = ({
   const showAllReviewedMessage = pendingOnlyFilter && totalCarouselEntries === 0;
   const canStepAssets = totalCarouselEntries > 1;
 
+  // Contain-fit the focused asset within an 800x600 box, preserving the template's own proportions — the
+  // square template fills it at 600x600 (height-bound); every wider-than-tall template scales to fill the
+  // full 800 width, capped at 600 tall if its aspect ratio is close to square.
+  const assetScale = Math.min(MAX_ASSET_WIDTH / template.width, MAX_ASSET_HEIGHT / template.height);
+  const assetWidth = Math.round(template.width * assetScale);
+  const assetHeight = Math.round(template.height * assetScale);
+
+  // The asset is always centered in the stage — the trailing comment column just tags along COMMENT_GAP
+  // to its right, wherever that lands (the stage's own overflow:auto lets it be scrolled into view if the
+  // canvas is too narrow to show both at once, rather than pulling the asset off-center to make room).
+  const assetLeft = (stageWidth - assetWidth) / 2;
+  const chevronSpace = canStepAssets ? CHEVRON_SPACE : 0;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* The "stage": the focused asset, centered both ways within whatever space is left above the
           carousel. Its own height never changes with the focused asset's aspect ratio (flex: 1 always
           consumes exactly the remaining space), so the carousel below never moves when a shorter/wider
           asset is focused. */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+      <div ref={stageRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
       {showAllReviewedMessage ? (
-        <div style={{ width: FOCUS_SIZE, margin: '0 auto', minHeight: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center' }}>
+        <div style={{ width: assetWidth, margin: '0 auto', minHeight: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center' }}>
           <TaskAlt style={{ fontSize: 32, color: '#4caf50' }} />
           <p style={{ margin: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25' }}>
             All assets reviewed.
@@ -136,7 +172,7 @@ export const AlertAssetFocusView = ({
         </div>
       ) : (
       <>
-      <div style={{ width: FOCUS_SIZE, margin: '0 auto' }}>
+      <div style={{ width: assetWidth, marginLeft: assetLeft, alignSelf: 'flex-start' }}>
         <p style={{ margin: '0 0 2px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.1px' }}>
           {title}
         </p>
@@ -145,7 +181,7 @@ export const AlertAssetFocusView = ({
         </p>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-start', marginLeft: assetLeft - chevronSpace }}>
       {canStepAssets && (
         <IconButton
           onClick={onPrevAsset}
@@ -158,9 +194,10 @@ export const AlertAssetFocusView = ({
           <ChevronLeft style={{ fontSize: 20 }} />
         </IconButton>
       )}
-      <div ref={containerRef} style={{ position: 'relative', width: FOCUS_SIZE }}>
-      <div style={{ position: 'relative', width: FOCUS_SIZE, aspectRatio: `${template.width} / ${template.height}` }}>
+      <div ref={containerRef} style={{ position: 'relative', width: assetWidth }}>
+      <div style={{ position: 'relative', width: assetWidth, height: assetHeight }}>
         <CommentableAssetPreview
+          assetKey={focusedKey}
           offer={offer}
           template={template}
           backgroundUrl={backgroundUrl}
@@ -269,7 +306,7 @@ export const AlertAssetFocusView = ({
         entries={showComments ? commentEntries : []}
         anchorRefs={anchorRefsMap}
         containerRef={containerRef}
-        left={FOCUS_SIZE + 24}
+        left={assetWidth + COMMENT_GAP}
         activeAnchorId={activeAnchorId}
         showResolved={showResolved}
         pendingAnchor={pendingAnchor}

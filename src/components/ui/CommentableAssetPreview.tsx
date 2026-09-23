@@ -95,6 +95,10 @@ interface CommentableAssetPreviewProps {
   offer: Offer;
   template: Template;
   backgroundUrl: string;
+  /** The specific asset being previewed (an AlertAssetEntry.key) — stamped onto any pin/highlight created
+   * here, so comments stay scoped to this exact asset and never leak onto another template/background
+   * variant of the same offer. */
+  assetKey: string;
   pins: { anchor: AssetCommentAnchor; commentId: string }[];
   pendingAnchor?: AssetCommentAnchor;
   activeAnchorId: string | null;
@@ -114,7 +118,7 @@ interface CommentableAssetPreviewProps {
 }
 
 export const CommentableAssetPreview = ({
-  offer, template, backgroundUrl, pins, pendingAnchor, activeAnchorId, onPinClick,
+  offer, template, backgroundUrl, assetKey, pins, pendingAnchor, activeAnchorId, onPinClick,
   registerAnchorRef, onCreatePin, onTextSelected, onRequestPreview, onShowOfferCard,
   approvalStatus, onApprove, onReject, approvalDisabled,
 }: CommentableAssetPreviewProps) => {
@@ -141,7 +145,7 @@ export const CommentableAssetPreview = ({
       left: rangeRect.right + 8,
       anchor: {
         kind: 'asset',
-        offerId: offer.id,
+        assetKey,
         xPct: ((rangeRect.left - containerRect.left) / containerRect.width) * 100,
         yPct: ((rangeRect.top - containerRect.top) / containerRect.height) * 100,
         widthPct: (rangeRect.width / containerRect.width) * 100,
@@ -160,7 +164,7 @@ export const CommentableAssetPreview = ({
     const rect = containerRef.current.getBoundingClientRect();
     onCreatePin({
       kind: 'asset',
-      offerId: offer.id,
+      assetKey,
       xPct: ((e.clientX - rect.left) / rect.width) * 100,
       yPct: ((e.clientY - rect.top) / rect.height) * 100,
     });

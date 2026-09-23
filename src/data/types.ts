@@ -340,8 +340,10 @@ export interface EmailCommentAnchor {
 /** Percentage-based point on one asset's preview image, anchoring a comment to a pin. */
 export interface AssetCommentAnchor {
   kind: 'asset';
-  /** The offer whose creative this pin/highlight belongs to. */
-  offerId: string;
+  /** The specific asset this pin/highlight belongs to — an `AlertAssetEntry.key` (a bare offer id for the
+   * primary/email asset, or a composite id for an "extra" one). Scoped per asset, not per offer, so a
+   * comment made on one template/background variant never shows up on another asset of the same offer. */
+  assetKey: string;
   /** Pin center (no width/height) or the highlighted rect's top-left corner (with width/height). */
   xPct: number;
   yPct: number;

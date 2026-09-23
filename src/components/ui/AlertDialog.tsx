@@ -242,24 +242,27 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // comment *card* itself still respects this independently in FloatingCommentColumn.
   const highlightableComments = allComments.filter((c) => showResolved || !c.resolved);
 
-  /** Every comment anchored to one offer's asset (plus their replies), regardless of resolved state — used by the Asset Details dialog, which always shows its full history. */
-  const commentsForOffer = (offerId: string) => {
-    const anchored = allComments.filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId);
+  /** Every comment anchored to one specific asset (plus their replies), regardless of resolved state — used
+   * by the Asset Details dialog (always the offer's primary asset, so `assetKey` there is just the offer id),
+   * which always shows its full history. Scoped per asset, not per offer, so a comment made on one
+   * template/background variant never shows up on another asset of the same offer. */
+  const commentsForOffer = (assetKey: string) => {
+    const anchored = allComments.filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.assetKey === assetKey);
     const anchoredIds = new Set(anchored.map((c) => c.id));
     const replies = allComments.filter((c) => c.parentCommentId && anchoredIds.has(c.parentCommentId));
     return [...anchored, ...replies];
   };
 
   /** Same, but respecting the resolved-highlight visibility rule — used for the inline pin/highlight overlay. */
-  const pinsForOffer = (offerId: string) =>
+  const pinsForAsset = (assetKey: string) =>
     highlightableComments
-      .filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
+      .filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.assetKey === assetKey)
       .map((c) => ({ anchor: c.anchor, commentId: c.id }));
 
-  /** Top-level comment thread anchored to one offer's asset, for the floating comment column next to the focused asset. */
-  const assetColumnEntriesFor = (offerId: string): ColumnEntry[] =>
+  /** Top-level comment thread anchored to one specific asset, for the floating comment column next to the focused asset. */
+  const assetColumnEntriesFor = (assetKey: string): ColumnEntry[] =>
     allComments
-      .filter((c) => !c.parentCommentId && c.anchor?.kind === 'asset' && c.anchor.offerId === offerId)
+      .filter((c) => !c.parentCommentId && c.anchor?.kind === 'asset' && c.anchor.assetKey === assetKey)
       .map((c) => ({ id: c.id, comment: c, replies: allComments.filter((r) => r.parentCommentId === c.id) }));
 
   /** Top-level comment thread anchored to the email body text, for the floating comment column in the Email Preview panel. */
@@ -552,8 +555,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     backgroundUrl={focusedEntry.background.url}
                     title={focusedEntry.offer.vehicleName}
                     dimensions={`${focusedEntry.template.width} x ${focusedEntry.template.height}`}
-                    pins={pinsForOffer(focusedEntry.offer.id)}
-                    pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.offerId === focusedEntry.offer.id ? pendingAnchor : undefined}
+                    pins={pinsForAsset(focusedEntry.key)}
+                    pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.assetKey === focusedEntry.key ? pendingAnchor : undefined}
                     activeAnchorId={activeAnchorId}
                     onPinClick={handleAnchorClick}
                     registerAnchorRef={registerAnchorRef}
@@ -588,7 +591,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     onApproveAllAssets={handleApproveRemainingAssets}
                     showComments={showComments}
                     showResolved={showResolved}
-                    commentEntries={assetColumnEntriesFor(focusedEntry.offer.id)}
+                    commentEntries={assetColumnEntriesFor(focusedEntry.key)}
                     registerCommentRef={registerCommentRef}
                     onCancelPendingComment={() => setPendingAnchor(undefined)}
                     onSendPendingComment={handleSendComment}
