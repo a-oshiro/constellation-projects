@@ -305,17 +305,6 @@ export const AlertAssetFocusView = ({
             onSelect={onSelectOffer}
             reviewFor={reviewFor}
           />
-          {hasPendingAssets && (
-            <button
-              onClick={onApproveAllAssets}
-              style={{
-                border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-                fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab',
-              }}
-            >
-              Approve All Assets
-            </button>
-          )}
         </div>
       )}
     </div>
