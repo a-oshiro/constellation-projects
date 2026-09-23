@@ -22,8 +22,7 @@ import { FilledTemplatePreview } from './FilledTemplatePreview';
 
 const GROUP_GAP = 28;
 const ITEM_GAP = 10;
-const THUMB_HEIGHT = 100;
-const MAX_THUMB_WIDTH = 220;
+const THUMB_SIZE = 100;
 const NUDGE = 300;
 
 interface AlertAssetCarouselGroup {
@@ -120,8 +119,12 @@ export const AlertAssetCarousel = ({ groups, focusedKey, onSelect, reviewFor }: 
               </span>
               <div style={{ display: 'flex', gap: ITEM_GAP }}>
                 {group.entries.map((entry) => {
-                  const aspect = entry.template.width / entry.template.height;
-                  const width = Math.min(MAX_THUMB_WIDTH, Math.round(THUMB_HEIGHT * aspect));
+                  // Contain-fit within the fixed 100x100 box — the square template fills it exactly, every
+                  // wider-than-tall template is capped at 100 wide with a shorter height, centered with
+                  // spare white space above/below (never stretched, never cropped).
+                  const scale = Math.min(THUMB_SIZE / entry.template.width, THUMB_SIZE / entry.template.height);
+                  const renderedWidth = Math.round(entry.template.width * scale);
+                  const renderedHeight = Math.round(entry.template.height * scale);
                   const isFocused = entry.key === focusedKey;
                   const status = reviewFor(entry);
                   const reviewColor = status === 'approved' ? '#4caf50' : status === 'rejected' ? '#be0e1c' : undefined;
@@ -137,12 +140,14 @@ export const AlertAssetCarousel = ({ groups, focusedKey, onSelect, reviewFor }: 
                       onClick={() => onSelect(entry.key)}
                       title={entry.offer.vehicleName}
                       style={{
-                        position: 'relative', flexShrink: 0, width, height: THUMB_HEIGHT, padding: 0, cursor: 'pointer',
-                        border: 'none', borderRadius: 8, overflow: 'hidden', background: '#f0f2f4',
+                        position: 'relative', flexShrink: 0, width: THUMB_SIZE, height: THUMB_SIZE, padding: 0, cursor: 'pointer',
+                        border: 'none', borderRadius: 8, overflow: 'hidden', background: '#ffffff',
                         boxShadow: ringColor ? `inset 0 0 0 2px ${ringColor}` : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
                       }}
                     >
-                      <FilledTemplatePreview template={entry.template} offer={entry.offer} backgroundUrl={entry.background.url} />
+                      <div style={{ position: 'absolute', top: '50%', left: '50%', width: renderedWidth, height: renderedHeight, transform: 'translate(-50%, -50%)' }}>
+                        <FilledTemplatePreview template={entry.template} offer={entry.offer} backgroundUrl={entry.background.url} />
+                      </div>
                       {reviewColor && (
                         <div style={{ position: 'absolute', inset: 0, background: status === 'approved' ? 'rgba(76,175,80,0.22)' : 'rgba(190,14,28,0.22)', pointerEvents: 'none' }} />
                       )}

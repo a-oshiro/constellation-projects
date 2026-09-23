@@ -118,7 +118,12 @@ export const AlertAssetFocusView = ({
   const canStepAssets = totalCarouselEntries > 1;
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* The "stage": the focused asset, centered both ways within whatever space is left above the
+          carousel. Its own height never changes with the focused asset's aspect ratio (flex: 1 always
+          consumes exactly the remaining space), so the carousel below never moves when a shorter/wider
+          asset is focused. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
       {showAllReviewedMessage ? (
         <div style={{ width: FOCUS_SIZE, margin: '0 auto', minHeight: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center' }}>
           <TaskAlt style={{ fontSize: 32, color: '#4caf50' }} />
@@ -293,9 +298,10 @@ export const AlertAssetFocusView = ({
       </div>
       </>
       )}
+      </div>
 
       {hasMultipleAssets && (
-        <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ flexShrink: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Group by</span>

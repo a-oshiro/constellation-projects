@@ -538,8 +538,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
 
               <div
                 style={{
-                  flex: 1, overflow: 'auto', background: '#F4F5F6', padding: '24px 16px', position: 'relative',
-                  ...(failure ? { display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}),
+                  flex: 1, minHeight: 0, overflow: 'auto', background: '#F4F5F6', padding: '24px 16px', position: 'relative',
+                  display: 'flex', flexDirection: 'column',
+                  ...(failure ? { alignItems: 'center', justifyContent: 'center' } : {}),
                 }}
               >
                 {failure ? (
