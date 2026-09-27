@@ -101,6 +101,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const entryByKey = new Map(assetEntries.map((e) => [e.key, e]));
   /** Whether the carousel groups by vehicle (default) or by template/size. */
   const [groupBy, setGroupBy] = useState<'vehicle' | 'template'>('vehicle');
+  /** Whether the asset carousel is shown below the focused asset — visible by default, collapsible via its
+   * own toggle button or the Shift+C shortcut so the focused asset can have the full canvas when wanted. */
+  const [showCarousel, setShowCarousel] = useState(true);
   /** Which asset is shown at full size in the main asset-focus view — `AlertAssetEntry.key` (a bare offer id
    * for the primary asset, or a composite key for an extra asset). */
   const [focusedAssetKey, setFocusedAssetKey] = useState<string | null>(() => assetEntries[0]?.key ?? null);
@@ -413,14 +416,18 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setFocusedAssetKey(flatVisibleEntries[nextIdx].key);
   };
 
-  // Left/right arrow keys step through the carousel too — ignored while the user is typing anywhere
-  // (comment composer, recipient field, enrollment settings, etc.) so it never hijacks normal text editing.
+  // Left/right arrow keys step through the carousel too, and Shift+C toggles it open/closed — all ignored
+  // while the user is typing anywhere (comment composer, recipient field, enrollment settings, etc.) so
+  // they never hijack normal text editing.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const isStepKey = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+      const isToggleKey = e.shiftKey && e.key.toLowerCase() === 'c';
+      if (!isStepKey && !isToggleKey) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (isToggleKey) { setShowCarousel((v) => !v); return; }
       stepFocusedAsset(e.key === 'ArrowLeft' ? -1 : 1);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -583,6 +590,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     reviewForEntry={reviewForEntry}
                     groupBy={groupBy}
                     onChangeGroupBy={setGroupBy}
+                    showCarousel={showCarousel}
+                    onToggleShowCarousel={() => setShowCarousel((v) => !v)}
                     pendingOnlyFilter={pendingOnlyFilter}
                     onTogglePendingOnlyFilter={handleTogglePendingOnlyFilter}
                     onPrevAsset={() => stepFocusedAsset(-1)}

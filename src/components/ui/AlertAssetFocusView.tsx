@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton, Switch } from '@mui/material';
-import { ChevronLeft, ChevronRight, TaskAlt } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, KeyboardArrowDown, KeyboardArrowUp, TaskAlt } from '@mui/icons-material';
 import type {
   AssetCommentAnchor, CreativeQcResult, DealQcOfferResult, Offer, QcFinding, ReviewStatus, Template,
 } from '../../data/types';
@@ -82,6 +82,10 @@ interface AlertAssetFocusViewProps {
   reviewForEntry: (entry: AlertAssetEntry) => ReviewStatus;
   groupBy: 'vehicle' | 'template';
   onChangeGroupBy: (groupBy: 'vehicle' | 'template') => void;
+  /** Whether the carousel section (group-by row + thumbnail strip) is expanded — visible by default,
+   * collapsible via the toggle button just above it or the Shift+C shortcut. */
+  showCarousel: boolean;
+  onToggleShowCarousel: () => void;
   pendingOnlyFilter: boolean;
   onTogglePendingOnlyFilter: () => void;
   onPrevAsset: () => void;
@@ -108,7 +112,7 @@ export const AlertAssetFocusView = ({
   registerAnchorRef, anchorRefsMap, onCreatePin, onTextSelected, approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
   onRequestPreview, onShowOfferCard, legacyFindings, creativeQc, dealQc, activeSideCardKey, onToggleSideCard,
   sideCardRef, focusedKey, carouselGroups, hasMultipleAssets, onSelectEntry, reviewForEntry, groupBy, onChangeGroupBy,
-  pendingOnlyFilter, onTogglePendingOnlyFilter,
+  showCarousel, onToggleShowCarousel, pendingOnlyFilter, onTogglePendingOnlyFilter,
   onPrevAsset, onNextAsset, hasPendingAssets, onApproveAllAssets, showComments, showResolved, commentEntries,
   registerCommentRef, onCancelPendingComment, onSendPendingComment, onToggleResolved, onDeleteComment,
   onJumpToAnchor, onReply, onToggleReaction,
@@ -116,6 +120,7 @@ export const AlertAssetFocusView = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(0);
+  const [carouselToggleHovered, setCarouselToggleHovered] = useState(false);
   const creativeHasWarning = !!creativeQc?.sections.some((s) => s.checks.some((c) => c.status === 'warning'));
   const dealHasMismatch = !!dealQc && dealQc.result.mismatchedFields.length > 0;
 
@@ -339,45 +344,74 @@ export const AlertAssetFocusView = ({
 
       {hasMultipleAssets && (
         <div style={{ flexShrink: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Group by</span>
-              <div style={{ display: 'inline-flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 100, padding: 2 }}>
-                {([
-                  { value: 'vehicle', label: 'Vehicle' },
-                  { value: 'template', label: 'Template' },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => onChangeGroupBy(opt.value)}
-                    style={{
-                      border: 'none', cursor: 'pointer', borderRadius: 100, padding: '3px 12px',
-                      fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
-                      background: groupBy === opt.value ? '#473bab' : 'transparent',
-                      color: groupBy === opt.value ? '#ffffff' : '#686576',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
-              <Switch
-                size="small"
-                checked={pendingOnlyFilter}
-                onChange={onTogglePendingOnlyFilter}
-                sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
-              />
-              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Pending only</span>
-            </label>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <button
+              onClick={onToggleShowCarousel}
+              onMouseEnter={() => setCarouselToggleHovered(true)}
+              onMouseLeave={() => setCarouselToggleHovered(false)}
+              title={`${showCarousel ? 'Hide' : 'Show'} asset carousel (Shift+C)`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                border: '1px solid rgba(0,0,0,0.12)', borderRadius: 100, background: '#ffffff',
+                padding: carouselToggleHovered ? '6px 14px' : '6px',
+                boxShadow: '0px 1px 4px rgba(0,0,0,0.12)', transition: 'padding 0.15s ease',
+              }}
+            >
+              {showCarousel ? (
+                <KeyboardArrowDown style={{ fontSize: 18, color: '#473bab' }} />
+              ) : (
+                <KeyboardArrowUp style={{ fontSize: 18, color: '#473bab' }} />
+              )}
+              {carouselToggleHovered && (
+                <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', whiteSpace: 'nowrap' }}>
+                  {showCarousel ? 'Hide asset carousel' : 'Show asset carousel'}
+                </span>
+              )}
+            </button>
           </div>
-          <AlertAssetCarousel
-            groups={carouselGroups}
-            focusedKey={focusedKey}
-            onSelect={onSelectEntry}
-            reviewFor={reviewForEntry}
-          />
+          {showCarousel && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Group by</span>
+                  <div style={{ display: 'inline-flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 100, padding: 2 }}>
+                    {([
+                      { value: 'vehicle', label: 'Vehicle' },
+                      { value: 'template', label: 'Template' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => onChangeGroupBy(opt.value)}
+                        style={{
+                          border: 'none', cursor: 'pointer', borderRadius: 100, padding: '3px 12px',
+                          fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500,
+                          background: groupBy === opt.value ? '#473bab' : 'transparent',
+                          color: groupBy === opt.value ? '#ffffff' : '#686576',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
+                  <Switch
+                    size="small"
+                    checked={pendingOnlyFilter}
+                    onChange={onTogglePendingOnlyFilter}
+                    sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#473bab' }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: '#473bab' } }}
+                  />
+                  <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Pending only</span>
+                </label>
+              </div>
+              <AlertAssetCarousel
+                groups={carouselGroups}
+                focusedKey={focusedKey}
+                onSelect={onSelectEntry}
+                reviewFor={reviewForEntry}
+              />
+            </>
+          )}
         </div>
       )}
     </div>
