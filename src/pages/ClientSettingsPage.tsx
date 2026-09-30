@@ -2,6 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { OfferReplacementWorkflowTab } from '../components/settings/OfferReplacementWorkflowTab';
 import { AccountsTab } from '../components/settings/AccountsTab';
+import { FieldsTab } from '../components/settings/FieldsTab';
 
 const CLIENT_SETTINGS_TABS = [
   { id: 'accounts', label: 'Accounts' },
@@ -90,6 +91,8 @@ export const ClientSettingsPage = () => {
         <OfferReplacementWorkflowTab />
       ) : activeTab.id === 'accounts' ? (
         <AccountsTab />
+      ) : activeTab.id === 'fields' ? (
+        <FieldsTab />
       ) : (
         <div
           style={{
