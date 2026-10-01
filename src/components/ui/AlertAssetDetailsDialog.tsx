@@ -29,7 +29,6 @@ interface AlertAssetDetailsDialogProps {
   backgroundUrl: string;
   background: Background;
   projectId: string;
-  locked: boolean;
   comments: AlertComment[];
   activeAnchorId: string | null;
   onClose: () => void;
@@ -58,7 +57,7 @@ const sectionTitleStyle: React.CSSProperties = {
 const openTaskPage = (path: string) => window.open(path, '_blank', 'noopener,noreferrer');
 
 export const AlertAssetDetailsDialog = ({
-  offer, template, backgroundUrl, background, projectId, locked, comments, activeAnchorId, onClose,
+  offer, template, backgroundUrl, background, projectId, comments, activeAnchorId, onClose,
   onAddComment, onToggleResolved, onDeleteComment, onAnchorClick, onEditOffer, onReply, onToggleReaction,
   approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
   currentIndex, totalCount, onPrev, onNext,
@@ -223,7 +222,6 @@ export const AlertAssetDetailsDialog = ({
             <span style={sectionTitleStyle}>Offer</span>
             <OfferListCard
               offer={offer}
-              locked={locked}
               onEditVehicle={() => onEditOffer('vehicle')}
               onEditOffer={() => onEditOffer('offer')}
             />

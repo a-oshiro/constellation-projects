@@ -6,6 +6,9 @@ import {
   Close, Calculate, Add, CalendarToday, InfoOutlined,
   CheckCircle, WarningAmber, Delete,
 } from '@mui/icons-material';
+import { ReadOnlyNotice } from './ReadOnlyNotice';
+import { LockedFormScope } from './LockedFormScope';
+import { useLockedForm } from '../../context/LockedFormContext';
 import { AppTextField } from './AppTextField';
 import { AppSelect } from './AppSelect';
 import type {
@@ -34,9 +37,10 @@ interface OfferDetailsProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Overrides the panel's fixed width (defaults to 360, matching the standalone Offers task page). */
   width?: number;
-  /** Optional content rendered above the form fields, inside the same scrollable area — e.g. the alert
-   * dialog editor's Offer Card, which should scroll together with the fields rather than stay pinned. */
-  topContent?: React.ReactNode;
+  /** Shows the fields without letting them be edited (and drops the Save button) — e.g. the alert dialog's
+   * offer editor while the project is locked: every field is disabled, with an "Unlock project" hover
+   * tooltip. */
+  readOnly?: boolean;
 }
 
 // ── Field helpers ─────────────────────────────────────────────────────────────
@@ -184,6 +188,7 @@ function LeaseForm({ data, onChange }: {
   data: Partial<LeaseOfferData>;
   onChange: (field: keyof LeaseOfferData, value: unknown) => void;
 }) {
+  const locked = useLockedForm();
   const [calculatorOn, setCalculatorOn] = useState(false);
   const [draftRebates, setDraftRebates] = useState<Rebate[]>(data.rebates ?? []);
 
@@ -227,6 +232,7 @@ function LeaseForm({ data, onChange }: {
               </div>
             </div>
             <Switch
+              disabled={locked}
               checked={calculatorOn}
               onChange={(e) => setCalculatorOn(e.target.checked)}
               size="small"
@@ -332,6 +338,7 @@ function LeaseForm({ data, onChange }: {
                 {i === 0 && <div style={{ height: 1, background: '#f0f0f0' }} />}
                 <div style={{ display: 'flex', alignItems: 'center', padding: '10px 0', gap: 8 }}>
                   <Checkbox
+                    disabled={locked}
                     checked={r.checked}
                     onChange={(e) => handleRebateToggle(r.id, e.target.checked)}
                     size="small"
@@ -396,6 +403,7 @@ function PurchaseForm({ data, onChange }: {
   data: Partial<PurchaseOfferData>;
   onChange: (field: keyof PurchaseOfferData, value: unknown) => void;
 }) {
+  const locked = useLockedForm();
   return (
     <>
       <SectionTitle>Price Structure</SectionTitle>
@@ -440,6 +448,7 @@ function PurchaseForm({ data, onChange }: {
       <div style={{ height: 1, background: '#f0f0f0', margin: '16px 0' }} />
       <SectionTitle>Disclosures</SectionTitle>
       <TextField
+        disabled={locked}
         label="Additional Purchase Disclosure"
         multiline
         rows={4}
@@ -464,6 +473,7 @@ function ZDLeaseForm({ data, onChange }: {
   data: Partial<ZDLeaseOfferData>;
   onChange: (field: keyof ZDLeaseOfferData, value: unknown) => void;
 }) {
+  const locked = useLockedForm();
   return (
     <>
       <FieldGroup>
@@ -494,6 +504,7 @@ function ZDLeaseForm({ data, onChange }: {
 
       <div style={{ marginTop: 12 }}>
         <TextField
+          disabled={locked}
           label="Additional ZD Lease Disclosure"
           multiline
           rows={4}
@@ -519,6 +530,7 @@ function CustomForm({ data, onChange }: {
   data: Partial<CustomOfferData>;
   onChange: (field: keyof CustomOfferData, value: unknown) => void;
 }) {
+  const locked = useLockedForm();
   const fields = data.customFields ?? [];
 
   const addField = () => {
@@ -567,7 +579,7 @@ function CustomForm({ data, onChange }: {
               onChange={(e) => updateField(f.id, 'value', e.target.value)}
               style={{ flex: 1 }}
             />
-            <IconButton size="small" onClick={() => removeField(f.id)} sx={{ flexShrink: 0 }}>
+            <IconButton size="small" disabled={locked} onClick={() => removeField(f.id)} sx={{ flexShrink: 0 }}>
               <Delete style={{ fontSize: 16, color: '#9c99a9' }} />
             </IconButton>
           </div>
@@ -629,7 +641,7 @@ function CustomForm({ data, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360, topContent }: OfferDetailsProps) => {
+export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360, readOnly }: OfferDetailsProps) => {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
@@ -682,7 +694,8 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, on
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '16px 16px 8px' }}>
-        {topContent && <div style={{ marginBottom: 20 }}>{topContent}</div>}
+        {readOnly && <ReadOnlyNotice />}
+        <LockedFormScope locked={!!readOnly}>
         {offerType.type === 'Lease' && (
           <LeaseForm
             data={merged as Partial<LeaseOfferData>}
@@ -713,6 +726,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, on
             onChange={(field, value) => handleChange(field as string, value)}
           />
         )}
+        </LockedFormScope>
       </div>
 
       {/* Footer */}
@@ -731,6 +745,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, on
         >
           {onBack ? 'Back' : 'Cancel'}
         </button>
+        {!readOnly && (
         <button
           onClick={handleSave}
           style={{
@@ -742,6 +757,7 @@ export const OfferDetails = ({ offer, offerType, onClose, onSave, hideHeader, on
         >
           Save
         </button>
+        )}
       </div>
     </div>
   );

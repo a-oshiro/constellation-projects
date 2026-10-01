@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { Offer } from '../../data/types';
-import { Tooltip } from './Tooltip';
 
 /**
  * The "which vehicle is this" identity block ("Vehicle Row") shared by the Alert Offers panel's
@@ -8,7 +7,7 @@ import { Tooltip } from './Tooltip';
  * to form one seamless card), the floating canvas Offer Info Card, and the Offer Edit panel (rendered
  * bordered/standalone, above the edit form, with no pricing row). VIN/Stock No. are plain secondary
  * text here — no hyperlink/action. When `onClick` is provided this row itself becomes clickable (opens
- * the Vehicle Info editor), gated by `locked` the same way the pricing row below it is.
+ * the Vehicle Info editor — read only while the project is locked).
  */
 
 interface OfferIdentityCardProps {
@@ -16,21 +15,21 @@ interface OfferIdentityCardProps {
   /** False when a sibling element (e.g. a pricing row) completes the card's border/rounding below this. */
   bordered?: boolean;
   onClick?: () => void;
-  /** True while the project is Evergreen-locked — disables the click and shows an explanatory tooltip. */
-  locked?: boolean;
+  /** Rendered at the row's top-right (e.g. a per-offer actions menu). Clicks on it never reach `onClick`. */
+  trailing?: React.ReactNode;
 }
 
-export const OfferIdentityCard = ({ offer, bordered = true, onClick, locked }: OfferIdentityCardProps) => {
+export const OfferIdentityCard = ({ offer, bordered = true, onClick, trailing }: OfferIdentityCardProps) => {
   const [hovered, setHovered] = useState(false);
 
   const inner = (
     <div
-      onClick={onClick && !locked ? onClick : undefined}
+      onClick={onClick}
       onMouseEnter={onClick ? () => setHovered(true) : undefined}
       onMouseLeave={onClick ? () => setHovered(false) : undefined}
       style={{
         display: 'flex', gap: 12, padding: 12,
-        cursor: onClick ? (locked ? 'not-allowed' : 'pointer') : undefined,
+        cursor: onClick ? 'pointer' : undefined,
         background: onClick && hovered ? '#f5f5f6' : 'transparent',
       }}
     >
@@ -46,23 +45,18 @@ export const OfferIdentityCard = ({ offer, bordered = true, onClick, locked }: O
           <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Stock No. {offer.stockNumber}</span>
         )}
       </div>
+      {trailing && (
+        <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0, alignSelf: 'flex-start', margin: '-6px -6px 0 0' }}>
+          {trailing}
+        </div>
+      )}
     </div>
   );
 
-  const content = onClick ? (
-    <Tooltip
-      title={locked ? 'Unlock project to make changes to this offer' : ''}
-      disableHoverListener={!locked}
-      slotProps={{ popper: { style: { zIndex: 100050 } } }}
-    >
-      {inner}
-    </Tooltip>
-  ) : inner;
-
-  if (!bordered) return content;
+  if (!bordered) return inner;
   return (
     <div style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden' }}>
-      {content}
+      {inner}
     </div>
   );
 };

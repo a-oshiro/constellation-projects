@@ -5,21 +5,18 @@ import type { Offer } from '../../data/types';
 import { useProject } from '../../context/ProjectContext';
 import { VehicleInfo } from './VehicleInfo';
 import { OfferDetails } from './OfferDetails';
-import { OfferListCard } from './AlertOffersPanel';
 import { DiscardOfferEditDialog } from './DiscardOfferEditDialog';
-import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 /**
- * Right-side offer editor for the alert dialog. No tabs — instead the same "Offer Card" (identity +
- * pricing row) used everywhere else drives navigation: clicking its pricing row reveals the offer/lease
- * form ("offer" view), clicking its vehicle row opens Vehicle Info ("vehicle" view), and the Offer Card
- * itself is only shown in the "offer" view (never above the Vehicle Info fields), per CP-13922. It's
- * passed to `OfferDetails` as `topContent` so it scrolls together with the fields below it, rather than
- * staying pinned above a separately-scrolling form.
+ * Right-side offer editor for the alert dialog. No tabs — whichever Offer Card row opened it picks the
+ * view: the pricing row opens the offer/lease form ("offer" view), the vehicle row opens Vehicle Info
+ * ("vehicle" view). Neither view repeats the Offer Card above its fields.
  * Leaving with unsaved changes — via the header back arrow, the header close X, or the form's own
- * "Back" footer button — is gated behind a confirmation dialog. Only ever mounted while the project is
- * unlocked — the lock/tooltip gate lives on the Offer Card's rows instead. Rendered with `key={offer.id}`
- * by the caller so switching offers remounts (and resets the active view).
+ * "Back" footer button — is gated behind a confirmation dialog. While the project is locked every field
+ * is disabled with an "Unlock project to make changes" hover tooltip (and Save is hidden). Matches the dialog's other right panels: same shared, resizable
+ * width. Rendered with `key={offer.id}` by the caller so switching offers remounts (and resets the
+ * active view).
  */
 
 interface AlertOfferEditPanelProps {
@@ -32,19 +29,23 @@ interface AlertOfferEditPanelProps {
   onBack: () => void;
   /** Fully dismisses the right panel (no panel shown) — used by the header close X. */
   onClose: () => void;
-  /** Scrolls the email preview canvas so this offer's asset is in view — called whenever a row on the
-   * Offer Card (here or elsewhere) puts this offer's editor on screen, so the user can watch their edits
-   * land on the asset as they make them. */
-  onFocusAsset: () => void;
+  /** True while the project is Evergreen-locked — the fields are shown read only. */
+  readOnly: boolean;
+  /** The dialog's shared right-panel width (outer edge to edge), and its resize handle. */
+  width: number;
+  onResizeHandleMouseDown: (e: React.MouseEvent) => void;
 }
 
-export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFocusAsset }: AlertOfferEditPanelProps) => {
+/** OfferDetails/VehicleInfo (and the header above them) carry an 8px right margin inside this panel. */
+const INNER_RIGHT_MARGIN = 8;
+
+export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, readOnly, width, onResizeHandleMouseDown }: AlertOfferEditPanelProps) => {
   const { updateOffer } = useProject();
-  const [view, setView] = useState(initialView);
+  const view = initialView;
   const [isDirty, setIsDirty] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
-  const panelWidth = useResponsivePanelWidth();
+  const panelWidth = width - INNER_RIGHT_MARGIN;
   const offerType = offer.offerTypes[0];
 
   const guardedNavigate = (action: () => void) => {
@@ -62,7 +63,8 @@ export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFoc
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width, display: 'flex', flexDirection: 'column', flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+      <PanelResizeHandle onMouseDown={onResizeHandleMouseDown} />
       <div style={{
         display: 'flex', alignItems: 'center', gap: 4,
         width: panelWidth, margin: '8px 8px 0 0', boxSizing: 'border-box', background: '#ffffff',
@@ -72,7 +74,7 @@ export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFoc
           <ArrowBack style={{ fontSize: 18, color: '#686576' }} />
         </IconButton>
         <span style={{ flex: 1, fontSize: 15, fontWeight: 600, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-          {view === 'vehicle' ? 'Edit Vehicle Information' : 'Edit Offer'}
+          {view === 'vehicle' ? (readOnly ? 'Vehicle Information' : 'Edit Vehicle Information') : (readOnly ? 'Offer' : 'Edit Offer')}
         </span>
         <IconButton size="small" onClick={() => guardedNavigate(onClose)} sx={{ padding: '4px' }}>
           <Close style={{ fontSize: 18, color: '#686576' }} />
@@ -91,14 +93,7 @@ export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFoc
             onDirtyChange={setIsDirty}
             width={panelWidth}
             hideHeader
-            topContent={(
-              <OfferListCard
-                offer={offer}
-                locked={false}
-                onEditVehicle={() => { setView('vehicle'); onFocusAsset(); }}
-                onEditOffer={onFocusAsset}
-              />
-            )}
+            readOnly={readOnly}
           />
         ) : (
           <VehicleInfo
@@ -110,6 +105,7 @@ export const AlertOfferEditPanel = ({ offer, initialView, onBack, onClose, onFoc
             onDirtyChange={setIsDirty}
             width={panelWidth}
             hideHeader
+            readOnly={readOnly}
           />
         )}
       </div>

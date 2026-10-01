@@ -13,6 +13,8 @@ import {
 import { Close, ContentCopy, Edit, Delete, CalendarToday, ArticleOutlined } from '@mui/icons-material';
 import { AppTextField } from './AppTextField';
 import { AppSelect } from './AppSelect';
+import { ReadOnlyNotice } from './ReadOnlyNotice';
+import { LockedFormScope } from './LockedFormScope';
 import type { Offer } from '../../data/types';
 
 interface VehicleInfoProps {
@@ -31,6 +33,10 @@ interface VehicleInfoProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Overrides the panel's fixed width (defaults to 360, matching the standalone Offers task page). */
   width?: number;
+  /** Shows the fields without letting them be edited (and drops the Save button) — e.g. the alert dialog's
+   * offer editor while the project is locked: every field is disabled, with an "Unlock project" hover
+   * tooltip. */
+  readOnly?: boolean;
 }
 
 const autocompleteSx = {
@@ -54,7 +60,7 @@ const SectionLabel = ({ text }: { text: string }) => (
   </div>
 );
 
-export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360 }: VehicleInfoProps) => {
+export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSaved, onDirtyChange, width = 360, readOnly }: VehicleInfoProps) => {
   const [draft, setDraft] = useState<Partial<Offer>>({});
 
   useEffect(() => {
@@ -117,6 +123,8 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: 16 }}>
+        {readOnly && <ReadOnlyNotice />}
+        <LockedFormScope locked={!!readOnly}>
 
         {/* Vehicle image */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
@@ -137,14 +145,14 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
             }}>
               {imageFileName}
             </span>
-            <IconButton size="small">
-              <ContentCopy style={{ fontSize: 14, color: '#686576' }} />
+            <IconButton size="small" disabled={readOnly}>
+              <ContentCopy style={{ fontSize: 14, color: readOnly ? 'inherit' : '#686576' }} />
             </IconButton>
-            <IconButton size="small">
-              <Edit style={{ fontSize: 14, color: '#686576' }} />
+            <IconButton size="small" disabled={readOnly}>
+              <Edit style={{ fontSize: 14, color: readOnly ? 'inherit' : '#686576' }} />
             </IconButton>
-            <IconButton size="small">
-              <Delete style={{ fontSize: 14, color: '#686576' }} />
+            <IconButton size="small" disabled={readOnly}>
+              <Delete style={{ fontSize: 14, color: readOnly ? 'inherit' : '#686576' }} />
             </IconButton>
           </div>
         </div>
@@ -158,7 +166,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
             input: {
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton size="small" edge="end">
+                  <IconButton size="small" edge="end" disabled={readOnly}>
                     <ContentCopy style={{ fontSize: 15 }} />
                   </IconButton>
                 </InputAdornment>
@@ -198,6 +206,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
           <Autocomplete
             freeSolo
             size="small"
+            disabled={readOnly}
             options={[offer.model]}
             value={String(val('model') ?? '')}
             onInputChange={(_, v) => set('model', v)}
@@ -208,6 +217,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
           <Autocomplete
             freeSolo
             size="small"
+            disabled={readOnly}
             options={[offer.trim]}
             value={String(val('trim') ?? '')}
             onInputChange={(_, v) => set('trim', v)}
@@ -232,7 +242,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
         </div>
 
         {/* Condition */}
-        <FormControl sx={{ mb: 0.5 }}>
+        <FormControl sx={{ mb: 0.5 }} disabled={readOnly}>
           <FormLabel
             sx={{
               fontSize: 13,
@@ -256,7 +266,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
                 control={
                   <Radio
                     size="small"
-                    sx={{ color: '#473bab', '&.Mui-checked': { color: '#473bab' } }}
+                    sx={{ color: '#473bab', '&.Mui-checked': { color: '#473bab' }, '&.Mui-disabled': { color: 'rgba(0,0,0,0.26)' } }}
                   />
                 }
                 label={c}
@@ -429,6 +439,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
           </div>
         </div>
 
+        </LockedFormScope>
       </div>
 
       {/* Footer */}
@@ -460,6 +471,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
         >
           {onBack ? 'Back' : 'Close'}
         </button>
+        {!readOnly && (
         <button
           onClick={handleSave}
           style={{
@@ -477,6 +489,7 @@ export const VehicleInfo = ({ offer, onClose, onSave, hideHeader, onBack, onSave
         >
           Save
         </button>
+        )}
       </div>
     </div>
   );

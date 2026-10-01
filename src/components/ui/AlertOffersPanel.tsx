@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconButton } from '@mui/material';
-import { Close, InfoOutlined, ExpandMore, ChevronRight } from '@mui/icons-material';
+import { IconButton, Menu, MenuItem } from '@mui/material';
+import { Close, InfoOutlined, ExpandMore, ChevronRight, MoreVert, CheckCircleOutlined, HighlightOff } from '@mui/icons-material';
 import type { Offer } from '../../data/types';
 import { getOfferTypeDisplayFields } from './OfferCard';
 import { OfferIdentityCard } from './OfferIdentityCard';
@@ -15,13 +15,13 @@ const tooltipPopperProps = { popper: { style: { zIndex: 100050 } } };
 
 /**
  * Right-panel content opened from the dialog header's Offers (car) icon button. Two tabs:
- * - Selected: the offers actually used in this alert's email. Each card's pricing row is clickable
- *   (while the project is unlocked) to open the Offer Edit panel for that offer.
+ * - Selected: the offers actually used in this alert's email. Each card's pricing row is clickable to
+ *   open the Offer Edit panel for that offer (read only while the project is locked), and its three-dots
+ *   menu approves/rejects every asset generated for that offer.
  * - Models: an informational list of the models enrolled for this Evergreen dealer, each annotated
  *   with how many offers from that model are present in this email — there's no real "enrollment"
  *   persistence layer in this app, so this is derived/display-only.
- * Width matches every other right-panel in this dialog via `useResponsivePanelWidth` (360px, or 400px on
- * very wide viewports).
+ * Width is the dialog's shared, resizable right-panel width.
  */
 
 /** A request to jump to and briefly highlight one offer's card in the Selected tab — `token` is a nonce so
@@ -35,8 +35,10 @@ export interface OfferHighlightRequest {
 interface AlertOffersPanelProps {
   offers: Offer[];
   projectOffers: Offer[];
-  /** True while the project is Evergreen-locked — disables clicking an offer's pricing row to edit it. */
-  locked: boolean;
+  /** Approves/rejects every asset (all templates) generated for one offer — the card's three-dots menu. */
+  onReviewOfferAssets: (offerId: string, status: 'approved' | 'rejected') => void;
+  /** Disables the per-offer review menu (e.g. the alert is archived, sent, or failed to generate). */
+  reviewDisabled?: boolean;
   /** `view` picks which editor opens: the Vehicle Info form (clicked the identity/vehicle row) or the offer/lease form (clicked the pricing row). */
   onEditOffer: (offerId: string, view: 'vehicle' | 'offer') => void;
   onClose: () => void;
@@ -58,20 +60,20 @@ const tabButtonStyle = (active: boolean): React.CSSProperties => ({
 });
 
 /** The clickable pricing/offer-type row beneath an offer's identity block — the "offer row" that opens the editor. */
-const OfferRow = ({ offer, locked, onEdit }: { offer: Offer; locked: boolean; onEdit: () => void }) => {
+const OfferRow = ({ offer, onEdit }: { offer: Offer; onEdit: () => void }) => {
   const offerType = offer.offerTypes[0];
   const [hovered, setHovered] = useState(false);
   if (!offerType) return null;
   const fields = getOfferTypeDisplayFields(offerType);
 
-  const row = (
+  return (
     <div
-      onClick={locked ? undefined : onEdit}
+      onClick={onEdit}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px',
-        borderTop: '1px solid rgba(0,0,0,0.08)', cursor: locked ? 'not-allowed' : 'pointer',
+        borderTop: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer',
         background: hovered ? '#f5f5f6' : 'transparent',
       }}
     >
@@ -95,32 +97,68 @@ const OfferRow = ({ offer, locked, onEdit }: { offer: Offer; locked: boolean; on
       </div>
     </div>
   );
+};
 
+/** The Offer Card's top-right three-dots menu: approve or reject every asset generated for this offer. */
+const OfferReviewMenu = ({ disabled, onReview }: { disabled?: boolean; onReview: (status: 'approved' | 'rejected') => void }) => {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const choose = (status: 'approved' | 'rejected') => {
+    setAnchor(null);
+    onReview(status);
+  };
   return (
-    <Tooltip
-      title={locked ? 'Unlock project to make changes to this offer' : ''}
-      disableHoverListener={!locked}
-      slotProps={tooltipPopperProps}
-    >
-      {row}
-    </Tooltip>
+    <>
+      <IconButton size="small" disabled={disabled} onClick={(e) => setAnchor(e.currentTarget)} title="Offer actions" sx={{ padding: '4px' }}>
+        <MoreVert style={{ fontSize: 18, color: '#686576' }} />
+      </IconButton>
+      <Menu
+        anchorEl={anchor}
+        open={!!anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        sx={{ zIndex: 100050 }}
+      >
+        <MenuItem onClick={() => choose('approved')} sx={{ gap: 1, fontSize: 13, fontFamily: 'Roboto, sans-serif' }}>
+          <CheckCircleOutlined style={{ fontSize: 18, color: '#4caf50' }} />
+          Approve all assets for this offer
+        </MenuItem>
+        <MenuItem onClick={() => choose('rejected')} sx={{ gap: 1, fontSize: 13, fontFamily: 'Roboto, sans-serif' }}>
+          <HighlightOff style={{ fontSize: 18, color: '#be0e1c' }} />
+          Reject all assets for this offer
+        </MenuItem>
+      </Menu>
+    </>
   );
 };
 
 /**
  * The "Offer Card": a vehicle identity row (click → Vehicle Info editor) plus a pricing row (click →
- * offer/lease editor), both gated by `locked`. Reused as-is by the Selected tab here, the Models tab
+ * offer/lease editor) — always clickable; the editors themselves go read only while the project is
+ * locked. `onReviewAllAssets`, when given, adds the top-right approve/reject-all menu. Reused as-is by the Selected tab here, the Models tab
  * (per-model expanded offers), the floating canvas Offer Info Card (`AlertOfferCard`), and atop the
  * Offer Edit panel itself. `highlighted` briefly tints the card to call out a card jumped-to from the
  * canvas — purely visual, fades via the background-color transition.
  */
-export const OfferListCard = ({ offer, locked, onEditVehicle, onEditOffer, highlighted }: { offer: Offer; locked: boolean; onEditVehicle: () => void; onEditOffer: () => void; highlighted?: boolean }) => (
+export const OfferListCard = ({ offer, onEditVehicle, onEditOffer, highlighted, onReviewAllAssets, reviewDisabled }: {
+  offer: Offer;
+  onEditVehicle: () => void;
+  onEditOffer: () => void;
+  highlighted?: boolean;
+  onReviewAllAssets?: (status: 'approved' | 'rejected') => void;
+  reviewDisabled?: boolean;
+}) => (
   <div style={{
     background: highlighted ? 'rgba(99,86,225,0.12)' : '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden',
     transition: 'background-color 0.3s ease',
   }}>
-    <OfferIdentityCard offer={offer} bordered={false} onClick={onEditVehicle} locked={locked} />
-    <OfferRow offer={offer} locked={locked} onEdit={onEditOffer} />
+    <OfferIdentityCard
+      offer={offer}
+      bordered={false}
+      onClick={onEditVehicle}
+      trailing={onReviewAllAssets && <OfferReviewMenu disabled={reviewDisabled} onReview={onReviewAllAssets} />}
+    />
+    <OfferRow offer={offer} onEdit={onEditOffer} />
   </div>
 );
 
@@ -142,7 +180,7 @@ const modelHeaderStyle: React.CSSProperties = {
 const isEnrolledOffer = (o: Offer) => o.id.startsWith('sea-offer-');
 const modelKey = (o: Offer) => `${o.model} · ${o.year}`;
 
-export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, onClose, highlightRequest, width, onResizeHandleMouseDown }: AlertOffersPanelProps) => {
+export const AlertOffersPanel = ({ offers, projectOffers, onEditOffer, onReviewOfferAssets, reviewDisabled, onClose, highlightRequest, width, onResizeHandleMouseDown }: AlertOffersPanelProps) => {
   const [tab, setTab] = useState<'selected' | 'models'>('selected');
   const [expandedModelKeys, setExpandedModelKeys] = useState<Set<string>>(new Set());
   const [flashOfferId, setFlashOfferId] = useState<string | null>(null);
@@ -206,9 +244,10 @@ export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, o
                 <div key={offer.id} ref={(el) => registerOfferRef(offer.id, el)}>
                   <OfferListCard
                     offer={offer}
-                    locked={locked}
                     onEditVehicle={() => onEditOffer(offer.id, 'vehicle')}
                     onEditOffer={() => onEditOffer(offer.id, 'offer')}
+                    onReviewAllAssets={(status) => onReviewOfferAssets(offer.id, status)}
+                    reviewDisabled={reviewDisabled}
                     highlighted={flashOfferId === offer.id}
                   />
                 </div>
@@ -276,9 +315,10 @@ export const AlertOffersPanel = ({ offers, projectOffers, locked, onEditOffer, o
                             <OfferListCard
                               key={offer.id}
                               offer={offer}
-                              locked={locked}
                               onEditVehicle={() => onEditOffer(offer.id, 'vehicle')}
                               onEditOffer={() => onEditOffer(offer.id, 'offer')}
+                              onReviewAllAssets={(status) => onReviewOfferAssets(offer.id, status)}
+                              reviewDisabled={reviewDisabled}
                             />
                           ))
                         )}

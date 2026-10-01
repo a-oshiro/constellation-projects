@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton, Switch } from '@mui/material';
-import { ChevronLeft, ChevronRight, KeyboardArrowDown, KeyboardArrowUp, TaskAlt } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, TaskAlt } from '@mui/icons-material';
 import type {
   AssetCommentAnchor, CreativeQcResult, DealQcOfferResult, Offer, QcFinding, ReviewStatus, Template,
 } from '../../data/types';
@@ -15,8 +15,8 @@ import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn
 import { QC_FINDING_LABEL } from '../../utils/alertReview';
 
 /**
- * The dialog's main content: one asset, contain-fit within an 800x600 box so it never exceeds that in
- * either dimension while keeping the template's own proportions (title + dimensions left-aligned above it),
+ * The dialog's main content: one asset, contain-fit within an 800x600 box (shrunk further whenever the
+ * stage is smaller, so the whole asset is always visible) while keeping the template's own proportions (title + dimensions left-aligned above it),
  * with QC warning tags + their floating detail cards to the left, and a carousel of every other asset below
  * — replaces the old inline-email-canvas as the dialog's primary view. Comment-by-click/drag-highlight is
  * unchanged (same CommentableAssetPreview mechanism); this component just focuses it on one offer at a
@@ -119,20 +119,13 @@ export const AlertAssetFocusView = ({
 }: AlertAssetFocusViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(0);
+  const [stageHeight, setStageHeight] = useState(0);
+  const [titleHeight, setTitleHeight] = useState(0);
   const [carouselToggleHovered, setCarouselToggleHovered] = useState(false);
   const creativeHasWarning = !!creativeQc?.sections.some((s) => s.checks.some((c) => c.status === 'warning'));
   const dealHasMismatch = !!dealQc && dealQc.result.mismatchedFields.length > 0;
-
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const update = () => setStageWidth(el.clientWidth);
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    update();
-    return () => ro.disconnect();
-  }, []);
 
   const activeLegacyFinding = activeSideCardKey?.startsWith('legacy:')
     ? legacyFindings.find((f) => `legacy:${f.id}` === activeSideCardKey)
@@ -144,11 +137,33 @@ export const AlertAssetFocusView = ({
   // out) — rather than show a reviewed asset the carousel below no longer lists, swap in this message.
   const showAllReviewedMessage = pendingOnlyFilter && totalCarouselEntries === 0;
   const canStepAssets = totalCarouselEntries > 1;
+  const chevronSpace = canStepAssets ? CHEVRON_SPACE : 0;
+
+  // The stage's size (and the title block above the asset) bound how large the asset may render. The
+  // title block isn't always mounted (the "all reviewed" message replaces it), so it's observed when present.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const update = () => {
+      setStageWidth(stage.clientWidth);
+      setStageHeight(stage.clientHeight);
+      setTitleHeight(titleRef.current?.offsetHeight ?? 0);
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(stage);
+    if (titleRef.current) ro.observe(titleRef.current);
+    update();
+    return () => ro.disconnect();
+  }, [showAllReviewedMessage]);
 
   // Contain-fit the focused asset within an 800x600 box, preserving the template's own proportions — the
   // square template fills it at 600x600 (height-bound); every wider-than-tall template scales to fill the
-  // full 800 width, capped at 600 tall if its aspect ratio is close to square.
-  const assetScale = Math.min(MAX_ASSET_WIDTH / template.width, MAX_ASSET_HEIGHT / template.height);
+  // full 800 width, capped at 600 tall if its aspect ratio is close to square. When the stage is smaller
+  // than that (minus the flanking chevrons and the title block), the box shrinks to what's available so
+  // the asset is never cut off. Before the first measurement the stage reports 0, so the max box is used.
+  const fitWidth = stageWidth > 0 ? Math.min(MAX_ASSET_WIDTH, stageWidth - 2 * chevronSpace) : MAX_ASSET_WIDTH;
+  const fitHeight = stageHeight > 0 ? Math.min(MAX_ASSET_HEIGHT, stageHeight - titleHeight) : MAX_ASSET_HEIGHT;
+  const assetScale = Math.max(0, Math.min(fitWidth / template.width, fitHeight / template.height));
   const assetWidth = Math.round(template.width * assetScale);
   const assetHeight = Math.round(template.height * assetScale);
 
@@ -156,7 +171,6 @@ export const AlertAssetFocusView = ({
   // to its right, wherever that lands (the stage's own overflow:auto lets it be scrolled into view if the
   // canvas is too narrow to show both at once, rather than pulling the asset off-center to make room).
   const assetLeft = (stageWidth - assetWidth) / 2;
-  const chevronSpace = canStepAssets ? CHEVRON_SPACE : 0;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -177,7 +191,7 @@ export const AlertAssetFocusView = ({
         </div>
       ) : (
       <>
-      <div style={{ width: assetWidth, marginLeft: assetLeft, alignSelf: 'flex-start' }}>
+      <div ref={titleRef} style={{ width: assetWidth, marginLeft: assetLeft, alignSelf: 'flex-start' }}>
         <p style={{ margin: '0 0 2px', fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.1px' }}>
           {title}
         </p>
@@ -344,29 +358,38 @@ export const AlertAssetFocusView = ({
 
       {hasMultipleAssets && (
         <div style={{ flexShrink: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
+          {/* A 120x4 gray notch that morphs into a labelled pill on hover. The row stays a fixed 12px (the
+              pill overflows it vertically) so nothing around it shifts while the notch grows; with the
+              carousel hidden, the negative margin eats into the canvas's bottom padding so the notch sits
+              near the canvas's bottom edge. */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 12, marginBottom: showCarousel ? 0 : -12 }}>
             <button
               onClick={onToggleShowCarousel}
               onMouseEnter={() => setCarouselToggleHovered(true)}
               onMouseLeave={() => setCarouselToggleHovered(false)}
-              title={`${showCarousel ? 'Hide' : 'Show'} asset carousel (Shift+C)`}
+              onFocus={() => setCarouselToggleHovered(true)}
+              onBlur={() => setCarouselToggleHovered(false)}
+              title={`${showCarousel ? 'Hide' : 'Reveal'} carousel (Shift+C)`}
+              aria-label={showCarousel ? 'Hide carousel' : 'Reveal carousel'}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                border: '1px solid rgba(0,0,0,0.12)', borderRadius: 100, background: '#ffffff',
-                padding: carouselToggleHovered ? '6px 14px' : '6px',
-                boxShadow: '0px 1px 4px rgba(0,0,0,0.12)', transition: 'padding 0.15s ease',
+                position: 'relative', zIndex: 1, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                boxSizing: 'border-box', padding: 0, overflow: 'hidden', borderRadius: 100, border: 'none',
+                background: '#cac9cf',
+                width: carouselToggleHovered ? 136 : 120,
+                height: carouselToggleHovered ? 28 : 4,
+                transition: 'width 0.18s ease, height 0.18s ease',
               }}
             >
-              {showCarousel ? (
-                <KeyboardArrowDown style={{ fontSize: 18, color: '#473bab' }} />
-              ) : (
-                <KeyboardArrowUp style={{ fontSize: 18, color: '#473bab' }} />
-              )}
-              {carouselToggleHovered && (
-                <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', whiteSpace: 'nowrap' }}>
-                  {showCarousel ? 'Hide asset carousel' : 'Show asset carousel'}
-                </span>
-              )}
+              <span
+                style={{
+                  fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#ffffff', whiteSpace: 'nowrap',
+                  opacity: carouselToggleHovered ? 1 : 0, transition: 'opacity 0.12s ease',
+                  transitionDelay: carouselToggleHovered ? '0.08s' : '0s',
+                }}
+              >
+                {showCarousel ? 'Hide carousel' : 'Reveal carousel'}
+              </span>
             </button>
           </div>
           {showCarousel && (

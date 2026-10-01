@@ -1,4 +1,5 @@
 import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { useLockedForm } from '../../context/LockedFormContext';
 
 interface AppSelectProps {
   label?: string;
@@ -18,23 +19,26 @@ export const AppSelect = ({
   disabled,
   size = 'small',
   fullWidth = true,
-}: AppSelectProps) => (
-  <FormControl size={size} fullWidth={fullWidth} disabled={disabled}>
-    {label && <InputLabel sx={{ fontSize: 13 }}>{label}</InputLabel>}
-    <Select
-      value={value}
-      label={label}
-      onChange={(e) => onChange(e.target.value as string)}
-      sx={{
-        fontSize: 14,
-        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#6d28d9' },
-      }}
-    >
-      {options.map((opt) => (
-        <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: 14 }}>
-          {opt.label}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-);
+}: AppSelectProps) => {
+  const locked = useLockedForm();
+  return (
+    <FormControl size={size} fullWidth={fullWidth} disabled={locked || disabled}>
+      {label && <InputLabel sx={{ fontSize: 13 }}>{label}</InputLabel>}
+      <Select
+        value={value}
+        label={label}
+        onChange={(e) => onChange(e.target.value as string)}
+        sx={{
+          fontSize: 14,
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#6d28d9' },
+        }}
+      >
+        {options.map((opt) => (
+          <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: 14 }}>
+            {opt.label}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+};

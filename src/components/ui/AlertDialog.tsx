@@ -106,7 +106,16 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   const [showCarousel, setShowCarousel] = useState(true);
   /** Which asset is shown at full size in the main asset-focus view — `AlertAssetEntry.key` (a bare offer id
    * for the primary asset, or a composite key for an extra asset). */
-  const [focusedAssetKey, setFocusedAssetKey] = useState<string | null>(() => assetEntries[0]?.key ?? null);
+  // A sent alert opens with the "Pending only" carousel filter on (see pendingOnlyFilter below), so it
+  // lands on the first asset still awaiting review rather than one the filter would hide.
+  const [focusedAssetKey, setFocusedAssetKey] = useState<string | null>(() => {
+    if (alert.status === 'sent') {
+      const firstPending = assetEntries.find((e) =>
+        !(e.isPrimary ? alert.offerReviews?.[e.offer.id] : alert.extraAssetReviews?.[e.key]));
+      if (firstPending) return firstPending.key;
+    }
+    return assetEntries[0]?.key ?? null;
+  });
   /** Set by an asset's "Offer Info" button — opens the Alert Offers panel on the Selected tab and
    * scrolls/flashes that offer's card there. `token` is a nonce so re-clicking the same asset's button
    * retriggers the scroll/flash even when `offerId` is unchanged. */
@@ -114,7 +123,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   /** Which QC side-card is open next to the focused asset — one of `legacy:{findingId}`, `creative:{offerId}`, or `deal:{offerId}`. One open at a time; click-outside closes it. */
   const [activeSideCardKey, setActiveSideCardKey] = useState<string | null>(null);
   /** When on, the carousel (and the offer this dialog can focus) is limited to offers still awaiting review. */
-  const [pendingOnlyFilter, setPendingOnlyFilter] = useState(false);
+  const [pendingOnlyFilter, setPendingOnlyFilter] = useState(() => alert.status === 'sent');
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
   const sideCardRef = useRef<HTMLDivElement>(null);
@@ -436,22 +445,34 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   }, [flatVisibleEntries, focusedAssetKey]);
 
   // Footer progress readout ("6 of 7 approved") and the assets progress ring's green/red split.
-  const assetsTotalCount = allAlertOffers.length;
-  const assetsApprovedCount = allAlertOffers.filter((o) => offerReviewFor(o.id)?.status === 'approved').length;
-  const assetsRejectedCount = allAlertOffers.filter((o) => offerReviewFor(o.id)?.status === 'rejected').length;
+  // Counts every asset in the carousel (primary email-template assets and the extra templates alike).
+  const assetsTotalCount = assetEntries.length;
+  const assetsApprovedCount = assetEntries.filter((e) => reviewForEntry(e) === 'approved').length;
+  const assetsRejectedCount = assetEntries.filter((e) => reviewForEntry(e) === 'rejected').length;
+  // The footer widget's state rolls up the same full asset list (not just the per-offer `assetsStatus`
+  // that gates sending), so "Approve all" stays available until every template's asset is reviewed.
+  // Same rule as the context's computeAssetsRollup: pending until every asset is reviewed, then approved
+  // if any was approved, otherwise rejected.
+  const assetsWidgetStatus: ReviewStatus = assetsTotalCount === 0 || assetsApprovedCount + assetsRejectedCount < assetsTotalCount
+    ? 'pending'
+    : assetsApprovedCount > 0 ? 'approved' : 'rejected';
   // Both tracks approved — the footer swaps its message and reveals the Send action.
   const readyToSend = alert.status === 'approved';
 
-  // Only approves assets that haven't been reviewed at all — a rejected asset is left alone, since that
-  // decision has to be resolved individually (Approve / Undo on its own card).
+  // Approves every asset (primary and extra templates) that hasn't been reviewed yet — a rejected asset is
+  // left alone, since that decision has to be resolved individually (Approve / Undo on its own card).
   const handleApproveRemainingAssets = () => {
-    allAlertOffers.forEach((o) => {
-      if (!offerReviewFor(o.id)) setOfferAssetReview(alert.id, o.id, 'approved');
+    assetEntries.forEach((e) => {
+      if (reviewForEntry(e) === 'pending') setEntryReview(e, 'approved');
     });
   };
-  // Resets every offer's review back to pending — the footer's "Undo reviews" action once assets are done.
+  // The Offers panel's per-offer menu: approves/rejects every asset (each template) generated for one offer.
+  const handleReviewOfferAssets = (offerId: string, status: 'approved' | 'rejected') => {
+    assetEntries.filter((e) => e.offer.id === offerId).forEach((e) => setEntryReview(e, status));
+  };
+  // Resets every asset's review back to pending — the footer's "Undo reviews" action once assets are done.
   const handleUndoAllAssetReviews = () => {
-    allAlertOffers.forEach((o) => setOfferAssetReview(alert.id, o.id, 'pending'));
+    assetEntries.forEach((e) => setEntryReview(e, 'pending'));
   };
 
   // Carousel within the Asset Details dialog — steps through allAlertOffers in order, wrapping at the ends.
@@ -701,14 +722,16 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
             </div>
 
             {/* Right panel — Activity History, Email Preview, Offers, QC warnings, or the offer editor: mutually exclusive */}
-            {editingOffer && !projectLocked ? (
+            {editingOffer ? (
               <AlertOfferEditPanel
                 key={`${editingOffer.id}-${editingOfferView}`}
                 offer={editingOffer}
                 initialView={editingOfferView}
+                readOnly={!!projectLocked}
+                width={sharedRightPanel.width}
+                onResizeHandleMouseDown={sharedRightPanel.onResizeHandleMouseDown}
                 onBack={() => { setEditingOfferId(null); setRightPanel('offers'); }}
                 onClose={() => setEditingOfferId(null)}
-                onFocusAsset={() => focusAsset(editingOffer.id)}
               />
             ) : rightPanel === 'history' ? (
               <div style={{ width: panelWidth, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,0.08)', overflowY: 'auto', padding: '16px' }}>
@@ -782,8 +805,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               <AlertOffersPanel
                 offers={allAlertOffers}
                 projectOffers={currentProject.offers}
-                locked={!!projectLocked}
                 onEditOffer={editOffer}
+                onReviewOfferAssets={handleReviewOfferAssets}
+                reviewDisabled={isArchived || isSent || !!failure}
                 onClose={() => setRightPanel(null)}
                 highlightRequest={highlightRequest}
                 width={sharedRightPanel.width}
@@ -821,7 +845,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                   approvedCount={assetsApprovedCount}
                   rejectedCount={assetsRejectedCount}
                   totalCount={assetsTotalCount}
-                  status={alert.assetsStatus}
+                  status={assetsWidgetStatus}
                   disabled={isArchived || !!failure}
                   disabledReason={failure ? DISABLED_TOOLTIP_REASON : undefined}
                   onApproveAll={handleApproveRemainingAssets}
@@ -889,7 +913,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
           backgroundUrl={detailsBg.url}
           background={detailsBg}
           projectId={currentProject.id}
-          locked={!!projectLocked}
           comments={commentsForOffer(detailsOffer.id)}
           activeAnchorId={activeAnchorId}
           onClose={() => setDetailsOfferId(null)}
