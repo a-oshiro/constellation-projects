@@ -1,23 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton, Switch } from '@mui/material';
 import { ChevronLeft, ChevronRight, TaskAlt } from '@mui/icons-material';
-import type {
-  AssetCommentAnchor, CreativeQcResult, DealQcOfferResult, Offer, QcFinding, ReviewStatus, Template,
-} from '../../data/types';
+import type { AssetCommentAnchor, Offer, ReviewStatus, Template } from '../../data/types';
 import type { AlertAssetEntry } from '../../utils/overviewAssets';
 import { CommentableAssetPreview, type AssetTextSelection } from './CommentableAssetPreview';
 import { AssetStatusBadge } from './AlertApprovalWidgets';
-import { AlertQcFindingCard, QC_FINDING_ICON } from './AlertQcFindingCard';
-import { AlertCreativeQcSideCard } from './AlertCreativeQcSideCard';
-import { AlertDealQcSideCard } from './AlertDealQcSideCard';
+import { QcTagList } from './QcTagList';
 import { AlertAssetCarousel } from './AlertAssetCarousel';
 import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
-import { QC_FINDING_LABEL } from '../../utils/alertReview';
+import type { QcTag } from '../../utils/alertQc';
 
 /**
  * The dialog's main content: one asset, contain-fit within an 800x600 box (shrunk further whenever the
- * stage is smaller, so the whole asset is always visible) while keeping the template's own proportions (title + dimensions left-aligned above it),
- * with QC warning tags + their floating detail cards to the left, and a carousel of every other asset below
+ * stage is smaller, so the whole asset is always visible) while keeping the template's own proportions
+ * (title + dimensions left-aligned above it), with its QC tags pinned top-left (clicking one opens the QC
+ * warnings panel on that warning), and a carousel of every other asset below
  * — replaces the old inline-email-canvas as the dialog's primary view. Comment-by-click/drag-highlight is
  * unchanged (same CommentableAssetPreview mechanism); this component just focuses it on one offer at a
  * time instead of stacking every offer's asset in a scrolling email.
@@ -35,13 +32,7 @@ const COMMENT_GAP = 20;
  * is subtracted back out when positioning the row that wraps both chevrons and the asset. */
 const CHEVRON_SPACE = 48;
 
-export const qcTagAnchorId = (key: string) => `qc-tag-${key}`;
 
-interface DealQcContext {
-  result: DealQcOfferResult;
-  checkedAt: number;
-  rulesetVersion: string;
-}
 
 interface AlertAssetFocusViewProps {
   offer: Offer;
@@ -65,12 +56,11 @@ interface AlertAssetFocusViewProps {
   onUndo: () => void;
   onRequestPreview: () => void;
   onShowOfferCard: () => void;
-  legacyFindings: QcFinding[];
-  creativeQc?: CreativeQcResult;
-  dealQc?: DealQcContext;
-  activeSideCardKey: string | null;
-  onToggleSideCard: (key: string) => void;
-  sideCardRef: React.RefObject<HTMLDivElement | null>;
+  /** The focused asset's QC tags (same list its Offer Card shows); clicking one opens the QC panel on it. */
+  qcTags: QcTag[];
+  /** The tag whose warning the open QC panel is focused on — outlined. */
+  activeQcKey: string | null;
+  onSelectQcTag: (tag: QcTag) => void;
   /** The focused asset's own key — highlights its thumbnail in the carousel. */
   focusedKey: string;
   /** Every asset currently visible in the carousel, grouped by vehicle or by template (per `groupBy`) and
@@ -110,8 +100,7 @@ interface AlertAssetFocusViewProps {
 export const AlertAssetFocusView = ({
   offer, template, backgroundUrl, title, dimensions, pins, pendingAnchor, activeAnchorId, onPinClick,
   registerAnchorRef, anchorRefsMap, onCreatePin, onTextSelected, approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
-  onRequestPreview, onShowOfferCard, legacyFindings, creativeQc, dealQc, activeSideCardKey, onToggleSideCard,
-  sideCardRef, focusedKey, carouselGroups, hasMultipleAssets, onSelectEntry, reviewForEntry, groupBy, onChangeGroupBy,
+  onRequestPreview, onShowOfferCard, qcTags, activeQcKey, onSelectQcTag, focusedKey, carouselGroups, hasMultipleAssets, onSelectEntry, reviewForEntry, groupBy, onChangeGroupBy,
   showCarousel, onToggleShowCarousel, pendingOnlyFilter, onTogglePendingOnlyFilter,
   onPrevAsset, onNextAsset, hasPendingAssets, onApproveAllAssets, showComments, showResolved, commentEntries,
   registerCommentRef, onCancelPendingComment, onSendPendingComment, onToggleResolved, onDeleteComment,
@@ -124,14 +113,7 @@ export const AlertAssetFocusView = ({
   const [stageHeight, setStageHeight] = useState(0);
   const [titleHeight, setTitleHeight] = useState(0);
   const [carouselToggleHovered, setCarouselToggleHovered] = useState(false);
-  const creativeHasWarning = !!creativeQc?.sections.some((s) => s.checks.some((c) => c.status === 'warning'));
-  const dealHasMismatch = !!dealQc && dealQc.result.mismatchedFields.length > 0;
 
-  const activeLegacyFinding = activeSideCardKey?.startsWith('legacy:')
-    ? legacyFindings.find((f) => `legacy:${f.id}` === activeSideCardKey)
-    : undefined;
-  const showCreativeCard = activeSideCardKey === `creative:${offer.id}` && creativeQc;
-  const showDealCard = activeSideCardKey === `deal:${offer.id}` && dealQc;
   const totalCarouselEntries = carouselGroups.reduce((n, g) => n + g.entries.length, 0);
   // Toggling "pending only" can hide the currently-focused asset entirely (it's reviewed and filtered
   // out) — rather than show a reviewed asset the carousel below no longer lists, swap in this message.
@@ -243,82 +225,12 @@ export const AlertAssetFocusView = ({
           />
         )}
 
-        {(legacyFindings.length > 0 || creativeHasWarning || dealHasMismatch) && (
-          <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-            {legacyFindings.map((finding) => {
-              const FindingIcon = QC_FINDING_ICON[finding.type];
-              const key = `legacy:${finding.id}`;
-              const isActive = activeSideCardKey === key;
-              return (
-                <button
-                  key={key}
-                  ref={(el) => registerAnchorRef(qcTagAnchorId(key), el)}
-                  onClick={(e) => { e.stopPropagation(); onToggleSideCard(key); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none',
-                    background: '#FDF4EC', borderRadius: 8, padding: '3px 8px 3px 6px',
-                    outline: isActive ? '2px solid #c45500' : 'none',
-                  }}
-                >
-                  <FindingIcon style={{ fontSize: 14, color: '#c45500', flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#c45500', letterSpacing: '0.4px', whiteSpace: 'nowrap', opacity: 0.75 }}>
-                    {QC_FINDING_LABEL[finding.type]}
-                  </span>
-                </button>
-              );
-            })}
-            {creativeHasWarning && (() => {
-              const key = `creative:${offer.id}`;
-              const isActive = activeSideCardKey === key;
-              return (
-                <button
-                  key={key}
-                  ref={(el) => registerAnchorRef(qcTagAnchorId(key), el)}
-                  onClick={(e) => { e.stopPropagation(); onToggleSideCard(key); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none',
-                    background: '#FDF4EC', borderRadius: 8, padding: '3px 8px 3px 6px',
-                    outline: isActive ? '2px solid #c45500' : 'none',
-                  }}
-                >
-                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#c45500', letterSpacing: '0.4px', whiteSpace: 'nowrap', opacity: 0.75 }}>
-                    Creative QC
-                  </span>
-                </button>
-              );
-            })()}
-            {dealHasMismatch && (() => {
-              const key = `deal:${offer.id}`;
-              const isActive = activeSideCardKey === key;
-              return (
-                <button
-                  key={key}
-                  ref={(el) => registerAnchorRef(qcTagAnchorId(key), el)}
-                  onClick={(e) => { e.stopPropagation(); onToggleSideCard(key); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: 'none',
-                    background: '#FDF4EC', borderRadius: 8, padding: '3px 8px 3px 6px',
-                    outline: isActive ? '2px solid #c45500' : 'none',
-                  }}
-                >
-                  <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#c45500', letterSpacing: '0.4px', whiteSpace: 'nowrap', opacity: 0.75 }}>
-                    Deal QC
-                  </span>
-                </button>
-              );
-            })()}
-          </div>
-        )}
-
-        {(activeLegacyFinding || showCreativeCard || showDealCard) && (
-          <div ref={sideCardRef}>
-            {activeLegacyFinding && <AlertQcFindingCard finding={activeLegacyFinding} />}
-            {showCreativeCard && creativeQc && <AlertCreativeQcSideCard result={creativeQc} />}
-            {showDealCard && dealQc && (
-              <AlertDealQcSideCard result={dealQc.result} checkedAt={dealQc.checkedAt} rulesetVersion={dealQc.rulesetVersion} />
-            )}
-          </div>
-        )}
+        <QcTagList
+          tags={qcTags}
+          activeKey={activeQcKey}
+          onSelect={onSelectQcTag}
+          style={{ position: 'absolute', top: 8, left: 8, zIndex: 6 }}
+        />
       </div>
 
       <FloatingCommentColumn

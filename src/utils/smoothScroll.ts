@@ -5,13 +5,17 @@ function easeInOutQuad(t: number): number {
 /**
  * Animates `container.scrollTop` to center `target` within it, using a manual rAF loop with an
  * ease-in/out curve. Native `scrollIntoView({behavior:'smooth'})` was found to stall partway through
- * long scrolls in some environments, so this gives full control over the animation.
+ * long scrolls in some environments, so this gives full control over the animation. A target taller than
+ * the container is aligned to its top (less `topOffset`) instead, so its beginning is what lands in view.
  */
-export function scrollElementIntoViewCentered(container: HTMLElement, target: HTMLElement, duration = 500): void {
+export function scrollElementIntoViewCentered(container: HTMLElement, target: HTMLElement, duration = 500, topOffset = 16): void {
   const containerRect = container.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
   const startScrollTop = container.scrollTop;
-  const desiredScrollTop = targetRect.top - containerRect.top + startScrollTop - (containerRect.height - targetRect.height) / 2;
+  const targetTop = targetRect.top - containerRect.top + startScrollTop;
+  const desiredScrollTop = targetRect.height > containerRect.height - 2 * topOffset
+    ? targetTop - topOffset
+    : targetTop - (containerRect.height - targetRect.height) / 2;
   const maxScrollTop = container.scrollHeight - container.clientHeight;
   const endScrollTop = Math.max(0, Math.min(desiredScrollTop, maxScrollTop));
   const delta = endScrollTop - startScrollTop;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconButton, Menu, MenuItem } from '@mui/material';
-import { Close, InfoOutlined, ExpandMore, ChevronRight, MoreVert, CheckCircleOutlined, HighlightOff } from '@mui/icons-material';
+import { Close, InfoOutlined, ExpandMore, ChevronRight, MoreVert, CheckCircleOutlined, HighlightOff, Check } from '@mui/icons-material';
 import type { Offer } from '../../data/types';
 import { getOfferTypeDisplayFields } from './OfferCard';
 import { OfferIdentityCard } from './OfferIdentityCard';
@@ -8,6 +8,8 @@ import { OutOfStockBadge } from './OutOfStockBadge';
 import { Tooltip } from './Tooltip';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { scrollElementIntoViewCentered } from '../../utils/smoothScroll';
+import type { QcTag } from '../../utils/alertQc';
+import { QcTagList } from './QcTagList';
 
 /** Tooltips nested inside this dialog's right panel need a z-index above the dialog's own panel (100001)
  * to escape being clipped by it — 100050 is the convention already used elsewhere in this dialog's subtree. */
@@ -39,6 +41,12 @@ interface AlertOffersPanelProps {
   onReviewOfferAssets: (offerId: string, status: 'approved' | 'rejected') => void;
   /** Disables the per-offer review menu (e.g. the alert is archived, sent, or failed to generate). */
   reviewDisabled?: boolean;
+  /** Each offer's QC tags — the same ones shown on its asset; clicking one opens the QC panel on it. */
+  qcTagsForOffer: (offerId: string) => QcTag[];
+  /** True once every asset (all templates) generated for the offer is approved — shows the card's "All Assets Approved" tag. */
+  allAssetsApprovedFor: (offerId: string) => boolean;
+  activeQcKey: string | null;
+  onSelectQcTag: (tag: QcTag) => void;
   /** `view` picks which editor opens: the Vehicle Info form (clicked the identity/vehicle row) or the offer/lease form (clicked the pricing row). */
   onEditOffer: (offerId: string, view: 'vehicle' | 'offer') => void;
   onClose: () => void;
@@ -135,18 +143,24 @@ const OfferReviewMenu = ({ disabled, onReview }: { disabled?: boolean; onReview:
 /**
  * The "Offer Card": a vehicle identity row (click → Vehicle Info editor) plus a pricing row (click →
  * offer/lease editor) — always clickable; the editors themselves go read only while the project is
- * locked. `onReviewAllAssets`, when given, adds the top-right approve/reject-all menu. Reused as-is by the Selected tab here, the Models tab
+ * locked. `onReviewAllAssets`, when given, adds the top-right approve/reject-all menu; `qcTags` adds the
+ * offer's QC tags (the same ones its asset shows) between the two rows, alongside an "All Assets Approved"
+ * tag once `allAssetsApproved`. Reused as-is by the Selected tab here, the Models tab
  * (per-model expanded offers), the floating canvas Offer Info Card (`AlertOfferCard`), and atop the
  * Offer Edit panel itself. `highlighted` briefly tints the card to call out a card jumped-to from the
  * canvas — purely visual, fades via the background-color transition.
  */
-export const OfferListCard = ({ offer, onEditVehicle, onEditOffer, highlighted, onReviewAllAssets, reviewDisabled }: {
+export const OfferListCard = ({ offer, onEditVehicle, onEditOffer, highlighted, onReviewAllAssets, reviewDisabled, qcTags, activeQcKey, onSelectQcTag, allAssetsApproved }: {
   offer: Offer;
   onEditVehicle: () => void;
   onEditOffer: () => void;
   highlighted?: boolean;
   onReviewAllAssets?: (status: 'approved' | 'rejected') => void;
   reviewDisabled?: boolean;
+  qcTags?: QcTag[];
+  activeQcKey?: string | null;
+  onSelectQcTag?: (tag: QcTag) => void;
+  allAssetsApproved?: boolean;
 }) => (
   <div style={{
     background: highlighted ? 'rgba(99,86,225,0.12)' : '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, overflow: 'hidden',
@@ -158,6 +172,22 @@ export const OfferListCard = ({ offer, onEditVehicle, onEditOffer, highlighted, 
       onClick={onEditVehicle}
       trailing={onReviewAllAssets && <OfferReviewMenu disabled={reviewDisabled} onReview={onReviewAllAssets} />}
     />
+    {(allAssetsApproved || (qcTags && qcTags.length > 0 && onSelectQcTag)) && (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 12px 10px' }}>
+        {allAssetsApproved && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, background: '#edf7ed', borderRadius: 8, padding: '3px 8px 3px 6px',
+            fontSize: 11, fontFamily: 'Roboto, sans-serif', fontWeight: 700, color: '#1b5e20', letterSpacing: '0.4px', whiteSpace: 'nowrap',
+          }}>
+            <Check style={{ fontSize: 14, color: '#4caf50' }} />
+            All Assets Approved
+          </span>
+        )}
+        {qcTags && onSelectQcTag && (
+          <QcTagList tags={qcTags} activeKey={activeQcKey} onSelect={onSelectQcTag} style={{ display: 'contents' }} />
+        )}
+      </div>
+    )}
     <OfferRow offer={offer} onEdit={onEditOffer} />
   </div>
 );
@@ -180,7 +210,7 @@ const modelHeaderStyle: React.CSSProperties = {
 const isEnrolledOffer = (o: Offer) => o.id.startsWith('sea-offer-');
 const modelKey = (o: Offer) => `${o.model} · ${o.year}`;
 
-export const AlertOffersPanel = ({ offers, projectOffers, onEditOffer, onReviewOfferAssets, reviewDisabled, onClose, highlightRequest, width, onResizeHandleMouseDown }: AlertOffersPanelProps) => {
+export const AlertOffersPanel = ({ offers, projectOffers, onEditOffer, onReviewOfferAssets, reviewDisabled, qcTagsForOffer, allAssetsApprovedFor, activeQcKey, onSelectQcTag, onClose, highlightRequest, width, onResizeHandleMouseDown }: AlertOffersPanelProps) => {
   const [tab, setTab] = useState<'selected' | 'models'>('selected');
   const [expandedModelKeys, setExpandedModelKeys] = useState<Set<string>>(new Set());
   const [flashOfferId, setFlashOfferId] = useState<string | null>(null);
@@ -248,6 +278,10 @@ export const AlertOffersPanel = ({ offers, projectOffers, onEditOffer, onReviewO
                     onEditOffer={() => onEditOffer(offer.id, 'offer')}
                     onReviewAllAssets={(status) => onReviewOfferAssets(offer.id, status)}
                     reviewDisabled={reviewDisabled}
+                    qcTags={qcTagsForOffer(offer.id)}
+                    allAssetsApproved={allAssetsApprovedFor(offer.id)}
+                    activeQcKey={activeQcKey}
+                    onSelectQcTag={onSelectQcTag}
                     highlighted={flashOfferId === offer.id}
                   />
                 </div>
@@ -319,6 +353,10 @@ export const AlertOffersPanel = ({ offers, projectOffers, onEditOffer, onReviewO
                               onEditOffer={() => onEditOffer(offer.id, 'offer')}
                               onReviewAllAssets={(status) => onReviewOfferAssets(offer.id, status)}
                               reviewDisabled={reviewDisabled}
+                              qcTags={qcTagsForOffer(offer.id)}
+                              allAssetsApproved={allAssetsApprovedFor(offer.id)}
+                              activeQcKey={activeQcKey}
+                              onSelectQcTag={onSelectQcTag}
                             />
                           ))
                         )}

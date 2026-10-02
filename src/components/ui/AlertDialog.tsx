@@ -15,7 +15,8 @@ import { FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableTe
 import type { ColumnEntry } from './FloatingCommentColumn';
 import { AlertOfferEditPanel } from './AlertOfferEditPanel';
 import { AlertAssetDetailsDialog } from './AlertAssetDetailsDialog';
-import { AlertAssetFocusView, qcTagAnchorId } from './AlertAssetFocusView';
+import { AlertAssetFocusView } from './AlertAssetFocusView';
+import { creativeQcHasWarning, qcTagsForOffer, type QcFocusRequest, type QcTag } from '../../utils/alertQc';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
 import { AlertEmailPreviewPanel } from './AlertEmailPreviewPanel';
 import { AssetsFooterWidget, EmailFooterWidget } from './AlertFooterWidgets';
@@ -120,13 +121,12 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
    * scrolls/flashes that offer's card there. `token` is a nonce so re-clicking the same asset's button
    * retriggers the scroll/flash even when `offerId` is unchanged. */
   const [highlightRequest, setHighlightRequest] = useState<OfferHighlightRequest | null>(null);
-  /** Which QC side-card is open next to the focused asset — one of `legacy:{findingId}`, `creative:{offerId}`, or `deal:{offerId}`. One open at a time; click-outside closes it. */
-  const [activeSideCardKey, setActiveSideCardKey] = useState<string | null>(null);
+  /** The QC warning a clicked QC tag (on an asset or an Offer Card) asked the QC panel to scroll to. */
+  const [qcFocusRequest, setQcFocusRequest] = useState<QcFocusRequest | null>(null);
   /** When on, the carousel (and the offer this dialog can focus) is limited to offers still awaiting review. */
   const [pendingOnlyFilter, setPendingOnlyFilter] = useState(() => alert.status === 'sent');
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [cursorHint, setCursorHint] = useState<{ x: number; y: number } | null>(null);
-  const sideCardRef = useRef<HTMLDivElement>(null);
 
   // Margin commenting: a highlight/pin the user just created but hasn't sent a comment for yet, and the id
   // of a comment whose highlight/pin was just clicked (or vice versa) for a brief jump/emphasis.
@@ -190,14 +190,11 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // every approve/reject control. QC findings are a separate, non-blocking overlay on the normal view.
   const failure = alert.generationFailure;
   const qcFindings = alert.qcFindings ?? [];
-  const qcFindingsForOffer = (offerId: string) => qcFindings.filter((f) => f.offerId === offerId);
   const creativeQcResults = alert.creativeQc ?? [];
-  const creativeQcForOffer = (offerId: string) => creativeQcResults.find((r) => r.offerId === offerId);
   const dealQc = alert.dealQc;
-  const dealQcForOffer = (offerId: string) => dealQc?.offers.find((o) => o.offerId === offerId);
   const hasQcIssues =
     qcFindings.length > 0 ||
-    creativeQcResults.some((r) => r.sections.some((s) => s.checks.some((c) => c.status === 'warning'))) ||
+    creativeQcResults.some(creativeQcHasWarning) ||
     !!dealQc?.offers.some((o) => o.mismatchedFields.length > 0);
 
   // Banner takes priority over the icon cluster's usual top-right slot — when visible, that cluster gets
@@ -226,6 +223,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // was open.
   const openRightPanel = (panel: 'history' | 'emailPreview' | 'offers' | 'qc' | 'projectSettings') => {
     setEditingOfferId(null);
+    setQcFocusRequest(null);
     setRightPanel((v) => (v === panel ? null : panel));
   };
   // The primary asset's key is always the bare offer id (see buildAlertAssetEntries), so focusing "an
@@ -345,18 +343,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setShowComments(true);
   };
 
-  // Clicking anywhere in the dialog other than the open QC side-card or the tag that opened it closes it —
-  // the gray background, a different asset, or the email body text all count as "outside".
-  const handleDialogClick = (e: React.MouseEvent) => {
-    const target = e.target as Node;
-
-    if (activeSideCardKey) {
-      const insideCard = sideCardRef.current?.contains(target);
-      const insideTag = anchorRefs.current.get(qcTagAnchorId(activeSideCardKey))?.contains(target);
-      if (!insideCard && !insideTag) setActiveSideCardKey(null);
-    }
-  };
-
   const editingOffer = editingOfferId ? offers.find((o) => o.id === editingOfferId) : undefined;
   const detailsOffer = detailsOfferId ? offers.find((o) => o.id === detailsOfferId) : undefined;
   const detailsBg = detailsOffer ? bgFor(detailsOffer) : undefined;
@@ -466,6 +452,11 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       if (reviewForEntry(e) === 'pending') setEntryReview(e, 'approved');
     });
   };
+  // Every asset generated for the offer (each template) is approved — the Offer Card's "All Assets Approved" tag.
+  const allAssetsApprovedFor = (offerId: string) => {
+    const entries = assetEntries.filter((e) => e.offer.id === offerId);
+    return entries.length > 0 && entries.every((e) => reviewForEntry(e) === 'approved');
+  };
   // The Offers panel's per-offer menu: approves/rejects every asset (each template) generated for one offer.
   const handleReviewOfferAssets = (offerId: string, status: 'approved' | 'rejected') => {
     assetEntries.filter((e) => e.offer.id === offerId).forEach((e) => setEntryReview(e, status));
@@ -495,7 +486,18 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   };
   const handleToggleReaction = (commentId: string, emoji: string) => toggleAlertCommentReaction(alert.id, commentId, emoji);
 
-  const focusedDealQcResult = focusedEntry ? dealQcForOffer(focusedEntry.offer.id) : undefined;
+  // QC tags (on the focused asset and on every Offer Card) open the QC panel scrolled to that tag's
+  // warning. A tag on another offer's card also focuses that offer's asset, so the canvas matches.
+  const qcFocusTokenRef = useRef(0);
+  const qcTagsFor = (offerId: string) => qcTagsForOffer(alert, offerId);
+  const handleSelectQcTag = (tag: QcTag) => {
+    setEditingOfferId(null);
+    setRightPanel('qc');
+    qcFocusTokenRef.current += 1;
+    setQcFocusRequest({ key: tag.key, tab: tag.tab, offerId: tag.offerId, token: qcFocusTokenRef.current });
+    if (focusedEntry?.offer.id !== tag.offerId) focusAsset(tag.offerId);
+  };
+  const activeQcKey = rightPanel === 'qc' ? qcFocusRequest?.key ?? null : null;
 
   return ReactDOM.createPortal(
     <>
@@ -504,7 +506,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.4)' }}
       />
       <div
-        onClick={handleDialogClick}
         style={{
           position: 'fixed', inset: 16, zIndex: 100001,
           background: '#ffffff', borderRadius: 16, overflow: 'hidden',
@@ -597,13 +598,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     onReject={() => reviewFocusedAssetAndAdvance(focusedEntry, 'rejected')}
                     onUndo={() => setEntryReview(focusedEntry, 'pending')}
                     onRequestPreview={() => setDetailsOfferId(focusedEntry.offer.id)}
-                    onShowOfferCard={() => { setActiveSideCardKey(null); showOfferInOffersPanel(focusedEntry.offer.id); }}
-                    legacyFindings={qcFindingsForOffer(focusedEntry.offer.id)}
-                    creativeQc={creativeQcForOffer(focusedEntry.offer.id)}
-                    dealQc={focusedDealQcResult && dealQc ? { result: focusedDealQcResult, checkedAt: dealQc.checkedAt, rulesetVersion: dealQc.rulesetVersion } : undefined}
-                    activeSideCardKey={activeSideCardKey}
-                    onToggleSideCard={(key) => setActiveSideCardKey((k) => (k === key ? null : key))}
-                    sideCardRef={sideCardRef}
+                    onShowOfferCard={() => showOfferInOffersPanel(focusedEntry.offer.id)}
+                    qcTags={qcTagsFor(focusedEntry.offer.id)}
+                    activeQcKey={activeQcKey}
+                    onSelectQcTag={handleSelectQcTag}
                     focusedKey={focusedEntry.key}
                     carouselGroups={carouselGroups}
                     hasMultipleAssets={assetEntries.length > 1}
@@ -808,6 +806,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 onEditOffer={editOffer}
                 onReviewOfferAssets={handleReviewOfferAssets}
                 reviewDisabled={isArchived || isSent || !!failure}
+                qcTagsForOffer={qcTagsFor}
+                allAssetsApprovedFor={allAssetsApprovedFor}
+                activeQcKey={activeQcKey}
+                onSelectQcTag={handleSelectQcTag}
                 onClose={() => setRightPanel(null)}
                 highlightRequest={highlightRequest}
                 width={sharedRightPanel.width}
@@ -817,7 +819,10 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
               <AlertQcPanel
                 creativeQc={alert.creativeQc}
                 dealQc={alert.dealQc}
+                qcFindings={qcFindings}
                 offers={allAlertOffers}
+                fallbackCheckedAt={creativeQcResults[0]?.sections[0]?.checkedAt ?? dealQc?.checkedAt ?? alert.createdAt}
+                focusRequest={qcFocusRequest}
                 onClose={() => setRightPanel(null)}
                 panelWidth={sharedRightPanel.width}
                 onResizeHandleMouseDown={sharedRightPanel.onResizeHandleMouseDown}
