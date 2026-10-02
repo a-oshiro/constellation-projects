@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
+import { Checkbox, IconButton, Menu, MenuItem, ListItemIcon } from '@mui/material';
 import { MoreVert, ContentCopy, LocalOfferOutlined, ViewComfyOutlined, PaletteOutlined, ImageOutlined } from '@mui/icons-material';
 import type { Project } from '../../data/projects';
 import { EvergreenIndicatorIcon } from './EvergreenProjectBadge';
@@ -42,9 +42,11 @@ interface ProjectBoardCardProps {
   onOpen: () => void;
   onDuplicate: () => void;
   onShowOverview: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export const ProjectBoardCard = ({ project, locked, onOpen, onDuplicate, onShowOverview }: ProjectBoardCardProps) => {
+export const ProjectBoardCard = ({ project, locked, onOpen, onDuplicate, onShowOverview, selected = false, onToggleSelect }: ProjectBoardCardProps) => {
   const [hovered, setHovered] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
@@ -69,7 +71,14 @@ export const ProjectBoardCard = ({ project, locked, onOpen, onDuplicate, onShowO
     >
       {/* ── Wrapper: thumbnail + content ─────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
-        <div style={{ width: 90, flexShrink: 0, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid rgba(0,0,0,0.06)' }}>
+        <div style={{ position: 'relative', width: 90, flexShrink: 0, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid rgba(0,0,0,0.06)' }}>
+          <Checkbox
+            checked={selected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            inputProps={{ 'aria-label': `Select ${project.projectName}` }}
+            sx={{ position: 'absolute', top: 0, left: 0, padding: '9px', color: '#686576', '&.Mui-checked': { color: '#473bab' } }}
+          />
           <img src={bmwLogoSrc} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
         </div>
 

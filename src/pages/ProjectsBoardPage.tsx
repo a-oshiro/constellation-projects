@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, IconButton, Tabs, Tab, TextField, InputAdornment } from '@mui/material';
-import { Add, Replay, Search } from '@mui/icons-material';
+import { Add, Close, EditOutlined, Replay, Search } from '@mui/icons-material';
 import { PROJECTS, getProjectPath } from '../data/projects';
 import type { Project } from '../data/projects';
 import { CURRENT_USER } from '../data/mockData';
@@ -47,7 +47,7 @@ const tabSx = {
 };
 
 const BoardColumnView = ({
-  column, projects, locked, selectedProjectId, onOpenProject, onDuplicateProject, onShowOverview,
+  column, projects, locked, selectedProjectId, onOpenProject, onDuplicateProject, onShowOverview, selectedIds, onToggleSelect,
 }: {
   column: BoardColumn;
   projects: Project[];
@@ -56,6 +56,8 @@ const BoardColumnView = ({
   onOpenProject: (project: Project) => void;
   onDuplicateProject: (project: Project) => void;
   onShowOverview: (project: Project) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (project: Project) => void;
 }) => {
   const config = STATUS_CONFIG[column.statuses[0]];
 
@@ -80,6 +82,8 @@ const BoardColumnView = ({
             onOpen={() => onOpenProject(project)}
             onDuplicate={() => onDuplicateProject(project)}
             onShowOverview={() => onShowOverview(project)}
+            selected={selectedIds.has(project.id)}
+            onToggleSelect={() => onToggleSelect(project)}
           />
         ))}
       </div>
@@ -94,6 +98,7 @@ export const ProjectsBoardPage = () => {
   const [tab, setTab] = useState<BoardTab>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const myProjectCount = useMemo(() => PROJECTS.filter((p) => p.creator === CURRENT_USER.name).length, []);
 
@@ -107,6 +112,28 @@ export const ProjectsBoardPage = () => {
     () => (tab === 'mine' ? searched.filter((p) => p.creator === CURRENT_USER.name) : searched),
     [searched, tab],
   );
+
+  const selectedCount = useMemo(
+    () => visibleProjects.filter((p) => selectedIds.has(p.id)).length,
+    [visibleProjects, selectedIds],
+  );
+
+  const handleToggleSelect = (project: Project) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(project.id)) next.add(project.id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selectedCount === visibleProjects.length) visibleProjects.forEach((p) => next.delete(p.id));
+      else visibleProjects.forEach((p) => next.add(p.id));
+      return next;
+    });
+  };
 
   const byColumn = useMemo(() => {
     const map = new Map<string, Project[]>();
@@ -153,6 +180,37 @@ export const ProjectsBoardPage = () => {
 
         {/* ── Toolbar ──────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', flexShrink: 0 }}>
+          {selectedCount > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f4f5f6', borderRadius: 40, padding: '3px 8px 3px 4px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => setSelectedIds(new Set())}
+                  aria-label="Clear selection"
+                  sx={{ padding: '5px', color: '#686576' }}
+                >
+                  <Close style={{ fontSize: 20 }} />
+                </IconButton>
+                <span style={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.4px', lineHeight: 1.66, whiteSpace: 'nowrap' }}>
+                  {selectedCount} selected
+                </span>
+              </div>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditOutlined style={{ fontSize: 16 }} />}
+                sx={{
+                  color: '#473bab', borderColor: 'rgba(99,86,225,0.5)', borderRadius: '100px', padding: '4px 10px',
+                  fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.46px',
+                  textTransform: 'none', whiteSpace: 'nowrap', lineHeight: '22px',
+                  '&:hover': { borderColor: '#473bab', background: 'rgba(99,86,225,0.04)' },
+                }}
+              >
+                Edit Projects
+              </Button>
+            </div>
+          ) : (
+            <>
           <Button
             variant="contained"
             disableElevation
@@ -178,6 +236,9 @@ export const ProjectsBoardPage = () => {
           >
             Recent Activity
           </Button>
+
+            </>
+          )}
 
           <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.12)', flexShrink: 0 }} />
 
@@ -225,6 +286,9 @@ export const ProjectsBoardPage = () => {
               onOpenProject={handleOpenProject}
               onDuplicateProject={() => {}}
               onShowOverview={openProjectSettings}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAll={handleToggleSelectAll}
             />
           </div>
         ) : (
@@ -240,6 +304,8 @@ export const ProjectsBoardPage = () => {
                   onOpenProject={handleOpenProject}
                   onDuplicateProject={() => {}}
                   onShowOverview={openProjectSettings}
+                  selectedIds={selectedIds}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </div>

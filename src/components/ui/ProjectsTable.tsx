@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconButton, ListItemIcon, Menu, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Checkbox, IconButton, ListItemIcon, Menu, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { ContentCopy, MoreVert } from '@mui/icons-material';
 import type { Project } from '../../data/projects';
 import bmwLogoSrc from '../../assets/bmw-logo.png';
@@ -44,6 +44,9 @@ interface ProjectsTableProps {
   onOpenProject: (project: Project) => void;
   onDuplicateProject: (project: Project) => void;
   onShowOverview: (project: Project) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (project: Project) => void;
+  onToggleSelectAll: () => void;
 }
 
 interface ProjectTableRowProps {
@@ -52,9 +55,13 @@ interface ProjectTableRowProps {
   onOpen: () => void;
   onDuplicate: () => void;
   onShowOverview: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }
 
-const ProjectTableRow = ({ project, status, onOpen, onDuplicate, onShowOverview }: ProjectTableRowProps) => {
+const CHECKBOX_SX = { padding: '9px', color: '#686576', '&.Mui-checked, &.MuiCheckbox-indeterminate': { color: '#473bab' } } as const;
+
+const ProjectTableRow = ({ project, status, onOpen, onDuplicate, onShowOverview, selected, onToggleSelect }: ProjectTableRowProps) => {
   const [hovered, setHovered] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
@@ -64,8 +71,12 @@ const ProjectTableRow = ({ project, status, onOpen, onDuplicate, onShowOverview 
       onClick={onOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      selected={selected}
       sx={{ cursor: 'pointer', '& td': { borderBottom: '1px solid #f0f0f0' } }}
     >
+      <TableCell padding="checkbox" sx={BODY_CELL_SX} onClick={(e) => e.stopPropagation()}>
+        <Checkbox checked={selected} onChange={onToggleSelect} inputProps={{ 'aria-label': `Select ${project.projectName}` }} sx={CHECKBOX_SX} />
+      </TableCell>
       <TableCell sx={{ ...BODY_CELL_SX, width: 64 }}>
         <img src={bmwLogoSrc} alt="" style={{ width: 48, height: 48, objectFit: 'contain', display: 'block' }} />
       </TableCell>
@@ -109,11 +120,22 @@ const ProjectTableRow = ({ project, status, onOpen, onDuplicate, onShowOverview 
   );
 };
 
-export const ProjectsTable = ({ projects, statusFor, onOpenProject, onDuplicateProject, onShowOverview }: ProjectsTableProps) => (
+export const ProjectsTable = ({ projects, statusFor, onOpenProject, onDuplicateProject, onShowOverview, selectedIds, onToggleSelect, onToggleSelectAll }: ProjectsTableProps) => {
+  const selectedCount = projects.filter((p) => selectedIds.has(p.id)).length;
+  return (
   <TableContainer style={{ flex: 1, minHeight: 0 }}>
     <Table stickyHeader size="small">
       <TableHead>
         <TableRow>
+          <TableCell padding="checkbox" sx={HEADER_CELL_SX}>
+            <Checkbox
+              checked={projects.length > 0 && selectedCount === projects.length}
+              indeterminate={selectedCount > 0 && selectedCount < projects.length}
+              onChange={onToggleSelectAll}
+              inputProps={{ 'aria-label': 'Select all projects' }}
+              sx={CHECKBOX_SX}
+            />
+          </TableCell>
           <TableCell sx={HEADER_CELL_SX} />
           <TableCell sx={HEADER_CELL_SX}>Project Name</TableCell>
           <TableCell sx={HEADER_CELL_SX}>Account</TableCell>
@@ -133,9 +155,12 @@ export const ProjectsTable = ({ projects, statusFor, onOpenProject, onDuplicateP
             onOpen={() => onOpenProject(project)}
             onDuplicate={() => onDuplicateProject(project)}
             onShowOverview={() => onShowOverview(project)}
+            selected={selectedIds.has(project.id)}
+            onToggleSelect={() => onToggleSelect(project)}
           />
         ))}
       </TableBody>
     </Table>
   </TableContainer>
-);
+  );
+};
