@@ -72,6 +72,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // email is the whole point of reviewing the alert.
   const [rightPanel, setRightPanel] = useState<'history' | 'emailPreview' | 'offers' | 'qc' | 'projectSettings' | null>('emailPreview');
   const [showComments, setShowComments] = useState(true);
+  /** Asset comments whose boxes are open over the focused asset, in the order they were opened — a box
+   * opens when its pin/highlight is clicked and stays open until its X is clicked. */
+  const [openAssetCommentIds, setOpenAssetCommentIds] = useState<string[]>([]);
   const [showResolved, setShowResolved] = useState(false);
   const [commentsMenuAnchor, setCommentsMenuAnchor] = useState<HTMLElement | null>(null);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   /** Whether the carousel groups by vehicle (default) or by template/size. */
   const [groupBy, setGroupBy] = useState<'vehicle' | 'template'>('vehicle');
   /** Whether the asset carousel is shown below the focused asset — visible by default, collapsible via its
-   * own toggle button or the Shift+C shortcut so the focused asset can have the full canvas when wanted. */
+   * own toggle button or the Shift+P shortcut so the focused asset can have the full canvas when wanted. */
   const [showCarousel, setShowCarousel] = useState(true);
   /** Which asset is shown at full size in the main asset-focus view — `AlertAssetEntry.key` (a bare offer id
    * for the primary asset, or a composite key for an extra asset). */
@@ -286,7 +289,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // A highlight the user just made but hasn't sent a comment for yet — shown immediately, non-interactive,
   // and removed the moment it's cancelled or sent.
   const anchorsForParagraph = (index: number) => {
-    const committed = emailAnchors.filter((a) => a.anchor.paragraphIndex === index);
+    const committed = showComments ? emailAnchors.filter((a) => a.anchor.paragraphIndex === index) : [];
     if (pendingAnchor?.kind === 'email' && pendingAnchor.paragraphIndex === index) {
       return [...committed, { anchor: pendingAnchor, commentId: PENDING_ANCHOR_ID }];
     }
@@ -294,6 +297,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   };
 
   const handleAnchorClick = (commentId: string) => setActiveAnchorId(commentId);
+  // Opens (or brings to the front) an asset comment's box over the focused asset.
+  const openAssetComment = (commentId: string) =>
+    setOpenAssetCommentIds((ids) => [...ids.filter((id) => id !== commentId), commentId]);
 
   const handleEmailMouseUp = () => {
     const selection = window.getSelection();
@@ -332,6 +338,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     if (!floatingSelection) return;
     setPendingAnchor(floatingSelection.anchor);
     setFloatingSelection(null);
+    setShowComments(true);
     window.getSelection()?.removeAllRanges();
   };
 
@@ -411,18 +418,23 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     setFocusedAssetKey(flatVisibleEntries[nextIdx].key);
   };
 
-  // Left/right arrow keys step through the carousel too, and Shift+C toggles it open/closed — all ignored
+  // Left/right arrow keys step through the carousel too, Shift+P toggles it open/closed, and Shift+C
+  // toggles comment visibility (boxes and pins/highlights alike) — all ignored
   // while the user is typing anywhere (comment composer, recipient field, enrollment settings, etc.) so
   // they never hijack normal text editing.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const isStepKey = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
-      const isToggleKey = e.shiftKey && e.key.toLowerCase() === 'c';
-      if (!isStepKey && !isToggleKey) return;
+      const key = e.key.toLowerCase();
+      const isCarouselKey = e.shiftKey && key === 'p';
+      const isCommentsKey = e.shiftKey && key === 'c';
+      if (!isStepKey && !isCarouselKey && !isCommentsKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-      if (isToggleKey) { setShowCarousel((v) => !v); return; }
+      if (isCarouselKey) { setShowCarousel((v) => !v); return; }
+      if (isCommentsKey) { setShowComments((v) => !v); return; }
       stepFocusedAsset(e.key === 'ArrowLeft' ? -1 : 1);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -587,10 +599,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     pins={pinsForAsset(focusedEntry.key)}
                     pendingAnchor={pendingAnchor?.kind === 'asset' && pendingAnchor.assetKey === focusedEntry.key ? pendingAnchor : undefined}
                     activeAnchorId={activeAnchorId}
-                    onPinClick={handleAnchorClick}
+                    onPinClick={(commentId) => { handleAnchorClick(commentId); openAssetComment(commentId); }}
                     registerAnchorRef={registerAnchorRef}
-                    anchorRefsMap={anchorRefs}
-                    onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); }}
+                    onCreatePin={(anchor) => { setPendingAnchor(anchor); setFloatingSelection(null); setShowComments(true); }}
                     onTextSelected={setFloatingSelection}
                     approvalStatus={reviewForEntry(focusedEntry)}
                     approvalDisabled={isArchived}
@@ -618,6 +629,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     hasPendingAssets={assetsApprovedCount + assetsRejectedCount < assetsTotalCount}
                     onApproveAllAssets={handleApproveRemainingAssets}
                     showComments={showComments}
+                    openCommentIds={openAssetCommentIds}
+                    onCloseComment={(commentId) => setOpenAssetCommentIds((ids) => ids.filter((id) => id !== commentId))}
                     showResolved={showResolved}
                     commentEntries={assetColumnEntriesFor(focusedEntry.key)}
                     registerCommentRef={registerCommentRef}
@@ -686,7 +699,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                 <IconButton
                   size="small"
                   onClick={() => setShowComments((v) => !v)}
-                  title={showComments ? 'Hide comments' : 'Show comments'}
+                  title={showComments ? 'Hide comments (Shift+C)' : 'Show comments (Shift+C)'}
                   sx={{ width: 30, height: 30, padding: 0, background: showComments ? 'rgba(71,59,171,0.1)' : 'transparent', '&:hover': { background: 'rgba(0,0,0,0.04)' } }}
                 >
                   <ModeCommentOutlined style={{ fontSize: 18, color: showComments ? '#473bab' : '#1f1d25' }} />

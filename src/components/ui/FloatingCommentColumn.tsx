@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, IconButton, Menu } from '@mui/material';
-import { AddReactionOutlined, ArrowUpward, CheckCircle, CheckCircleOutlineOutlined, MoreVert } from '@mui/icons-material';
+import { AddReactionOutlined, ArrowUpward, CheckCircle, CheckCircleOutlineOutlined, Close, MoreVert } from '@mui/icons-material';
 import type { AlertComment, AlertCommentAnchor } from '../../data/types';
 import { CURRENT_USER } from '../../data/mockData';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -124,7 +124,18 @@ const CommentMenuButton = ({ onDelete, size = 'medium' }: CommentMenuButtonProps
   );
 };
 
+/** The small X shared by both card kinds when shown as a popover over an asset. */
+const CloseCardButton = ({ onClose }: { onClose: () => void }) => (
+  <IconButton size="small" title="Close" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ padding: '4px' }}>
+    <Close style={{ fontSize: 18, color: '#686576' }} />
+  </IconButton>
+);
+
 interface CommentCardProps {
+  /** Card width — defaults to the margin column's width. */
+  width?: number;
+  /** When passed, an X button (rightmost in the top-right cluster) closes the card. */
+  onClose?: () => void;
   comment: AlertComment;
   replies: AlertComment[];
   isActive: boolean;
@@ -135,7 +146,7 @@ interface CommentCardProps {
   onToggleReaction: (commentId: string, emoji: string) => void;
 }
 
-const CommentCard = ({ comment, replies, isActive, onJumpToAnchor, onToggleResolved, onDelete, onReply, onToggleReaction }: CommentCardProps) => {
+export const CommentCard = ({ width = COLUMN_WIDTH, onClose, comment, replies, isActive, onJumpToAnchor, onToggleResolved, onDelete, onReply, onToggleReaction }: CommentCardProps) => {
   const resolved = !!comment.resolved;
   const [replyOpen, setReplyOpen] = useState(false);
 
@@ -163,8 +174,8 @@ const CommentCard = ({ comment, replies, isActive, onJumpToAnchor, onToggleResol
     <div
       onClick={onJumpToAnchor}
       style={{
-        position: 'relative', width: COLUMN_WIDTH, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 4,
-        padding: '8px 60px 8px 8px', borderRadius: 8, cursor: 'pointer', background: '#ffffff',
+        position: 'relative', width, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 4,
+        padding: onClose ? '8px 88px 8px 8px' : '8px 60px 8px 8px', borderRadius: 8, cursor: 'pointer', background: '#ffffff',
         boxShadow: isActive ? '0 0 0 2px #473bab, 0px 2px 8px rgba(0,0,0,0.12)' : '0px 1px 4px rgba(0,0,0,0.12)',
         transition: 'box-shadow 0.3s',
       }}
@@ -181,6 +192,7 @@ const CommentCard = ({ comment, replies, isActive, onJumpToAnchor, onToggleResol
           {resolved ? <CheckCircle style={{ fontSize: 18 }} /> : <CheckCircleOutlineOutlined style={{ fontSize: 18 }} />}
         </button>
         <CommentMenuButton onDelete={() => onDelete(comment.id)} />
+        {onClose && <CloseCardButton onClose={onClose} />}
       </div>
 
       {renderBody(comment)}
@@ -218,12 +230,15 @@ const CommentCard = ({ comment, replies, isActive, onJumpToAnchor, onToggleResol
 };
 
 interface PendingCommentCardProps {
+  /** Card width — defaults to the margin column's width. */
+  width?: number;
   anchor: AlertCommentAnchor;
+  /** Cancels the draft — wired to the X in the card's header row (the text box itself has no X). */
   onCancel: () => void;
   onSend: (text: string, mentionedNames: string[]) => void;
 }
 
-const PendingCommentCard = ({ anchor, onCancel, onSend }: PendingCommentCardProps) => {
+export const PendingCommentCard = ({ width = COLUMN_WIDTH, anchor, onCancel, onSend }: PendingCommentCardProps) => {
   const draftRef = useRef<{ text: string; mentionedNames: string[] }>({ text: '', mentionedNames: [] });
   const handleSend = () => {
     const text = draftRef.current.text.trim();
@@ -231,16 +246,18 @@ const PendingCommentCard = ({ anchor, onCancel, onSend }: PendingCommentCardProp
     onSend(text, draftRef.current.mentionedNames);
   };
   return (
-    <div style={{ width: COLUMN_WIDTH, boxSizing: 'border-box', background: '#ffffff', borderRadius: 8, padding: 8, boxShadow: '0 0 0 2px #473bab, 0px 2px 8px rgba(0,0,0,0.12)' }}>
-      <p style={{ margin: '0 0 6px', fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {anchor.kind === 'email' || anchor.quotedText ? `Commenting on "${anchor.quotedText}"` : 'Commenting on pinned location'}
-      </p>
+    <div onClick={(e) => e.stopPropagation()} style={{ width, boxSizing: 'border-box', background: '#ffffff', borderRadius: 8, padding: 8, boxShadow: '0 0 0 2px #473bab, 0px 2px 8px rgba(0,0,0,0.12)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '-4px -4px 2px 0' }}>
+        <p style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 11, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {anchor.kind === 'email' || anchor.quotedText ? `Commenting on "${anchor.quotedText}"` : 'Commenting on pinned location'}
+        </p>
+        <CloseCardButton onClose={onCancel} />
+      </div>
       <div style={{ position: 'relative' }} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSend(); } }}>
         <div style={{ paddingRight: 36 }}>
           <MentionCommentComposer
             autoFocus
             minHeight={60}
-            onClose={onCancel}
             onChange={(text, mentionedNames) => { draftRef.current = { text, mentionedNames }; }}
           />
         </div>

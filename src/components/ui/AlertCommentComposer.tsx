@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { IconButton, Avatar } from '@mui/material';
+import { IconButton, Avatar, Popper } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { MOCK_TEAMMATES } from '../../data/mockData';
 import type { Teammate } from '../../data/mockData';
@@ -82,6 +82,10 @@ const EditableArea = memo(function EditableArea({
 /** Free-text comment box with Figma-style "@" tagging: typing @ opens a teammate picker; picking one inserts a non-editable purple mention chip. */
 export const MentionCommentComposer = ({ initialText, initialMentionedNames, onChange, onClose, disabled, autoFocus, minHeight }: MentionCommentComposerProps) => {
   const editableRef = useRef<HTMLDivElement>(null);
+  /** The mention list is anchored here, but rendered in a portal (Popper) so a scrolling/clipping ancestor —
+   * e.g. a comment box over an asset — can never cut it off. It opens above the composer, flipping below
+   * when there's no room. */
+  const [mentionAnchor, setMentionAnchor] = useState<HTMLDivElement | null>(null);
   const [isEmpty, setIsEmpty] = useState(!initialText);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -197,7 +201,7 @@ export const MentionCommentComposer = ({ initialText, initialMentionedNames, onC
 
   return (
     <div style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 16, padding: 12, background: '#ffffff', display: 'flex', alignItems: 'flex-start', gap: 8, boxSizing: 'border-box' }}>
-      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+      <div ref={setMentionAnchor} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
         {isEmpty && (
           <span style={{ position: 'absolute', top: 0, left: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#9c99a9', pointerEvents: 'none' }}>
             Leave a comment...
@@ -211,8 +215,14 @@ export const MentionCommentComposer = ({ initialText, initialMentionedNames, onC
           onKeyDown={stableOnKeyDown}
           minHeight={minHeight}
         />
-        {mentionQuery !== null && filteredTeammates.length > 0 && (
-          <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, boxShadow: '0px 4px 16px rgba(0,0,0,0.16)', zIndex: 10, minWidth: 200, overflow: 'hidden' }}>
+        <Popper
+          open={mentionQuery !== null && filteredTeammates.length > 0 && !!mentionAnchor}
+          anchorEl={mentionAnchor}
+          placement="top-start"
+          modifiers={[{ name: 'offset', options: { offset: [0, 4] } }, { name: 'flip', options: { fallbackPlacements: ['bottom-start'] } }]}
+          style={{ zIndex: 100050 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, boxShadow: '0px 4px 16px rgba(0,0,0,0.16)', minWidth: 200, overflow: 'hidden' }}>
             {filteredTeammates.map((t, i) => (
               <div
                 key={t.name}
@@ -224,7 +234,7 @@ export const MentionCommentComposer = ({ initialText, initialMentionedNames, onC
               </div>
             ))}
           </div>
-        )}
+        </Popper>
       </div>
       {onClose && (
         <IconButton size="small" onClick={onClose} disabled={disabled} sx={{ padding: '5px', flexShrink: 0 }}>

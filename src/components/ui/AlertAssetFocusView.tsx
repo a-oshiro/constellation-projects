@@ -7,7 +7,8 @@ import { CommentableAssetPreview, type AssetTextSelection } from './CommentableA
 import { AssetStatusBadge } from './AlertApprovalWidgets';
 import { QcTagList } from './QcTagList';
 import { AlertAssetCarousel } from './AlertAssetCarousel';
-import { FloatingCommentColumn, type ColumnEntry } from './FloatingCommentColumn';
+import type { ColumnEntry } from './FloatingCommentColumn';
+import { AssetCommentPopovers } from './AssetCommentPopovers';
 import type { QcTag } from '../../utils/alertQc';
 
 /**
@@ -19,18 +20,18 @@ import type { QcTag } from '../../utils/alertQc';
  * unchanged (same CommentableAssetPreview mechanism); this component just focuses it on one offer at a
  * time instead of stacking every offer's asset in a scrolling email.
  *
- * The asset is always centered in the stage; the comment column sits a fixed 20px to the right of it,
- * scrolled into view (via the stage's own overflow:auto) rather than pulling the asset off-center when the
- * canvas is too narrow to show both at once.
+ * The asset is always centered in the stage. Its comments open as boxes over the asset itself, next to
+ * their pin/highlight (see AssetCommentPopovers), so they always stay within the preview area.
  */
 
 const MAX_ASSET_WIDTH = 800;
 const MAX_ASSET_HEIGHT = 600;
-const COMMENT_GAP = 20;
 /** Width reserved by the flanking prev/next chevrons (36px button + 12px gap) on each side of the asset,
  * when they're rendered — the asset itself (not the chevrons) is what gets centered/shifted, so this offset
  * is subtracted back out when positioning the row that wraps both chevrons and the asset. */
 const CHEVRON_SPACE = 48;
+/** Duration + easing shared by every part of the carousel's open/close animation. */
+const CAROUSEL_TRANSITION = '0.3s ease-in-out';
 
 
 
@@ -45,8 +46,6 @@ interface AlertAssetFocusViewProps {
   activeAnchorId: string | null;
   onPinClick: (commentId: string) => void;
   registerAnchorRef: (commentId: string, el: HTMLElement | null) => void;
-  /** The same map registerAnchorRef writes into — needed directly by FloatingCommentColumn to look up each comment's anchor element. */
-  anchorRefsMap: React.RefObject<Map<string, HTMLElement>>;
   onCreatePin: (anchor: AssetCommentAnchor) => void;
   onTextSelected: (selection: AssetTextSelection | null) => void;
   approvalStatus: ReviewStatus;
@@ -73,7 +72,7 @@ interface AlertAssetFocusViewProps {
   groupBy: 'vehicle' | 'template';
   onChangeGroupBy: (groupBy: 'vehicle' | 'template') => void;
   /** Whether the carousel section (group-by row + thumbnail strip) is expanded — visible by default,
-   * collapsible via the toggle button just above it or the Shift+C shortcut. */
+   * collapsible via the toggle button just above it or the Shift+P shortcut. */
   showCarousel: boolean;
   onToggleShowCarousel: () => void;
   pendingOnlyFilter: boolean;
@@ -83,8 +82,12 @@ interface AlertAssetFocusViewProps {
   /** Whether any offer across the whole alert (not just the filtered carousel) is still unreviewed — controls the "Approve All Assets" button. */
   hasPendingAssets: boolean;
   onApproveAllAssets: () => void;
-  // Asset-track comment thread (for the focused offer only) — rendered here, to the right of the asset.
+  // Asset-track comment threads (for the focused asset only) — opened as boxes over the asset. While
+  // `showComments` is off, neither the boxes nor the pins/highlights render (a pending draft still does).
   showComments: boolean;
+  /** Comment ids whose boxes are open, in the order they were opened. */
+  openCommentIds: string[];
+  onCloseComment: (commentId: string) => void;
   showResolved: boolean;
   commentEntries: ColumnEntry[];
   registerCommentRef: (id: string, el: HTMLDivElement | null) => void;
@@ -99,14 +102,13 @@ interface AlertAssetFocusViewProps {
 
 export const AlertAssetFocusView = ({
   offer, template, backgroundUrl, title, dimensions, pins, pendingAnchor, activeAnchorId, onPinClick,
-  registerAnchorRef, anchorRefsMap, onCreatePin, onTextSelected, approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
+  registerAnchorRef, onCreatePin, onTextSelected, approvalStatus, approvalDisabled, onApprove, onReject, onUndo,
   onRequestPreview, onShowOfferCard, qcTags, activeQcKey, onSelectQcTag, focusedKey, carouselGroups, hasMultipleAssets, onSelectEntry, reviewForEntry, groupBy, onChangeGroupBy,
   showCarousel, onToggleShowCarousel, pendingOnlyFilter, onTogglePendingOnlyFilter,
-  onPrevAsset, onNextAsset, hasPendingAssets, onApproveAllAssets, showComments, showResolved, commentEntries,
+  onPrevAsset, onNextAsset, hasPendingAssets, onApproveAllAssets, showComments, openCommentIds, onCloseComment, showResolved, commentEntries,
   registerCommentRef, onCancelPendingComment, onSendPendingComment, onToggleResolved, onDeleteComment,
   onJumpToAnchor, onReply, onToggleReaction,
 }: AlertAssetFocusViewProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(0);
@@ -149,9 +151,7 @@ export const AlertAssetFocusView = ({
   const assetWidth = Math.round(template.width * assetScale);
   const assetHeight = Math.round(template.height * assetScale);
 
-  // The asset is always centered in the stage — the trailing comment column just tags along COMMENT_GAP
-  // to its right, wherever that lands (the stage's own overflow:auto lets it be scrolled into view if the
-  // canvas is too narrow to show both at once, rather than pulling the asset off-center to make room).
+  // The asset is always centered in the stage.
   const assetLeft = (stageWidth - assetWidth) / 2;
 
   return (
@@ -195,14 +195,13 @@ export const AlertAssetFocusView = ({
           <ChevronLeft style={{ fontSize: 20 }} />
         </IconButton>
       )}
-      <div ref={containerRef} style={{ position: 'relative', width: assetWidth }}>
       <div style={{ position: 'relative', width: assetWidth, height: assetHeight }}>
         <CommentableAssetPreview
           assetKey={focusedKey}
           offer={offer}
           template={template}
           backgroundUrl={backgroundUrl}
-          pins={pins}
+          pins={showComments ? pins : []}
           pendingAnchor={pendingAnchor}
           activeAnchorId={activeAnchorId}
           onPinClick={onPinClick}
@@ -231,25 +230,25 @@ export const AlertAssetFocusView = ({
           onSelect={onSelectQcTag}
           style={{ position: 'absolute', top: 8, left: 8, zIndex: 6 }}
         />
-      </div>
 
-      <FloatingCommentColumn
-        entries={showComments ? commentEntries : []}
-        anchorRefs={anchorRefsMap}
-        containerRef={containerRef}
-        left={assetWidth + COMMENT_GAP}
-        activeAnchorId={activeAnchorId}
-        showResolved={showResolved}
-        pendingAnchor={pendingAnchor}
-        onCancelPending={onCancelPendingComment}
-        onSendPending={onSendPendingComment}
-        onToggleResolved={onToggleResolved}
-        onDeleteComment={onDeleteComment}
-        onJumpToAnchor={(c) => onJumpToAnchor(c.id)}
-        registerCommentRef={registerCommentRef}
-        onReply={onReply}
-        onToggleReaction={onToggleReaction}
-      />
+        <AssetCommentPopovers
+          width={assetWidth}
+          height={assetHeight}
+          entries={commentEntries}
+          showResolved={showResolved}
+          openIds={showComments ? openCommentIds : []}
+          onCloseComment={onCloseComment}
+          activeAnchorId={activeAnchorId}
+          pendingAnchor={pendingAnchor}
+          onCancelPending={onCancelPendingComment}
+          onSendPending={onSendPendingComment}
+          onToggleResolved={onToggleResolved}
+          onDeleteComment={onDeleteComment}
+          onJumpToAnchor={(c) => onJumpToAnchor(c.id)}
+          registerCommentRef={registerCommentRef}
+          onReply={onReply}
+          onToggleReaction={onToggleReaction}
+        />
       </div>
       {canStepAssets && (
         <IconButton
@@ -269,19 +268,19 @@ export const AlertAssetFocusView = ({
       </div>
 
       {hasMultipleAssets && (
-        <div style={{ flexShrink: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ flexShrink: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
           {/* A 120x4 gray notch that morphs into a labelled pill on hover. The row stays a fixed 12px (the
               pill overflows it vertically) so nothing around it shifts while the notch grows; with the
               carousel hidden, the negative margin eats into the canvas's bottom padding so the notch sits
               near the canvas's bottom edge. */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 12, marginBottom: showCarousel ? 0 : -12 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 12, marginBottom: showCarousel ? 0 : -12, transition: `margin-bottom ${CAROUSEL_TRANSITION}` }}>
             <button
               onClick={onToggleShowCarousel}
               onMouseEnter={() => setCarouselToggleHovered(true)}
               onMouseLeave={() => setCarouselToggleHovered(false)}
               onFocus={() => setCarouselToggleHovered(true)}
               onBlur={() => setCarouselToggleHovered(false)}
-              title={`${showCarousel ? 'Hide' : 'Reveal'} carousel (Shift+C)`}
+              title={`${showCarousel ? 'Hide' : 'Reveal'} carousel (Shift+P)`}
               aria-label={showCarousel ? 'Hide carousel' : 'Reveal carousel'}
               style={{
                 position: 'relative', zIndex: 1, flexShrink: 0,
@@ -304,8 +303,17 @@ export const AlertAssetFocusView = ({
               </span>
             </button>
           </div>
-          {showCarousel && (
-            <>
+          {/* Always mounted so opening/closing can animate: the grid row eases between 0fr and 1fr (an
+              auto-height transition) while the contents fade. Inert while closed so it can't be tabbed into. */}
+          <div
+            inert={!showCarousel}
+            style={{
+              display: 'grid', gridTemplateRows: showCarousel ? '1fr' : '0fr', marginTop: showCarousel ? 8 : 0,
+              opacity: showCarousel ? 1 : 0,
+              transition: `grid-template-rows ${CAROUSEL_TRANSITION}, margin-top ${CAROUSEL_TRANSITION}, opacity ${CAROUSEL_TRANSITION}`,
+            }}
+          >
+            <div style={{ minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576' }}>Group by</span>
@@ -345,8 +353,8 @@ export const AlertAssetFocusView = ({
                 onSelect={onSelectEntry}
                 reviewFor={reviewForEntry}
               />
-            </>
-          )}
+            </div>
+          </div>
         </div>
       )}
     </div>
