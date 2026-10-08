@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { OpenInNew } from '@mui/icons-material';
+import { MenuItem, TextField } from '@mui/material';
 import type { EnrollmentSettings } from '../../../data/enrollmentSettings';
 import { VehiclesTab } from './VehiclesTab';
 import { VinPrioritiesTab } from './VinPrioritiesTab';
@@ -22,10 +23,49 @@ interface EnrollmentSettingsPanelProps {
   onChange: (patch: Partial<EnrollmentSettings>) => void;
   accountName: string;
   accountBrand: string;
+  /** 'sidebar' (default) is the left sub-nav; 'dropdown' swaps it for a select above the content — used by
+   * the alert dialog's narrow Project Settings panel. */
+  navVariant?: 'sidebar' | 'dropdown';
 }
 
-export const EnrollmentSettingsPanel = ({ settings, onChange, accountName, accountBrand }: EnrollmentSettingsPanelProps) => {
+export const EnrollmentSettingsPanel = ({ settings, onChange, accountName, accountBrand, navVariant = 'sidebar' }: EnrollmentSettingsPanelProps) => {
   const [activeTab, setActiveTab] = useState<EnrollmentTabId>('vehicles');
+
+  const tabContent = (
+    <>
+      {activeTab === 'vehicles' && <VehiclesTab settings={settings} onChange={onChange} />}
+      {activeTab === 'vin-priorities' && <VinPrioritiesTab settings={settings} onChange={onChange} />}
+      {activeTab === 'aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
+      {activeTab === 'creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
+      {activeTab === 'fees-disclosures' && (
+        <FeesDisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
+      )}
+    </>
+  );
+
+  if (navVariant === 'dropdown') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Section"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as EnrollmentTabId)}
+            // The menu portals to <body>; without this it opens behind the alert dialog (z-index 100001).
+            slotProps={{ select: { MenuProps: { sx: { zIndex: 100050 } } } }}
+          >
+            {ENROLLMENT_TABS.map((tab) => (
+              <MenuItem key={tab.id} value={tab.id}>{tab.label}</MenuItem>
+            ))}
+          </TextField>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 32px' }}>{tabContent}</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -70,13 +110,7 @@ export const EnrollmentSettingsPanel = ({ settings, onChange, accountName, accou
 
       {/* ── Active tab content ──────────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '24px 32px' }}>
-        {activeTab === 'vehicles' && <VehiclesTab settings={settings} onChange={onChange} />}
-        {activeTab === 'vin-priorities' && <VinPrioritiesTab settings={settings} onChange={onChange} />}
-        {activeTab === 'aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
-        {activeTab === 'creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
-        {activeTab === 'fees-disclosures' && (
-          <FeesDisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
-        )}
+        {tabContent}
       </div>
     </div>
   );

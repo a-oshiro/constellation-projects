@@ -71,6 +71,8 @@ const EmailAssetCard = ({ offer, template, bg }: { offer: Offer; template: Templ
   </div>
 );
 
+const EMAIL_MAX_WIDTH = 600;
+
 export const AlertEmailPreviewPanel = ({
   subject, preheader, bodyParagraphs, vin, accountName, featuredOffer, otherOffers, template, hasBackgrounds, bgFor,
   isOfferApproved, recipients, onRecipientsChange, emailBodyRef, onEmailMouseUp, anchorsForParagraph, activeAnchorId,
@@ -78,7 +80,8 @@ export const AlertEmailPreviewPanel = ({
   pendingAnchor, onCancelPendingComment, onSendPendingComment, onToggleResolved, onDeleteComment, onJumpToAnchor,
   onReply, onToggleReaction, onClose, panelWidth, onResizeHandleMouseDown, emailStatus,
 }: AlertEmailPreviewPanelProps) => {
-  const cardWidth = panelWidth - 32;
+  // The panel is resizable, but the email itself never grows past 600px — it stays centered instead.
+  const cardWidth = Math.min(panelWidth - 32, EMAIL_MAX_WIDTH);
   const approvedOtherOffers = otherOffers.filter((o) => isOfferApproved(o.id));
   const contentRef = useRef<HTMLDivElement>(null);
   const statusChip = STATUS_CHIP_STYLE[emailStatus];
@@ -104,7 +107,7 @@ export const AlertEmailPreviewPanel = ({
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, position: 'relative' }}>
         <AlertRecipientsAccordion recipients={recipients} onChange={onRecipientsChange} />
 
-        <div ref={contentRef} style={{ position: 'relative', width: cardWidth }}>
+        <div ref={contentRef} style={{ position: 'relative', width: cardWidth, margin: '0 auto' }}>
           <div
             ref={emailBodyRef}
             onMouseUp={onEmailMouseUp}

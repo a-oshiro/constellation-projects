@@ -63,6 +63,32 @@ export function buildAlertAssetEntries(alertOffers: Offer[], allOffers: Offer[],
   return entries;
 }
 
+/** Builds the library-shaped `Asset` for one alert asset entry, so the Asset Details dialog can open it. */
+export function assetFromAlertEntry(entry: AlertAssetEntry, projectName: string): Asset {
+  const { offer, template: tmpl, background: bg } = entry;
+  const dimLabel = `${tmpl.width} x ${tmpl.height}`;
+  const platform = tmpl.type === 'Facebook Post' ? 'Social' : tmpl.type === 'HTML' ? 'HTML' : 'Website';
+  return {
+    id: `preview-${offer.id}-${tmpl.id}-${bg.id}`,
+    name: `${offer.vehicleName}_${dimLabel}`,
+    description: `${tmpl.type === 'HTML' ? 'HTML' : 'Image'} | ${dimLabel}`,
+    thumbnailUrl: bg.url,
+    offerId: offer.id,
+    templateId: tmpl.id,
+    backgroundId: bg.id,
+    status: 'approved',
+    tags: [offer.offerTypes[0]?.type ?? 'Lease', dimLabel, platform],
+    folder: projectName,
+    width: tmpl.width,
+    height: tmpl.height,
+    imageType: tmpl.type === 'HTML' ? 'HTML' : 'Image',
+    offerType: offer.offerTypes[0]?.type ?? 'Lease',
+    platform,
+    offer,
+    backgroundUrl: bg.url,
+  };
+}
+
 export interface PreviewAdShell {
   id: string;
   name: string;

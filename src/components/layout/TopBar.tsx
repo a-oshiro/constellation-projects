@@ -1,8 +1,8 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TextField, Menu, MenuItem } from '@mui/material';
-import { Search } from '@mui/icons-material';
+import { TextField, Menu, MenuItem, CircularProgress, useMediaQuery } from '@mui/material';
+import { Search, CheckCircle } from '@mui/icons-material';
 import constellationLockup from '../../assets/constellation-lockup.svg';
 import { CURRENT_USER } from '../../data/mockData';
 
@@ -61,6 +61,100 @@ const IconBtn = forwardRef<
 });
 IconBtn.displayName = 'IconBtn';
 
+// Module-level so the simulated connection only runs once per app load,
+// not every time the top bar remounts during navigation.
+let connectionEstablished = false;
+const SIMULATED_CONNECT_MS = 2500;
+const CONNECTED_MESSAGE_MS = 3000;
+const TRANSITION_MS = 200;
+
+const ConnectionStatus = () => {
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [connected, setConnected] = useState(connectionEstablished);
+  const [dots, setDots] = useState(1);
+  // After the success message has been shown, the indicator collapses and then disappears.
+  const [collapsed, setCollapsed] = useState(connectionEstablished);
+  const [hidden, setHidden] = useState(connectionEstablished);
+
+  useEffect(() => {
+    if (connected) return;
+    const timer = setTimeout(() => {
+      connectionEstablished = true;
+      setConnected(true);
+    }, SIMULATED_CONNECT_MS);
+    const dotTimer = setInterval(() => setDots((d) => (d % 3) + 1), 400);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(dotTimer);
+    };
+  }, [connected]);
+
+  useEffect(() => {
+    if (!connected || collapsed) return;
+    const timer = setTimeout(() => setCollapsed(true), CONNECTED_MESSAGE_MS);
+    return () => clearTimeout(timer);
+  }, [connected, collapsed]);
+
+  useEffect(() => {
+    if (!collapsed) return;
+    const timer = setTimeout(() => setHidden(true), TRANSITION_MS);
+    return () => clearTimeout(timer);
+  }, [collapsed]);
+
+  if (hidden) return null;
+
+  const transition = `${TRANSITION_MS}ms ease-in-out`;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        display: 'flex', alignItems: 'center',
+        // On mobile it floats at the bottom-left of the screen instead of sitting in the top bar
+        ...(isMobile
+          ? { position: 'fixed', left: 12, bottom: 12, zIndex: 2147483647, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }
+          : { marginLeft: 12 }),
+        padding: collapsed ? 4 : '4px 10px',
+        borderRadius: 100,
+        background: connected ? 'rgb(232, 245, 233)' : isMobile ? '#e8e8ec' : 'transparent',
+        fontFamily: 'Roboto, sans-serif', fontSize: 12, letterSpacing: '0.15px',
+        color: connected ? '#2e7d32' : 'rgba(17, 16, 20, 0.56)',
+        opacity: collapsed ? 0 : 1,
+        transition: `background ${transition}, color ${transition}, padding ${transition}, opacity ${transition}`,
+        flexShrink: 0, whiteSpace: 'nowrap',
+      }}
+    >
+      {connected ? (
+        <CheckCircle style={{ fontSize: 16, color: '#2e7d32', flexShrink: 0 }} />
+      ) : (
+        <CircularProgress size={14} thickness={5} sx={{ color: 'rgba(17, 16, 20, 0.56)' }} />
+      )}
+      {/* Grid 1fr -> 0fr animates the text's width to zero without knowing it up front */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: collapsed ? '0fr' : '1fr',
+          marginLeft: collapsed ? 0 : 6,
+          opacity: collapsed ? 0 : 1,
+          transition: `grid-template-columns ${transition}, margin-left ${transition}, opacity ${transition}`,
+        }}
+      >
+        <span style={{ overflow: 'hidden', minWidth: 0 }}>
+          {connected ? (
+            'Connected successfully'
+          ) : (
+            <>
+              Connecting
+              <span style={{ display: 'inline-block', width: '1.2em', textAlign: 'left' }}>{'.'.repeat(dots)}</span>
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const TopBar = () => {
   const navigate = useNavigate();
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
@@ -97,6 +191,8 @@ export const TopBar = () => {
         alt="Constellation"
         style={{ height: 32, width: 'auto', flexShrink: 0 }}
       />
+
+      <ConnectionStatus />
 
       {/* Search bar — absolutely centered */}
       <div
