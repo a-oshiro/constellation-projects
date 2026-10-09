@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
 
@@ -33,16 +34,19 @@ const ROW_FALLBACK = 384;
 const FIRST_DRAW = 40;
 
 export function WindowedCardGrid<T>({
-  items, renderItem, scrollerRef,
+  items, renderItem, scrollerRef, variant = "cards",
 }: {
   items: readonly T[];
   renderItem: (item: T) => ReactNode;
   scrollerRef: RefObject<HTMLDivElement | null>;
+  /** `rows` draws a single column with no gap — a table's body. The windowing
+   *  is the same, and so is its one condition: every row one height. */
+  variant?: "cards" | "rows";
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [cols, setCols] = useState(1);
-  const [rowH, setRowH] = useState(ROW_FALLBACK);
+  const [rowH, setRowH] = useState(variant === "rows" ? 64 : ROW_FALLBACK);
   const [range, setRange] = useState({ start: 0, end: FIRST_DRAW });
 
   useEffect(() => {
@@ -59,9 +63,12 @@ export function WindowedCardGrid<T>({
       /* Columns and row height come off the real grid rather than a constant:
        * the tracks are `auto-fill minmax(240px, 1fr)`, so the count changes
        * with the pane and nothing here should have to know the numbers. */
-      const tracks = getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length;
+      const tracks = variant === "rows"
+        ? 1
+        : getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length;
       const firstCard = grid.firstElementChild as HTMLElement | null;
-      const height = firstCard ? firstCard.getBoundingClientRect().height + 20 : 0;
+      const gap = variant === "rows" ? 0 : 20;
+      const height = firstCard ? firstCard.getBoundingClientRect().height + gap : 0;
       const nextCols = Math.max(1, tracks);
       const nextRowH = height > 1 ? height : rowH;
       if (nextCols !== cols) setCols(nextCols);
@@ -108,7 +115,7 @@ export function WindowedCardGrid<T>({
       window.removeEventListener("resize", later);
       if (timer) clearTimeout(timer);
     };
-  }, [items.length, scrollerRef, cols, rowH]);
+  }, [items.length, scrollerRef, cols, rowH, variant]);
 
   const rows = Math.ceil(items.length / cols);
   const firstRow = Math.floor(range.start / cols);
@@ -119,9 +126,15 @@ export function WindowedCardGrid<T>({
   return (
     <div ref={wrapRef}>
       {above > 0 && <div style={{ height: above }} aria-hidden />}
-      <CardViewVertical ref={gridRef}>
-        {items.slice(range.start, range.end).map(renderItem)}
-      </CardViewVertical>
+      {variant === "rows" ? (
+        <div ref={gridRef} role="rowgroup">
+          {items.slice(range.start, range.end).map(renderItem)}
+        </div>
+      ) : (
+        <CardViewVertical ref={gridRef}>
+          {items.slice(range.start, range.end).map(renderItem)}
+        </CardViewVertical>
+      )}
       {below > 0 && <div style={{ height: below }} aria-hidden />}
     </div>
   );

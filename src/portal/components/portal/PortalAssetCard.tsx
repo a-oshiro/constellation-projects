@@ -1,3 +1,4 @@
+
 // The Portal's asset card — one card, drawn identically wherever a grid of
 // assets is: the Portal itself, and a signal-driven project's Assets task.
 // Extracted from app/portal/page.tsx so the two cannot drift; the screen owns

@@ -28,6 +28,14 @@ const FOLDER_KEY = "folder";
 const SORT_KEY = "sortBy";
 const ASC_KEY = "asc";
 const GROUP_KEY = "categorizeBy";
+/** Cards or the table. Written as `view=table` — what a reader calls it. */
+const VIEW_KEY = "view";
+/** The picked assets, repeated — written only while the grid shows only them
+ *  ("N selected", clicked), since that is when they ARE the view. A link with
+ *  them opens on that selection, filtered to it. */
+const SELECTED_KEY = "selected";
+
+export type PortalView = "grid" | "list";
 
 /** What the Portal opens as. Only a departure from these is written, so a link
  *  stays readable and an omitted key means default rather than "whatever the
@@ -37,6 +45,8 @@ export const PORTAL_VIEW_DEFAULTS = {
   /** Newest first — the arrow points down when the Portal opens. */
   sortAsc: false,
   group: "None",
+  /** Cards. Only the table is written. */
+  view: "grid" as PortalView,
 } as const;
 
 /** Which keys are selects and which are numeric ranges, read off the empty
@@ -76,6 +86,9 @@ export interface PortalUrlState {
   sort: string;
   sortAsc: boolean;
   group: string;
+  view: PortalView;
+  /** Picked asset ids; non-empty means "showing only these". */
+  selected: string[];
 }
 
 export function readPortalUrl(params: Params): PortalUrlState {
@@ -99,7 +112,10 @@ export function readPortalUrl(params: Params): PortalUrlState {
   const sort = params.get(SORT_KEY);
   const asc = params.get(ASC_KEY);
   const group = params.get(GROUP_KEY);
-  if (sort !== null || asc !== null || group !== null) present = true;
+  const view = params.get(VIEW_KEY);
+  if (sort !== null || asc !== null || group !== null || view !== null) present = true;
+  const selected = params.getAll(SELECTED_KEY).filter(Boolean);
+  if (selected.length) present = true;
 
   return {
     present,
@@ -108,6 +124,10 @@ export function readPortalUrl(params: Params): PortalUrlState {
     sort: sort || PORTAL_VIEW_DEFAULTS.sort,
     sortAsc: asc === null ? PORTAL_VIEW_DEFAULTS.sortAsc : asc === "1" || asc === "true",
     group: group || PORTAL_VIEW_DEFAULTS.group,
+    // Anything but the table reads as the default, so a mistyped value opens
+    // the Portal as usual rather than in some third state.
+    view: view === "table" ? "list" : PORTAL_VIEW_DEFAULTS.view,
+    selected,
   };
 }
 
@@ -117,6 +137,9 @@ export function portalUrlQuery(state: {
   sort: string;
   sortAsc: boolean;
   group: string;
+  view?: PortalView;
+  /** Only while the grid shows only the selection — see SELECTED_KEY. */
+  selected?: readonly string[];
 }): string {
   const { selects, ranges } = fieldKinds();
   const p = new URLSearchParams();
@@ -138,6 +161,9 @@ export function portalUrlQuery(state: {
   if (state.sort !== PORTAL_VIEW_DEFAULTS.sort) p.set(SORT_KEY, state.sort);
   if (state.sortAsc !== PORTAL_VIEW_DEFAULTS.sortAsc) p.set(ASC_KEY, state.sortAsc ? "1" : "0");
   if (state.group !== PORTAL_VIEW_DEFAULTS.group) p.set(GROUP_KEY, state.group);
+  // Cards or table, for the same reason: it is how the sender was looking.
+  if (state.view && state.view !== PORTAL_VIEW_DEFAULTS.view) p.set(VIEW_KEY, "table");
+  for (const id of state.selected ?? []) p.append(SELECTED_KEY, id);
 
   return p.toString();
 }

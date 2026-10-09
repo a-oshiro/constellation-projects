@@ -1,3 +1,4 @@
+
 // One search for the whole platform.
 //
 // The top bar's "Search anything" is the only search there is: the screens no
@@ -15,7 +16,7 @@
 //    looks across the whole platform rather than the current screen.
 
 import {
-  createContext, useCallback, useContext, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -28,6 +29,10 @@ interface GlobalSearch {
   submit: () => void;
   clearSubmitted: () => void;
   clear: () => void;
+  /** Set while the screen below is ignoring the search (it is showing only
+   *  the selection): the field stays, greyed out, and this says why. */
+  frozen: string | null;
+  setFrozen: (reason: string | null) => void;
 }
 
 const Ctx = createContext<GlobalSearch | null>(null);
@@ -35,6 +40,7 @@ const Ctx = createContext<GlobalSearch | null>(null);
 export function GlobalSearchProvider({ children }: { children: ReactNode }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState<string | null>(null);
+  const [frozen, setFrozen] = useState<string | null>(null);
 
   // The term narrows THIS screen, so leaving the screen drops it. Without
   // this, typing "Toyota" on the Portal and clicking through to the Task
@@ -54,6 +60,7 @@ export function GlobalSearchProvider({ children }: { children: ReactNode }) {
     setLastPath(pathname);
     setQuery("");
     setSubmitted(null);
+    setFrozen(null);
   }
 
   const submit = useCallback(() => {
@@ -66,7 +73,8 @@ export function GlobalSearchProvider({ children }: { children: ReactNode }) {
     query, setQuery, submitted, submit,
     clearSubmitted: () => setSubmitted(null),
     clear,
-  }), [query, submitted, submit, clear]);
+    frozen, setFrozen,
+  }), [query, submitted, submit, clear, frozen]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -77,7 +85,18 @@ export function useGlobalSearch(): GlobalSearch {
   return useContext(Ctx) ?? {
     query: "", setQuery: () => {}, submitted: null,
     submit: () => {}, clearSubmitted: () => {}, clear: () => {},
+    frozen: null, setFrozen: () => {},
   };
+}
+
+/** Freezes the top bar's search while `reason` is set, and thaws it when the
+ *  reason goes or the screen unmounts. */
+export function useFreezeGlobalSearch(reason: string | null) {
+  const { setFrozen } = useGlobalSearch();
+  useEffect(() => {
+    setFrozen(reason);
+    return () => setFrozen(null);
+  }, [reason, setFrozen]);
 }
 
 /** Case-insensitive containment, the test every surface uses so they all agree

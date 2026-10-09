@@ -11,7 +11,10 @@ import { PortalFolderTree } from "@portal/components/folders/PortalFolderTree";
 import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
 import { WindowedCardGrid } from "@portal/components/ui/WindowedCardGrid";
 import { AssetDetailsDialog } from "@portal/components/portal/AssetDetailsDialog";
-import { PortalAssetCard, isVideo } from "@portal/components/portal/PortalAssetCard";
+import { PortalAssetCard, isVideo, type AssetChip } from "@portal/components/portal/PortalAssetCard";
+import {
+  PortalAssetRow, PortalFolderRows, PortalTableHeader, sortFolders,
+} from "@portal/components/portal/PortalAssetTable";
 import {
   PortalFilterPanel, EMPTY_PORTAL_FILTERS, derivePortalOptions, derivePortalCounts,
   matchesPortalFilters, hasAnyPortalFilter, derivePortalRangeBounds, PORTAL_FILTER_LABELS,
@@ -22,11 +25,11 @@ import {
   usePinnedFilters, FilterSelectAll, FilterSectionHeader, groupByValue,
 } from "@portal/components/ui/FilterBar";
 import { ScrollAwayHeader } from "@portal/components/ui/ScrollAwayHeader";
-import { useGlobalSearch } from "@portal/lib/global-search";
+import { useFreezeGlobalSearch, useGlobalSearch } from "@portal/lib/global-search";
 import { portalFolderPath, portalChildFolders } from "@portal/lib/portal-folder-paths";
 import { readPortalUrl, portalUrlQuery } from "@portal/lib/portal-url-state";
 import { Highlight } from "@portal/components/ui/Highlight";
-import { BulkActions, BulkActionMenuItem, type BulkAction } from "@portal/components/ui/BulkActions";
+import { BulkActions, BulkActionMenuItem, ONLY_SELECTED_REASON, type BulkAction } from "@portal/components/ui/BulkActions";
 import { Toast, useToast } from "@portal/components/ui/Toast";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -35,7 +38,6 @@ import { Button } from "@portal/components/ui/button";
 import { downloadBlob } from "@portal/lib/export-docx";
 import JSZip from "jszip";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 
 // ─── Main Portal Page ─────────────────────────────────────────────────────────
@@ -145,9 +147,9 @@ export default function PortalPage() {
    *  follows it — re-reading would fight the writes below. */
   const fromUrl = useMemo(() => readPortalUrl(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  // In the URL with the sort and the grouping — see lib/portal-url-state.ts.
+  const [viewMode, setViewMode] = useState(fromUrl.view);
   const [leftWidth,  setLeftWidth]  = usePersistedPaneSize("pane:left-width",  260);
-
 
   // ── Filters ───────────────────────────────────────────────────────────────
   // The funnel swaps the left pane from the folder tree to the filter pane,
@@ -162,7 +164,18 @@ export default function PortalPage() {
    *  the list changes what you can reach, never what you have already chosen,
    *  so clearing a filter hands the earlier picks back rather than dropping
    *  them. */
-  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set());
+  // A link may carry a selection — only while it was being shown on its own
+  // (see lib/portal-url-state.ts) — and opens on it, filtered to it.
+  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(() => new Set(fromUrl.selected));
+  /** "N selected", clicked: the grid shows the selection and nothing else —
+   *  across folders, past the filters and the search. Off again by its chip's
+   *  ✕, or by the selection emptying. */
+  const [onlySelectedOn, setOnlySelected] = useState(fromUrl.selected.length > 0);
+  const onlySelected = onlySelectedOn && selectedAssets.size > 0;
+  // What it overrides is frozen while it is on — the filters, the folders and
+  // the search keep their values, greyed out, and say why.
+  const frozenReason = onlySelected ? ONLY_SELECTED_REASON : undefined;
+  useFreezeGlobalSearch(frozenReason ?? null);
   // The platform's search is the only one — the screen no longer keeps a field
   // of its own, and the folder rail's "Find folder" reads from it too.
   const { query: assetSearch, clear: clearSearch } = useGlobalSearch();
@@ -311,8 +324,9 @@ export default function PortalPage() {
     ["fileType", "entityType", "brands", "shape", "collection"],
   );
 
-  const filteredAssets = folderScoped
-    .filter((a) => matchesPortalFilters(a, portalFilters, assetSearch))
+  const filteredAssets = (onlySelected
+    ? library.filter((a) => selectedAssets.has(a.id))
+    : folderScoped.filter((a) => matchesPortalFilters(a, portalFilters, assetSearch)))
     .sort((a, b) => {
       const dir = assetSortAsc ? 1 : -1;
       switch (assetSort) {
@@ -480,11 +494,14 @@ export default function PortalPage() {
         sort: assetSort,
         sortAsc: assetSortAsc,
         group: categorizeBy,
+        view: viewMode,
+        // The selection is the view only while it is shown on its own.
+        selected: onlySelected ? [...selectedAssets] : [],
       });
       navigate(query ? `${pathname}?${query}` : pathname, { replace: true });
     }, 200);
     return () => clearTimeout(t);
-  }, [activeLiveFolder, portalFilters, assetSort, assetSortAsc, categorizeBy, navigate, pathname]);
+  }, [activeLiveFolder, portalFilters, assetSort, assetSortAsc, categorizeBy, viewMode, onlySelected, selectedAssets, navigate, pathname]);
 
   /** Where you are, from the Portal down. Every crumb but the last walks back
    *  to that level — which is the only way out of a folder three deep besides
@@ -556,6 +573,7 @@ export default function PortalPage() {
     );
     const rows = direct.map((f) => ({
       id: (f as { id?: string }).id ?? f.name,
+      path: f.name,
       label: f.name.slice(prefix.length),
       items: f.count,
       // What each of them holds in turn, so a tile can say "1 subfolder"
@@ -568,6 +586,44 @@ export default function PortalPage() {
     // and the row above already carries the sort for what is in the grid.
     return rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   }, [activeLiveFolder, railFolders]);
+
+  /** Each folder's most recent asset, anywhere beneath it — what "Updated"
+   *  means for a folder row, and what sorting folders by date orders by. */
+  const folderRecency = useMemo(() => {
+    const newest = new Map<string, number>();
+    for (const a of library) {
+      const parts = portalFolderPath(a.folder).split("/");
+      for (let i = 1; i <= parts.length; i++) {
+        const path = parts.slice(0, i).join("/");
+        const seen = newest.get(path);
+        if (seen === undefined || a.updatedDaysAgo < seen) newest.set(path, a.updatedDaysAgo);
+      }
+    }
+    return newest;
+  }, [library]);
+
+  /** The table's folders: their own list, in the assets' sort where a folder
+   *  has that field — see sortFolders. The cards keep theirs alphabetical. */
+  const tableFolders = useMemo(
+    () => sortFolders(
+      childFolderCards.map((f) => ({ ...f, updatedDaysAgo: folderRecency.get(f.path) })),
+      assetSort,
+      assetSortAsc,
+    ),
+    [childFolderCards, folderRecency, assetSort, assetSortAsc],
+  );
+
+  /** A column heading sets the sort. The same column again flips it; a new one
+   *  starts where a reader expects — newest first for a date, A to Z for the
+   *  rest. Same state as the Sort control, so the two always agree. */
+  const sortByColumn = (field: string) => {
+    if (field === assetSort) {
+      setAssetSortAsc((a) => !a);
+      return;
+    }
+    setAssetSort(field);
+    setAssetSortAsc(field !== "Updated At" && field !== "Created At");
+  };
 
   /** Categorize By names a filter; the grid is cut into one section per value
    *  of it. Assets carrying no value at all end in a trailing section rather
@@ -788,6 +844,19 @@ export default function PortalPage() {
     </div>
   );
 
+  /** A chip is a filter you can see — in the cards and in the table alike. */
+  const isChipActive = (c: AssetChip) => (portalFilters[c.field] ?? []).includes(c.text);
+  const pickChip = (c: AssetChip) =>
+    setPortalFilters((prev) => {
+      const picked = prev[c.field] ?? [];
+      return {
+        ...prev,
+        [c.field]: picked.includes(c.text)
+          ? picked.filter((v) => v !== c.text)
+          : [...picked, c.text],
+      };
+    });
+
   /** One asset card — the shared PortalAssetCard, which a signal-driven
    *  project's Assets task draws too. Written once here because the grid draws
    *  it either flat or inside a section, and two copies of it would drift. */
@@ -808,24 +877,74 @@ export default function PortalPage() {
       }
       chipsOpen={chipsOpen === asset.id}
       onChipsToggle={(next) => setChipsOpen(next ? asset.id : null)}
-      isChipActive={(c) => (portalFilters[c.field] ?? []).includes(c.text)}
-      onChipPick={(c) =>
-        setPortalFilters((prev) => {
-          const picked = prev[c.field] ?? [];
-          return {
-            ...prev,
-            [c.field]: picked.includes(c.text)
-              ? picked.filter((v) => v !== c.text)
-              : [...picked, c.text],
-          };
-        })
-      }
+      isChipActive={isChipActive}
+      onChipPick={pickChip}
       /* Only in Recents, which is the one view where the cards come from
        * different folders. Inside a folder every card is from it, and the line
        * would repeat the page's own title once per card. */
       onFolder={activeLiveFolder ? undefined : () => setActiveLiveFolder(asset.folder)}
     />
   );
+
+  /** One asset as a table row — the card's same two targets: the checkbox
+   *  selects, the name opens the lightbox. */
+  const toggleSelected = (id: string, checked: boolean) =>
+    setSelectedAssets((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const assetRow = (asset: PortalAsset) => (
+    <PortalAssetRow
+      key={asset.id}
+      asset={asset}
+      showFolder={!activeLiveFolder}
+      query={assetSearch}
+      selected={selectedAssets.has(asset.id)}
+      onSelect={(checked) => toggleSelected(asset.id, checked)}
+      onOpen={() => setDetailAsset(asset)}
+      onFolder={() => setActiveLiveFolder(asset.folder)}
+      chipsOpen={chipsOpen === asset.id}
+      onChipsToggle={(next) => setChipsOpen(next ? asset.id : null)}
+      isChipActive={isChipActive}
+      onChipPick={pickChip}
+    />
+  );
+  const listedIds = filteredAssets.map((a) => a.id);
+  const listedPicked = listedIds.filter((id) => selectedAssets.has(id)).length;
+  const tableHeader = (
+    <PortalTableHeader
+      showFolder={!activeLiveFolder}
+      sortField={assetSort}
+      sortAsc={assetSortAsc}
+      onSort={sortByColumn}
+      selectAll={listedIds.length > 0 ? {
+        checked: listedPicked === listedIds.length,
+        indeterminate: listedPicked > 0 && listedPicked < listedIds.length,
+        /* Adds or removes only what is listed, like Select all / visible:
+         * picks the filters are hiding stay picked. */
+        onChange: (next) => setSelectedAssets((prev) => {
+          const out = new Set(prev);
+          for (const id of listedIds) {
+            if (next) out.add(id);
+            else out.delete(id);
+          }
+          return out;
+        }),
+      } : undefined}
+    />
+  );
+  const folderRows = (
+    <PortalFolderRows
+      folders={tableFolders}
+      showFolder={!activeLiveFolder}
+      query={assetSearch}
+      onOpen={setActiveLiveFolder}
+    />
+  );
+  const asTable = viewMode === "list";
+
 
   /** Recents is the whole asset library, and the filters narrow it. It used to
    *  be shown only while the filter pane was open, which meant opening the
@@ -835,6 +954,7 @@ export default function PortalPage() {
 
   const filterRow = (
     <PortalFilterPanel
+      disabledReason={frozenReason}
       bounds={rangeBounds}
       filters={portalFilters}
       options={filterOptions}
@@ -882,6 +1002,7 @@ export default function PortalPage() {
                 liveFolders={railFolders}
                 activeLiveFolder={activeLiveFolder}
                 onSelectLiveFolder={setActiveLiveFolder}
+                disabledReason={frozenReason}
               />
             )}
           </div>
@@ -1005,6 +1126,8 @@ export default function PortalPage() {
                   count={selectedAssets.size}
                   hidden={hiddenPicked}
                   onClear={() => setSelectedAssets(new Set())}
+                  onlySelected={onlySelected}
+                  onOnlySelectedChange={setOnlySelected}
                   actions={bulkActions}
                   primary={{
                     label: "New",
@@ -1146,7 +1269,9 @@ export default function PortalPage() {
                    * before files is the order every file browser uses; what
                    * changes under grouping is that they are a named, counted
                    * section like the rest. */
-                  <div className="flex flex-col gap-8">
+                  <div role={asTable ? "table" : undefined} aria-label={asTable ? "Assets" : undefined}>
+                  {asTable && tableHeader}
+                  <div className={`flex flex-col gap-8 ${asTable ? "mt-4" : ""}`}>
                     {groupedSections.map((section, i) => {
                       const next = groupedSections[i + 1];
                       const bar = next && section.count > LONG_SECTION && (
@@ -1185,9 +1310,12 @@ export default function PortalPage() {
                         {section.assets ? (
                           <WindowedCardGrid
                             items={section.assets}
-                            renderItem={assetCard}
+                            renderItem={asTable ? assetRow : assetCard}
                             scrollerRef={gridScrollerRef}
+                            variant={asTable ? "rows" : "cards"}
                           />
+                        ) : asTable ? (
+                          folderRows
                         ) : (
                           /* The folder band, which pages itself rather than
                            * windowing — it is ten tiles until you ask for the
@@ -1201,9 +1329,25 @@ export default function PortalPage() {
                       );
                     })}
                   </div>
+                  </div>
                 ) : (
                   /* Folders first, then what is loose in this one — the order
                    * every file browser uses. */
+                  asTable ? (
+                    /* The table: folders as a list of their own, in the same
+                      * sort, then a heavier line, then the assets. */
+                    <div role="table" aria-label="Assets">
+                      {tableHeader}
+                      {folderRows}
+                      {emptyNotice}
+                      <WindowedCardGrid
+                        items={filteredAssets}
+                        renderItem={assetRow}
+                        scrollerRef={gridScrollerRef}
+                        variant="rows"
+                      />
+                    </div>
+                  ) : (
                   <>
                     <div className="mb-6">{folderTiles}</div>
                     {emptyNotice}
@@ -1213,6 +1357,7 @@ export default function PortalPage() {
                       scrollerRef={gridScrollerRef}
                     />
                   </>
+                  )
                 )
               ) : null}
             </div>
@@ -1246,4 +1391,3 @@ export default function PortalPage() {
     </div>
   );
 }
-

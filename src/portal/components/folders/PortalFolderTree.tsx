@@ -1,17 +1,27 @@
-import { useMemo, useState } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X, Plus, Clock, ChevronRight, ChevronDown,
-  Folder,
+  Folder, MoreVertical, Pencil, FolderInput, Trash2,
 } from "lucide-react";
+import { Button } from "@portal/components/ui/button";
+import { BulkActionMenuItem } from "@portal/components/ui/BulkActions";
 import { Highlight } from "@portal/components/ui/Highlight";
 import { useGlobalSearch, matchesQuery } from "@portal/lib/global-search";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface PortalFolderTreeProps {
+  /** Set while the folders have no say (the grid is showing only the
+   *  selection): the list greys out and ignores clicks but still scrolls, and
+   *  this is its tooltip. The header — Close, New Folder — keeps working. */
+  disabledReason?: string;
   /** Dismisses the pane, from the X in the header. */
   onClose?: () => void;
-  /** The platform's folders, derived from the assets it returned. */
+  /** The platform's own folders, derived from the assets it returned. Listed
+   *  above the prototype's folders and separated from them, so it is always
+   *  clear which half of the tree is real. */
   liveFolders?: { name: string; count: number }[];
   activeLiveFolder?: string | null;
   onSelectLiveFolder?: (name: string | null) => void;
@@ -57,6 +67,103 @@ function folderMatches(label: string, query: string) {
   return !query.trim() || matchesQuery(label, query);
 }
 
+/** A row's kebab: hidden until the row is hovered (or the kebab is focused or
+ *  open), and laid OVER the row's right end rather than given a column of its
+ *  own — a reserved slot would truncate every name in the tree by its width
+ *  just in case. It sits on a fade in the row's own colour, so whatever it
+ *  covers at that moment goes under it cleanly, and nothing moves when it
+ *  appears.
+ *
+ *  The menu is portalled and fixed: the rail scrolls, and a menu positioned
+ *  inside it would be clipped by it. It closes on any scroll, since a fixed
+ *  menu would otherwise stay put while its row moved away.
+ *
+ *  MOCK — the three actions do nothing yet; they are here to show the menu. */
+/** The menu's height: three 36px items and its 6px padding top and bottom. */
+const MENU_H = 3 * 36 + 12;
+
+function RowMenu({ label, active }: { label: string; active: boolean }) {
+  const [at, setAt] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const open = at !== null;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setAt(null);
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !button.current?.contains(t)) close();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { close(); button.current?.focus(); }
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (open) return setAt(null);
+    const r = button.current!.getBoundingClientRect();
+    const right = window.innerWidth - r.right;
+    // Below the kebab, unless that runs past the foot of the window — the rail
+    // reaches the bottom of the screen, so its last rows would open off it.
+    setAt(r.bottom + 4 + MENU_H > window.innerHeight - 8
+      ? { bottom: window.innerHeight - r.top + 4, right }
+      : { top: r.bottom + 4, right });
+  }
+
+  const pick = () => setAt(null);
+  const fade = active
+    ? "from-indigo-50 via-indigo-50"
+    : "from-white via-white group-hover/row:from-gray-50 group-hover/row:via-gray-50";
+
+  return (
+    <span
+      /* The row navigates on click; nothing in here should. That includes the
+       * portalled menu — React bubbles a portal's events through its owner. */
+      onClick={(e) => e.stopPropagation()}
+      className={`absolute right-1 top-1 bottom-1 flex items-center pl-4 rounded-r-lg bg-gradient-to-l via-70% to-transparent ${fade} transition-opacity ${
+        open ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100"
+      }`}
+    >
+      <Button
+        ref={button}
+        variant="neutral"
+        size="icon-xs"
+        aria-label={`More actions for ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <MoreVertical />
+      </Button>
+      {at && createPortal(
+        <div
+          ref={menu}
+          role="menu"
+          aria-label={label}
+          style={{ top: at.top, bottom: at.bottom, right: at.right }}
+          className="fixed z-50 min-w-[180px] bg-white rounded-xl shadow-lg border border-gray-100 py-1.5"
+        >
+          <BulkActionMenuItem icon={Pencil} onClick={pick}>Rename</BulkActionMenuItem>
+          <BulkActionMenuItem icon={FolderInput} onClick={pick}>Move to…</BulkActionMenuItem>
+          <BulkActionMenuItem icon={Trash2} onClick={pick}>Delete</BulkActionMenuItem>
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 function FolderItem({
   icon,
   label,
@@ -89,7 +196,7 @@ function FolderItem({
   return (
     <div
       onClick={onClick}
-      className={`flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
+      className={`group/row relative flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
         active ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-50"
       } ${indent && depth === 0 ? "pl-7" : ""}`}
       style={depth > 0 ? { paddingLeft: INDENT_BASE + depth * INDENT_STEP } : undefined}
@@ -103,12 +210,18 @@ function FolderItem({
         </span>
       )}
       <span className={`shrink-0 ${LINE} flex items-center ${active ? "text-indigo-500" : "text-indigo-400"}`}>{icon}</span>
-      <span className="flex-1 min-w-0 text-[11.5px] leading-[18px] line-clamp-2 break-words">
+      {/* The name takes only its own width, so the count sits right after it
+        * as one phrase — "Brand Kits (0)" — rather than out at the pane's edge,
+        * where it read as a column belonging to nothing in particular. Same in
+        * every row of this tree. */}
+      <span className="min-w-0 text-[11.5px] leading-[18px] line-clamp-2 break-words">
         <Highlight text={label} query={query} />
       </span>
       {count !== undefined && (
-        <span className="text-[10px] text-gray-400 shrink-0 self-center">({count})</span>
+        <span className="-ml-1 text-[10px] text-gray-400 shrink-0 self-center">({count})</span>
       )}
+      {/* Recents is a view, not a folder — nothing to rename or move. */}
+      {count !== undefined && <RowMenu label={label} active={active} />}
     </div>
   );
 }
@@ -238,7 +351,7 @@ function FolderTreeNode({
          * common prefix and holds no assets of its own — it still has folders
          * to show, and the grid draws those as cards. */
         onClick={() => { setOpen(true); onPick(node.selectId); }}
-        className={`flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
+        className={`group/row relative flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
           active ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-50"
         }`}
         style={depth > 0 ? { paddingLeft: INDENT_BASE + depth * INDENT_STEP } : undefined}
@@ -252,10 +365,11 @@ function FolderTreeNode({
         <span className={`shrink-0 ${LINE} flex items-center ${active ? "text-indigo-500" : "text-indigo-400"}`}>
           <Folder size={13} />
         </span>
-        <span className="flex-1 min-w-0 text-[11.5px] leading-[18px] line-clamp-2 break-words">
+        <span className="min-w-0 text-[11.5px] leading-[18px] line-clamp-2 break-words">
           <Highlight text={node.name} query={query} />
         </span>
-        <span className="text-[10px] text-gray-400 shrink-0 self-center">({node.count})</span>
+        <span className="-ml-1 text-[10px] text-gray-400 shrink-0 self-center">({node.count})</span>
+        <RowMenu label={node.name} active={active} />
       </div>
       {showChildren && (
         <div className="relative mt-0.5">
@@ -275,14 +389,16 @@ function FolderTreeNode({
   );
 }
 
-// ─── BackgroundFolderTree ─────────────────────────────────────────────────────
+// ─── PortalFolderTree ─────────────────────────────────────────────────────
 
 export function PortalFolderTree({
   onClose,
   liveFolders = [],
   activeLiveFolder = null,
   onSelectLiveFolder,
+  disabledReason,
 }: PortalFolderTreeProps) {
+
   /** The platform's folders as a tree, read out of the paths their names
    *  carry — see buildFolderTree. */
   const folderTree = useMemo(() => buildFolderTree(liveFolders), [liveFolders]);
@@ -326,7 +442,10 @@ export function PortalFolderTree({
       </div>
 
       {/* Folder list */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 text-xs space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2 py-1 text-xs" title={disabledReason} aria-disabled={!!disabledReason || undefined}>
+        {/* The rows are inert, the list is not: hovering lands on it (the
+          * tooltip) and the wheel still scrolls it. */}
+        <div inert={!!disabledReason} className={`space-y-0.5 transition-opacity ${disabledReason ? "opacity-50" : ""}`}>
 
         {/* Recents */}
         <FolderItem
@@ -346,6 +465,8 @@ export function PortalFolderTree({
             onPick={(path) => onSelectLiveFolder?.(activeLiveFolder === path ? null : path)}
           />
         ))}
+
+        </div>
       </div>
     </>
   );

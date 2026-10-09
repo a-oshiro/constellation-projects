@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronUp } from "lucide-react";
 import { Highlight } from "@portal/components/ui/Highlight";
@@ -31,8 +32,11 @@ export interface Chip {
  * read.
  */
 export function AssetChips<T extends Chip>({
-  chips, query, open, onToggle, isActive, onPick,
+  chips, query, open, onToggle, isActive, onPick, flush = false,
 }: {
+  /** No top margin — for a table cell, where the chips are the cell's whole
+   *  content rather than the next line under a card's name. */
+  flush?: boolean;
   chips: T[];
   /** The platform search, so a value matched inside a chip is marked. */
   query: string;
@@ -135,7 +139,7 @@ export function AssetChips<T extends Chip>({
   if (chips.length === 0) return null;
 
   return (
-    <div className="relative mt-2">
+    <div className={`relative ${flush ? "" : "mt-2"}`}>
       {/* The ruler: the same chips, unconstrained, measured and never seen.
         *
         * Boxed in something of zero size that clips, because `absolute` keeps

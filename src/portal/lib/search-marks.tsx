@@ -1,3 +1,4 @@
+
 // Marking the platform search inside the labels of controls.
 //
 // The rule the app follows: where a screen used to carry its own search field,

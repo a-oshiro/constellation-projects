@@ -1,3 +1,4 @@
+
 // ─── FilterBar / FilterSelect ────────────────────────────────────────────────
 // The app's filter row and the multi-select that lives in it. Nothing here
 // knows what is being filtered — a screen supplies the options and owns the
@@ -1846,7 +1847,7 @@ function FilterDialog({
 // ─── The bar ─────────────────────────────────────────────────────────────────
 
 export function FilterBar({
-  filters, leading, onClear, right, pinned, onPinnedChange,
+  filters, leading, onClear, right, pinned, onPinnedChange, disabledReason,
 }: {
   /** The filters, as data — the bar carries a subset and the dialog the lot. */
   filters: FilterDescriptor[];
@@ -1860,8 +1861,14 @@ export function FilterBar({
   /** Ids of the filters the bar carries. Omit and it carries all of them. */
   pinned?: string[];
   onPinnedChange?: (next: string[]) => void;
+  /** Set while the filters have no say — e.g. the screen is showing only the
+   *  selection. The filters, More filters and Clear stay visible with their
+   *  values, greyed out and inert, and this is the tooltip that says why. The
+   *  sort and the grouping in `right` keep working. */
+  disabledReason?: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const off = !!disabledReason;
   const [menuOpen, setMenuOpen] = useState(false);
   /** The row's contents, held still while the More filters menu is open.
    *
@@ -2031,10 +2038,14 @@ export function FilterBar({
            strip, and `overflow-x-clip` then swallowed the More filters
            submenu, which opens to the SIDE. The fitting below is what keeps
            the controls inside the strip, so there is nothing left to clip. */
-        className="flex-1 min-w-0 flex items-center gap-2"
+        /* Frozen: the strip keeps the hover (for the tooltip) while every
+           control in it is `inert` — no click, no focus, no hit. */
+        title={disabledReason}
+        aria-disabled={off || undefined}
+        className={`flex-1 min-w-0 flex items-center gap-2 transition-opacity ${off ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         {shown.map((f) => (
-          <div key={f.id} ref={measureChip} data-filter-key={chipKey(f)} className="shrink-0">
+          <div key={f.id} ref={measureChip} data-filter-key={chipKey(f)} inert={off} className="shrink-0">
             {f.node}
           </div>
         ))}
@@ -2042,6 +2053,7 @@ export function FilterBar({
         <div
           ref={measureChip}
           data-filter-key={shown.length === 0 ? "__more:alone" : "__more"}
+          inert={off}
           className="shrink-0"
         >
           <MoreFiltersMenu
@@ -2065,6 +2077,7 @@ export function FilterBar({
             type="button"
             ref={measureChip}
             data-filter-key="__clear"
+            inert={off}
             onClick={onClear}
             className="shrink-0 px-1 text-[12px] font-medium text-indigo-600 hover:text-indigo-800 transition"
           >

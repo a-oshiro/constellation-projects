@@ -1,3 +1,4 @@
+
 // The Portal's filter pane — configuration only.
 //
 // A clone of the filter set the platform's Portal offers: 23 named filters in
@@ -268,7 +269,7 @@ export interface ExtraPortalFilter {
 export function PortalFilterPanel({
   filters, options, counts, bounds, sortField, sortAsc, categorizeBy, pinned, search,
   onFilters, onSortField, onToggleSortDir, onCategorizeBy, onClear,
-  onPinnedChange, extra = [],
+  onPinnedChange, extra = [], disabledReason,
 }: {
   filters: PortalFilters;
   /** Numeric spans for the sliders — see derivePortalRangeBounds. */
@@ -290,6 +291,8 @@ export function PortalFilterPanel({
   onPinnedChange?: (next: string[]) => void;
   /** The screen's own filters, leading the row. */
   extra?: readonly ExtraPortalFilter[];
+  /** Freezes the filters (not the sort or the grouping) — see FilterBar. */
+  disabledReason?: string;
 }) {
   /** A filter with nothing to offer is not shown: with the live library some of
    *  the platform's vocabularies come back empty, and an empty select is worse
@@ -381,6 +384,7 @@ export function PortalFilterPanel({
       filters={descriptors}
       pinned={pinned}
       onPinnedChange={onPinnedChange}
+      disabledReason={disabledReason}
       onClear={hasAnyPortalFilter(filters, search) || extraActive ? onClear : undefined}
       right={
         <>

@@ -159,7 +159,7 @@ const ConnectionStatus = () => {
 export const TopBar = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { setQuery } = useGlobalSearch();
+  const { setQuery, frozen } = useGlobalSearch();
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
 
   // The platform search narrows the Portal; elsewhere it stays a plain field.
@@ -212,7 +212,12 @@ export const TopBar = () => {
           width: 560,
           top: 8+3.5,
           height: 34,
+          // Frozen while the Portal shows only the selection: greyed out and
+          // inert, the title says why.
+          ...(onPortal && frozen ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
         }}
+        title={onPortal && frozen ? frozen : undefined}
+        inert={onPortal && !!frozen}
       >
         <TextField
           placeholder="Search anything"

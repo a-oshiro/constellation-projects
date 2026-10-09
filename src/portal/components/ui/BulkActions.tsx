@@ -1,3 +1,4 @@
+
 // Bulk actions — the header slot that changes with the selection.
 //
 // Two states in ONE place, one replacing the other:
@@ -5,6 +6,8 @@
 //   nothing picked   [ + New ]                       ← one filled button
 //   something picked ( ✕  3 selected  [Create] [Download] [Move]  ✎ ⧉ 🗑 )
 //   narrow           ( ✕  3 selected  ▣ ⤓ ⧉  ✎  ⋮ )     ← folds, then a kebab
+//   only selected    ( ✕  (3 selected ✕)  [Create] … )  ← the count, clicked,
+//                                                         is a filter chip
 //
 // Spec from the Figma `Line items / Top Bar / Actions` pill in "AV3
 // Constellation Design System - Component Library" (section "bulk actions",
@@ -39,8 +42,12 @@ export interface BulkAction {
   menu?: (close: () => void) => ReactNode;
 }
 
+/** What a frozen filter, search or folder says while the screen shows only
+ *  the selection — the same words everywhere it is frozen. */
+export const ONLY_SELECTED_REASON = "Showing only the selected — lift it to filter again";
+
 export function BulkActions({
-  count, hidden = 0, onClear, actions, primary, idle,
+  count, hidden = 0, onClear, actions, primary, idle, onlySelected = false, onOnlySelectedChange,
 }: {
   /** Everything picked — including any the current filters hide. */
   count: number;
@@ -61,6 +68,12 @@ export function BulkActions({
    *  filled button — the alerts board's Generate and Download CSV. Takes the
    *  place of `primary`. */
   idle?: ReactNode;
+  /** The count is also a filter: click it and the screen shows only what is
+   *  picked; it turns into a chip with an ✕ that lifts the filter (and keeps
+   *  the selection). Pass the change handler to offer it; the screen applies
+   *  the filter. */
+  onlySelected?: boolean;
+  onOnlySelectedChange?: (on: boolean) => void;
 }) {
   // The slot is the free space in the header row, and the pill must fit in it
   // — wrapping the row would move the whole screen down. So as the slot
@@ -94,7 +107,7 @@ export function BulkActions({
     ro.observe(slot);
     if (fullRef.current) ro.observe(fullRef.current);
     return () => ro.disconnect();
-  }, [count, hidden, actions]);
+  }, [count, hidden, actions, onlySelected]);
 
   if (count === 0) {
     const Icon = primary?.icon ?? Plus;
@@ -113,9 +126,9 @@ export function BulkActions({
   return (
     <div ref={slotRef} className="relative flex-1 min-w-0 flex">
       <div ref={fullRef} aria-hidden inert className="absolute left-0 top-0 invisible pointer-events-none">
-        <Pill count={count} hidden={hidden} onClear={onClear} actions={actions} fit={{ folded: 0, overflow: 0 }} />
+        <Pill count={count} hidden={hidden} onClear={onClear} actions={actions} fit={{ folded: 0, overflow: 0 }} only={onlySelected} onOnly={onOnlySelectedChange} />
       </div>
-      <Pill count={count} hidden={hidden} onClear={onClear} actions={actions} fit={fit} />
+      <Pill count={count} hidden={hidden} onClear={onClear} actions={actions} fit={fit} only={onlySelected} onOnly={onOnlySelectedChange} />
     </div>
   );
 }
@@ -154,13 +167,15 @@ function chooseFit(
 }
 
 function Pill({
-  count, hidden, onClear, actions, fit,
+  count, hidden, onClear, actions, fit, only, onOnly,
 }: {
   count: number;
   hidden: number;
   onClear: () => void;
   actions: readonly BulkAction[];
   fit: Fit;
+  only: boolean;
+  onOnly?: (on: boolean) => void;
 }) {
   const labelled = actions.filter((a) => !a.iconOnly).length;
   const shown = actions.slice(0, actions.length - fit.overflow);
@@ -180,14 +195,46 @@ function Pill({
     >
       <div className="flex items-center gap-1">
         <IconButton label="Clear selection" icon={X} onClick={onClear} />
-        <span className="text-[11px] leading-[18px] tracking-[0.4px] text-semantic-text-primary whitespace-nowrap pr-1">
-          <span className="tabular-nums">{count.toLocaleString()}</span> selected
-          {hidden > 0 && (
-            <Tooltip label="Hidden by the folder, filters or search. Actions include them.">
-              <span className="text-semantic-text-secondary"> · {hidden.toLocaleString()} not shown</span>
-            </Tooltip>
-          )}
-        </span>
+        {only && onOnly ? (
+          /* Filtering by the selection: the count is a contained chip — the
+           * one filled thing in the pill, so the screen's narrowed state is
+           * hard to miss — and its ✕ lifts the filter, not the selection. */
+          <span className="flex h-6 items-center gap-0.5 rounded-full bg-semantic-primary-main pl-2 pr-0.5 text-[11px] font-medium leading-[18px] tracking-[0.4px] text-semantic-primary-contrast whitespace-nowrap">
+            <span><span className="tabular-nums">{count.toLocaleString()}</span> selected</span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Show everything again"
+              title="Show everything again"
+              onClick={() => onOnly(false)}
+              className="size-5 text-semantic-primary-contrast hover:bg-white/20 hover:text-semantic-primary-contrast [&_svg:not([class*='size-'])]:size-3"
+            >
+              <X />
+            </Button>
+          </span>
+        ) : (
+          <span className="flex items-center text-[11px] leading-[18px] tracking-[0.4px] text-semantic-text-primary whitespace-nowrap pr-1">
+            {onOnly ? (
+              <Tooltip label="Show only the selected">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => onOnly(true)}
+                  className="h-6 px-1.5 text-[11px] font-normal tracking-[0.4px] text-semantic-text-primary hover:bg-black/[0.06] hover:text-semantic-text-primary"
+                >
+                  <span><span className="tabular-nums">{count.toLocaleString()}</span> selected</span>
+                </Button>
+              </Tooltip>
+            ) : (
+              <span><span className="tabular-nums">{count.toLocaleString()}</span> selected</span>
+            )}
+            {hidden > 0 && (
+              <Tooltip label="Hidden by the folder, filters or search. Actions include them.">
+                <span className="text-semantic-text-secondary"> · {hidden.toLocaleString()} not shown</span>
+              </Tooltip>
+            )}
+          </span>
+        )}
       </div>
       <div data-actions className="flex items-center gap-2">
         {shown.map((a) => {
