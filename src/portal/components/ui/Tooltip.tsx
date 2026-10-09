@@ -9,6 +9,7 @@
 // the alerts board scrolls horizontally, and an absolute tooltip would be
 // clipped by that scroll container.
 
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 /** Hover dwell before a tooltip opens — long enough that crossing a card's
@@ -64,7 +65,9 @@ export function Tooltip({
       onBlur={hide}
     >
       {children}
-      {at && label && (
+      {/* Portalled to <body>: inside a pane it shared the pane's stacking
+        * context, so the top bar's search box drew over it. */}
+      {at && label && createPortal(
         <span
           role="tooltip"
           style={{ top: at.top, left: at.left, transform: "translate(-50%, -100%)" }}
@@ -76,7 +79,8 @@ export function Tooltip({
           <svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true" className="block">
             <path d="M0 0 L6 6 L12 0 Z" fill="#616161" />
           </svg>
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );

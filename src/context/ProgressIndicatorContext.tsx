@@ -6,13 +6,27 @@ export interface ProgressItem {
   thumbnailUrl?: string;
 }
 
+export interface ProgressOptions {
+  /** Header while working. Defaults to "Generating assets...". */
+  title?: string;
+  /** Header once finished. Defaults to "Assets generated.". */
+  doneTitle?: string;
+  /** Called when the work finishes (the indicator stays until dismissed). */
+  onDone?: () => void;
+}
+
 interface ProgressIndicatorContextValue {
-  startProgress: (items: ProgressItem[]) => void;
+  startProgress: (items: ProgressItem[], options?: ProgressOptions) => void;
+  title: string;
+  doneTitle: string;
   dismiss: () => void;
   visible: boolean;
   items: ProgressItem[];
   done: boolean;
 }
+
+const DEFAULT_TITLE = 'Generating assets...';
+const DEFAULT_DONE_TITLE = 'Assets generated.';
 
 const ProgressIndicatorContext = createContext<ProgressIndicatorContextValue | null>(null);
 
@@ -20,14 +34,21 @@ export function ProgressIndicatorProvider({ children }: { children: React.ReactN
   const [items, setItems] = useState<ProgressItem[]>([]);
   const [visible, setVisible] = useState(false);
   const [done, setDone] = useState(false);
+  const [title, setTitle] = useState(DEFAULT_TITLE);
+  const [doneTitle, setDoneTitle] = useState(DEFAULT_DONE_TITLE);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const startProgress = useCallback((newItems: ProgressItem[]) => {
+  const startProgress = useCallback((newItems: ProgressItem[], options?: ProgressOptions) => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    setTitle(options?.title ?? DEFAULT_TITLE);
+    setDoneTitle(options?.doneTitle ?? DEFAULT_DONE_TITLE);
     setItems(newItems);
     setVisible(true);
     setDone(false);
-    timerRef.current = setTimeout(() => setDone(true), 3000);
+    timerRef.current = setTimeout(() => {
+      setDone(true);
+      options?.onDone?.();
+    }, 3000);
   }, []);
 
   const dismiss = useCallback(() => {
@@ -38,7 +59,7 @@ export function ProgressIndicatorProvider({ children }: { children: React.ReactN
   }, []);
 
   return (
-    <ProgressIndicatorContext.Provider value={{ startProgress, dismiss, visible, items, done }}>
+    <ProgressIndicatorContext.Provider value={{ startProgress, dismiss, visible, items, done, title, doneTitle }}>
       {children}
     </ProgressIndicatorContext.Provider>
   );

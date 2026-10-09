@@ -30,6 +30,7 @@ import { portalFolderPath, portalChildFolders } from "@portal/lib/portal-folder-
 import { readPortalUrl, portalUrlQuery } from "@portal/lib/portal-url-state";
 import { Highlight } from "@portal/components/ui/Highlight";
 import { BulkActions, BulkActionMenuItem, ONLY_SELECTED_REASON, type BulkAction } from "@portal/components/ui/BulkActions";
+import { useProgressIndicator } from "../context/ProgressIndicatorContext";
 import { Toast, useToast } from "@portal/components/ui/Toast";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -208,6 +209,9 @@ export default function PortalPage() {
    *  so a reload puts everything back where the platform has it. */
   const [movedTo, setMovedTo] = useState<ReadonlyMap<string, string>>(new Map());
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(new Set());
+  /** Duplicates made this session — identical to the original but for the
+   *  name, and in the same folder. Prototype-only, like moves and deletes. */
+  const [copies, setCopies] = useState<PortalAsset[]>([]);
   /** The platform folder the rail has selected, if any. The tree navigates;
    *  the bar filters. Keeping them apart means picking a folder does not
    *  leave a filter chip behind that has to be found and cleared. */
@@ -258,14 +262,15 @@ export default function PortalPage() {
   // Memoised because deriving the filter vocabularies walks every asset, and
   // a new array identity each render would make that run on every keystroke.
   const library: PortalAsset[] = useMemo(() => {
-    const base = librarySource === "live" ? liveAssets
+    const source = librarySource === "live" ? liveAssets
       : librarySource === "local" ? PORTAL_ASSETS
       : [];
+    const base = copies.length ? [...source, ...copies] : source;
     if (movedTo.size === 0 && deletedIds.size === 0) return base;
     return base
       .filter((a) => !deletedIds.has(a.id))
       .map((a) => (movedTo.has(a.id) ? { ...a, folder: movedTo.get(a.id)! } : a));
-  }, [librarySource, liveAssets, movedTo, deletedIds]);
+  }, [librarySource, liveAssets, copies, movedTo, deletedIds]);
 
   /** The folders the rail lists, always read off the library actually in hand.
    *
@@ -348,6 +353,7 @@ export default function PortalPage() {
   // so every action works on ALL of it, and the pill says how many of those
   // are not in front of you.
   const [toast, setToast] = useToast(3200);
+  const { startProgress } = useProgressIndicator();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [moveQuery, setMoveQuery] = useState("");
@@ -421,6 +427,24 @@ export default function PortalPage() {
     setToast(`Moved ${plural(selectedAssets.size)} to ${folder.split("/").pop()}`);
   }
 
+  /** Duplicate everything picked — hidden picks included, like every bulk
+   *  action. The activity monitor lists the items; the copies land in the
+   *  library when it reports them done. */
+  function duplicatePicked() {
+    const originals = library.filter((a) => selectedAssets.has(a.id));
+    if (originals.length === 0) return;
+    const stamp = Date.now();
+    const made = originals.map((a, i) => ({ ...a, id: `${a.id}-copy-${stamp}-${i}`, name: `${a.name} Copy` }));
+    startProgress(
+      made.map((c) => ({ id: c.id, name: c.name, thumbnailUrl: isVideo(c) ? undefined : c.url })),
+      {
+        title: `Duplicating ${originals.length.toLocaleString()} ${originals.length === 1 ? "item" : "items"}...`,
+        doneTitle: `Duplicated ${originals.length.toLocaleString()} ${originals.length === 1 ? "item" : "items"}.`,
+        onDone: () => setCopies((prev) => [...prev, ...made]),
+      },
+    );
+  }
+
   function deletePicked() {
     const n = selectedAssets.size;
     setDeletedIds((prev) => new Set([...prev, ...selectedAssets]));
@@ -474,7 +498,7 @@ export default function PortalPage() {
     },
     { id: "enhance", label: "AI Enhance", icon: WandSparkles, iconOnly: true, onClick: notYet("AI Enhance") },
     { id: "edit", label: "Edit Variables", icon: Pencil, iconOnly: true, onClick: notYet("Edit Variables") },
-    { id: "copy", label: "Create a Copy", icon: Copy, iconOnly: true, onClick: notYet("Create a Copy") },
+    { id: "copy", label: "Duplicate", icon: Copy, iconOnly: true, onClick: duplicatePicked },
     { id: "delete", label: "Delete", icon: Trash2, iconOnly: true, onClick: () => setConfirmDelete(true) },
   ];
 
