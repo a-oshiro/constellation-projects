@@ -101,7 +101,7 @@ const GROUP_1: NavItem[] = [
   { id: 'projects',  label: 'Projects', icon: <ProjectsIcon />, route: '/projects', hasChevron: true, enabled: true },
   { id: 'feeds',     label: 'Feeds',    icon: <FeedsIcon />,    route: '/feeds',    enabled: false },
   { id: 'design',    label: 'Design',   icon: <DesignIcon />,   route: '/design',   hasChevron: true, enabled: false },
-  { id: 'portal',    label: 'Portal',   icon: <PortalIcon />,   route: '/portal',   enabled: false },
+  { id: 'portal',    label: 'Portal',   icon: <PortalIcon />,   route: '/portal',   enabled: true },
 ];
 
 const GROUP_2: NavItem[] = [

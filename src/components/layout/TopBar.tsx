@@ -1,10 +1,11 @@
 import { forwardRef, useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { TextField, Menu, MenuItem, CircularProgress, useMediaQuery } from '@mui/material';
 import { Search, CheckCircle } from '@mui/icons-material';
 import constellationLockup from '../../assets/constellation-lockup.svg';
 import { CURRENT_USER } from '../../data/mockData';
+import { useGlobalSearch } from '../../portal/lib/global-search';
 
 const AIAgentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 30 30" fill="none">
@@ -157,7 +158,15 @@ const ConnectionStatus = () => {
 
 export const TopBar = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { setQuery } = useGlobalSearch();
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+
+  // The platform search narrows the Portal; elsewhere it stays a plain field.
+  // GlobalSearchProvider drops the term when the route changes, so clear the box too.
+  const onPortal = pathname.startsWith('/portal');
+  const [searchText, setSearchText] = useState('');
+  useEffect(() => { setSearchText(''); }, [pathname]);
 
   const closeSettingsMenu = () => setSettingsAnchor(null);
 
@@ -209,6 +218,11 @@ export const TopBar = () => {
           placeholder="Search anything"
           size="small"
           fullWidth
+          value={searchText}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            if (onPortal) setQuery(e.target.value);
+          }}
           slotProps={{
             input: {
               startAdornment: (

@@ -147,7 +147,7 @@ export function TemplateFilled({ offer, backgroundUrl, width, height }: Template
             ${leaseData.monthlyPayment ?? 0}
           </div>
           <div style={{ fontSize: width * 0.025, fontFamily: "'BMW Type Next', Roboto, sans-serif", color: 'white', lineHeight: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-            Per month for {leaseData.term ?? 0} months with ${leaseData.downPayment ?? 0} due ast signing. Government and dealer fees not included.
+            Per month for {leaseData.term ?? 0} months with ${leaseData.downPayment ?? 0} due at signing. Government and dealer fees not included.
           </div>
         </div>
         <div style={{

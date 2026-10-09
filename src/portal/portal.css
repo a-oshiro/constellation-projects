@@ -1,0 +1,117 @@
+/* The Portal — the CSS this package needs beyond Tailwind v4.
+ * Token values copied from the prototype's app/figma-tokens.css (generated from Figma).
+ * If your platform already defines these tokens, keep yours and drop the :root block.
+ * --chrome-offset is not here on purpose: ScrollAwayHeader sets it at runtime. */
+
+:root {
+  --semantic-action-active: #1110148F;
+  --semantic-action-hover: #1110140A;
+  --semantic-action-selected: #11101414;
+  --semantic-error-contrast: #FFFFFF;
+  --semantic-error-main: #D2323F;
+  --semantic-error-states-hover: #D2323F0A;
+  --semantic-error-states-outlinedborder: #D2323F80;
+  --semantic-primary-contrast: #FFFFFF;
+  --semantic-primary-light: #6356E1;
+  --semantic-primary-main: #473BAB;
+  --semantic-primary-states-hover: #6356E10A;
+  --semantic-primary-states-outlinedborder: #6356E180;
+  --semantic-success-contrast: #FFFFFF;
+  --semantic-success-main: #4CAF50;
+  --semantic-success-states-hover: #4CAF500A;
+  --semantic-success-states-outlinedborder: #4CAF5080;
+  --semantic-surfaces-container-high: #F4F5F6;
+  --semantic-text-primary: #1F1D25;
+  --semantic-text-secondary: #686576;
+}
+
+/* Tailwind v4 utilities: bg-semantic-…, text-semantic-…, border-semantic-… */
+@theme inline {
+  --color-semantic-action-active: var(--semantic-action-active);
+  --color-semantic-action-hover: var(--semantic-action-hover);
+  --color-semantic-action-selected: var(--semantic-action-selected);
+  --color-semantic-error-contrast: var(--semantic-error-contrast);
+  --color-semantic-error-main: var(--semantic-error-main);
+  --color-semantic-error-states-hover: var(--semantic-error-states-hover);
+  --color-semantic-error-states-outlinedborder: var(--semantic-error-states-outlinedborder);
+  --color-semantic-primary-contrast: var(--semantic-primary-contrast);
+  --color-semantic-primary-light: var(--semantic-primary-light);
+  --color-semantic-primary-main: var(--semantic-primary-main);
+  --color-semantic-primary-states-hover: var(--semantic-primary-states-hover);
+  --color-semantic-primary-states-outlinedborder: var(--semantic-primary-states-outlinedborder);
+  --color-semantic-success-contrast: var(--semantic-success-contrast);
+  --color-semantic-success-main: var(--semantic-success-main);
+  --color-semantic-success-states-hover: var(--semantic-success-states-hover);
+  --color-semantic-success-states-outlinedborder: var(--semantic-success-states-outlinedborder);
+  --color-semantic-surfaces-container-high: var(--semantic-surfaces-container-high);
+  --color-semantic-text-primary: var(--semantic-text-primary);
+  --color-semantic-text-secondary: var(--semantic-text-secondary);
+}
+
+/* The Toast arriving (and the bulk-actions pill, below). */
+@keyframes swap-in {
+  0%   { opacity: 0; transform: scale(0.97); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-swap-in {
+  animation: swap-in 0.55s ease-out;
+}
+
+/* Bulk actions arriving: the swap-in plus ONE flash of the rail's
+ * selected-folder purple, fading back to the pill's own grey — so the offer
+ * of actions is noticed without the pill staying coloured. */
+@keyframes bulk-in {
+  0%   { opacity: 0; transform: scale(0.97); background-color: --theme(--color-indigo-100); }
+  25%  { opacity: 1; transform: scale(1);    background-color: --theme(--color-indigo-100); }
+  100% { background-color: var(--semantic-surfaces-container-high); }
+}
+.animate-bulk-in {
+  animation: bulk-in 0.9s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-bulk-in { animation: none; }
+}
+
+/* ─── Dual-handle range slider (FilterRange) ───────────────────────────
+ * Two range inputs stacked on one drawn track. The inputs carry
+ * `pointer-events: none` so the upper one does not swallow the lower one's
+ * handle; the thumbs take pointer events back, which is what lets two
+ * overlapping inputs each stay grabbable. The native track is hidden — the
+ * visible track and the filled span between the handles are drawn by the
+ * component, since only one of the two inputs could ever own them.
+ * ─────────────────────────────────────────────────────────────────────── */
+.range-thumb::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+.range-thumb::-moz-range-track { background: transparent; height: 100%; }
+
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 16px; height: 16px;
+  margin-top: 2px;
+  border-radius: 9999px;
+  background: var(--semantic-primary-main, #473BAB);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  cursor: grab;
+}
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px; height: 16px;
+  border-radius: 9999px;
+  background: var(--semantic-primary-main, #473BAB);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  cursor: grab;
+}
+.range-thumb:active::-webkit-slider-thumb { cursor: grabbing; }
+.range-thumb:active::-moz-range-thumb { cursor: grabbing; }
+
+/* The handle is the only part of this input anyone can reach, so it is where
+ * the focus ring belongs. */
+.range-thumb:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--semantic-primary-main, #473BAB);
+  outline-offset: 2px;
+}
+.range-thumb:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--semantic-primary-main, #473BAB);
+  outline-offset: 2px;
+}
