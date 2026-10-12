@@ -140,13 +140,40 @@ function NextGroupBar({
  *  a control of its own — see the next-group bar in the grouped grid. */
 const LONG_SECTION = 12;
 
+/** The last good answer from /api/portal-assets, held in module memory so it
+ *  outlives the page component. Deliberately not localStorage: it clears on a
+ *  full reload (which is how a user gets fresh data) and cannot hit a quota. */
+let liveLibraryCache: {
+  assets: PortalAsset[];
+  folders: { name: string; count: number }[];
+  projects: number;
+} | null = null;
+
+/** What the screen was showing when it was left, so coming back puts it back:
+ *  the shareable view (as its query string — folder, filters, sort, grouping,
+ *  view mode), the picked assets, and the prototype-only edits. Module memory
+ *  for the same reasons as liveLibraryCache: a full reload clears it. */
+const portalSession: {
+  query: string | null;
+  selected: Set<string>;
+  onlySelected: boolean;
+  movedTo: ReadonlyMap<string, string>;
+  deletedIds: ReadonlySet<string>;
+  copies: PortalAsset[];
+} = { query: null, selected: new Set(), onlySelected: false, movedTo: new Map(), deletedIds: new Set(), copies: [] };
+
 export default function PortalPage() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   /** Read once, on mount. After that the screen owns the state and the URL
    *  follows it — re-reading would fight the writes below. */
-  const fromUrl = useMemo(() => readPortalUrl(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const fromUrl = useMemo(() => {
+    // A bare /portal (the sidebar link) resumes where the user left off; a
+    // link that carries a view wins over the remembered one.
+    const bare = searchParams.toString() === "" && portalSession.query !== null;
+    return readPortalUrl(bare ? new URLSearchParams(portalSession.query!) : searchParams);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // In the URL with the sort and the grouping — see lib/portal-url-state.ts.
   const [viewMode, setViewMode] = useState(fromUrl.view);
@@ -167,11 +194,15 @@ export default function PortalPage() {
    *  them. */
   // A link may carry a selection — only while it was being shown on its own
   // (see lib/portal-url-state.ts) — and opens on it, filtered to it.
-  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(() => new Set(fromUrl.selected));
+  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(
+    () => new Set(fromUrl.selected.length ? fromUrl.selected : portalSession.selected),
+  );
   /** "N selected", clicked: the grid shows the selection and nothing else —
    *  across folders, past the filters and the search. Off again by its chip's
    *  ✕, or by the selection emptying. */
-  const [onlySelectedOn, setOnlySelected] = useState(fromUrl.selected.length > 0);
+  const [onlySelectedOn, setOnlySelected] = useState(
+    fromUrl.selected.length > 0 || portalSession.onlySelected,
+  );
   const onlySelected = onlySelectedOn && selectedAssets.size > 0;
   // What it overrides is frozen while it is on — the filters, the folders and
   // the search keep their values, greyed out, and say why.
@@ -207,11 +238,11 @@ export default function PortalPage() {
   /** What the bulk actions have done to the library this session — moves by
    *  id, and deletions. Prototype-only: the platform is read, never written,
    *  so a reload puts everything back where the platform has it. */
-  const [movedTo, setMovedTo] = useState<ReadonlyMap<string, string>>(new Map());
-  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(new Set());
+  const [movedTo, setMovedTo] = useState<ReadonlyMap<string, string>>(portalSession.movedTo);
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(portalSession.deletedIds);
   /** Duplicates made this session — identical to the original but for the
    *  name, and in the same folder. Prototype-only, like moves and deletes. */
-  const [copies, setCopies] = useState<PortalAsset[]>([]);
+  const [copies, setCopies] = useState<PortalAsset[]>(portalSession.copies);
   /** The platform folder the rail has selected, if any. The tree navigates;
    *  the bar filters. Keeping them apart means picking a folder does not
    *  leave a filter chip behind that has to be found and cleared. */
@@ -222,6 +253,17 @@ export default function PortalPage() {
   const gridScrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Leaving Portal unmounts this page, so state alone would be thrown away
+    // and the next visit would hit the API again. A successful answer is kept
+    // in module memory instead (see liveLibraryCache) and reused until reload.
+    const cached = liveLibraryCache;
+    if (cached) {
+      setLiveAssets(cached.assets);
+      setLiveMeta({ projects: cached.projects, folders: cached.folders.length, reason: "" });
+      setLiveFolders(cached.folders);
+      setLibrarySource("live");
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -232,18 +274,19 @@ export default function PortalPage() {
           // The platform carries fewer fields than the generated set; the ones
           // it does not have simply produce no options, and their filters are
           // left out of the bar.
-          setLiveAssets((json.assets as Partial<PortalAsset>[]).map((a) => ({
+          const assets = (json.assets as Partial<PortalAsset>[]).map((a) => ({
             sizeKb: 0, componentCount: 0, assetType: "", brand: "",
             fluencyReady: "", holidays: [], offerCount: 0, offerType: "",
             offerTypes: [], textColor: "", usageYears: [],
             ...a,
-          }) as PortalAsset));
-          setLiveMeta({
-            projects: json.projectsRead ?? 0,
-            folders: json.folders?.length ?? 0,
-            reason: "",
-          });
-          setLiveFolders(json.folders ?? []);
+          }) as PortalAsset);
+          const folders: { name: string; count: number }[] = json.folders ?? [];
+          const projects: number = json.projectsRead ?? 0;
+          // Only a good answer is cached; a failure is retried on next visit.
+          liveLibraryCache = { assets, folders, projects };
+          setLiveAssets(assets);
+          setLiveMeta({ projects, folders: folders.length, reason: "" });
+          setLiveFolders(folders);
           setLibrarySource("live");
         } else {
           setLiveMeta({ projects: 0, folders: 0, reason: json.error ?? json.source ?? "no data" });
@@ -511,6 +554,14 @@ export default function PortalPage() {
   // pushing would make Back undo one chip at a time instead of leaving the
   // screen.
   useEffect(() => {
+    portalSession.selected = selectedAssets;
+    portalSession.onlySelected = onlySelectedOn;
+    portalSession.movedTo = movedTo;
+    portalSession.deletedIds = deletedIds;
+    portalSession.copies = copies;
+  }, [selectedAssets, onlySelectedOn, movedTo, deletedIds, copies]);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       const query = portalUrlQuery({
         folder: activeLiveFolder,
@@ -522,6 +573,7 @@ export default function PortalPage() {
         // The selection is the view only while it is shown on its own.
         selected: onlySelected ? [...selectedAssets] : [],
       });
+      portalSession.query = query;
       navigate(query ? `${pathname}?${query}` : pathname, { replace: true });
     }, 200);
     return () => clearTimeout(t);
