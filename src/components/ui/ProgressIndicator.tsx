@@ -5,9 +5,15 @@ import { useProgressIndicator } from '../../context/ProgressIndicatorContext';
 import { useTestWidget } from '../../context/TestWidgetContext';
 
 export function ProgressIndicator() {
-  const { visible, items, done, dismiss } = useProgressIndicator();
+  const { visible, items, done, dismiss, title, doneTitle } = useProgressIndicator();
   const { widgetWidth } = useTestWidget();
   const [collapsed, setCollapsed] = useState(false);
+  // A new run opens the list again, even if the last one was left collapsed.
+  const [lastItems, setLastItems] = useState(items);
+  if (items !== lastItems) {
+    setLastItems(items);
+    setCollapsed(false);
+  }
 
   if (!visible || items.length === 0) return null;
 
@@ -45,7 +51,7 @@ export function ProgressIndicator() {
           letterSpacing: '0.17px',
           lineHeight: 1.43,
         }}>
-          {done ? 'Assets generated.' : 'Generating assets...'}
+          {done ? doneTitle : title}
         </span>
         <button
           onClick={() => setCollapsed((c) => !c)}
@@ -76,7 +82,7 @@ export function ProgressIndicator() {
         <div style={{
           background: '#ffffff',
           overflowY: 'auto',
-          maxHeight: 260,
+          maxHeight: 255, // five rows; more scroll
         }}>
           {items.map((item) => (
             <div key={item.id} style={{

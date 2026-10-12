@@ -176,7 +176,10 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
 
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isBoardRoute = location.pathname === '/projects';
-  const showLeftPanel = !isSettingsRoute && !isBoardRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
+  // The Portal is a workspace-wide library with its own folder pane — none of the
+  // per-project chrome (tasks panel, preview strip, evergreen badge) applies.
+  const isPortalRoute = location.pathname.startsWith('/portal');
+  const showLeftPanel = !isSettingsRoute && !isBoardRoute && !isPortalRoute && (tasksPanelOpen || filterPanelOpen || alertsFilterPanelOpen);
 
   return (
     <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -222,7 +225,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                 Evergreen-ness is a property of `currentProject`, which stays set while browsing Settings pages —
                 exclude those routes too, or the badge/lock dialog would show there despite having nothing to do
                 with an evergreen project page. */}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && !isPortalRoute && (
               <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 5 }}>
                 <EvergreenProjectBadge
                   locked={locked}
@@ -231,7 +234,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
                 />
               </div>
             )}
-            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && (
+            {currentProject.isEvergreen && !isProjectOverviewRoute && !isBoardRoute && !isSettingsRoute && !isPortalRoute && (
               <UnlockProjectDialog
                 open={unlockDialogOpen}
                 onClose={() => setUnlockDialogOpen(false)}
@@ -241,7 +244,7 @@ const MainLayoutInner = ({ children }: { children: ReactNode }) => {
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {children}
             </div>
-            {!isSettingsRoute && !isProjectOverviewRoute && !isBoardRoute && <PreviewPanel />}
+            {!isSettingsRoute && !isProjectOverviewRoute && !isBoardRoute && !isPortalRoute && <PreviewPanel />}
           </div>
           {!isSettingsRoute && offersPanelOffer && offersPanel?.type === 'vehicle-info' && (
             <VehicleInfo

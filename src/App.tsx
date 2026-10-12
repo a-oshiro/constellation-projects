@@ -19,6 +19,9 @@ import { AdsPage } from './pages/AdsPage';
 import { CampaignsPage } from './pages/CampaignsPage';
 import { ClientSettingsPage } from './pages/ClientSettingsPage';
 import { AccountSettingsPage } from './pages/AccountSettingsPage';
+import PortalPage from './portal/PortalPage';
+import { GlobalSearchProvider } from './portal/lib/global-search';
+import { SearchMarks } from './portal/lib/search-marks';
 
 const theme = createTheme({
   typography: {
@@ -58,6 +61,8 @@ function App() {
             <BrowserRouter>
             <SnackbarProvider>
             <ProgressIndicatorProvider>
+            <GlobalSearchProvider>
+              <SearchMarks />
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -73,6 +78,7 @@ function App() {
                   <Route path="/approved" element={<ApprovedPage />} />
                   <Route path="/ads" element={<AdsPage />} />
                   <Route path="/campaigns" element={<CampaignsPage />} />
+                  <Route path="/portal" element={<PortalPage />} />
                   <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
                   <Route path="/settings/accounts/:accountId" element={<AccountSettingsPage />} />
                   <Route path="/settings/accounts/:accountId/:tabId" element={<AccountSettingsPage />} />
@@ -80,6 +86,7 @@ function App() {
                 </Routes>
               </MainLayout>
               <ProgressIndicator />
+            </GlobalSearchProvider>
             </ProgressIndicatorProvider>
             </SnackbarProvider>
             </BrowserRouter>

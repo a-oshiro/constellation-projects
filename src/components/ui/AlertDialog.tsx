@@ -6,15 +6,16 @@ import {
   MailOutlined, DirectionsCarOutlined, ChevronRight,
 } from '@mui/icons-material';
 import type { Alert, AlertActivityEntry, AlertCommentAnchor, AssetCommentAnchor, EmailCommentAnchor, Offer, ReviewStatus } from '../../data/types';
+import bmwLogoSrc from '../../assets/bmw-logo.png';
 import { useProject } from '../../context/ProjectContext';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import { backgroundForOffer, buildAlertAssetEntries, type AlertAssetEntry } from '../../utils/overviewAssets';
+import { assetFromAlertEntry, backgroundForOffer, buildAlertAssetEntries, type AlertAssetEntry } from '../../utils/overviewAssets';
 import { useResponsivePanelWidth } from '../../hooks/useResponsivePanelWidth';
 import { useResizableWidth } from '../../hooks/useResizableWidth';
 import { FloatingCommentButton, PENDING_ANCHOR_ID } from './AlertHighlightableText';
 import type { ColumnEntry } from './FloatingCommentColumn';
 import { AlertOfferEditPanel } from './AlertOfferEditPanel';
-import { AlertAssetDetailsDialog } from './AlertAssetDetailsDialog';
+import { AssetDetailsDialog } from './AssetDetailsDialog';
 import { AlertAssetFocusView } from './AlertAssetFocusView';
 import { creativeQcHasWarning, qcTagsForOffer, type QcFocusRequest, type QcTag } from '../../utils/alertQc';
 import { AlertGenerationFailedState } from './AlertGenerationFailedState';
@@ -93,9 +94,9 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // independent of which of the three is actually open. Project Settings keeps its own (wider) default.
   const sharedRightPanel = useResizableWidth(480, 400, 900);
   const projectSettingsPanel = useResizableWidth(projectSettingsDefaultWidth, 280, 900);
-  /** Which offer's asset is expanded into the Asset Details dialog — the alert dialog stays mounted
-   * underneath, so closing it (setDetailsOfferId(null)) needs no extra state to "return" to. */
-  const [detailsOfferId, setDetailsOfferId] = useState<string | null>(null);
+  /** Which asset (`AlertAssetEntry.key`) is expanded into the Asset Details dialog — the alert dialog stays
+   * mounted underneath, so closing it (setDetailsAssetKey(null)) needs no extra state to "return" to. */
+  const [detailsAssetKey, setDetailsAssetKey] = useState<string | null>(null);
   // Every asset this alert's offers can show — the "primary" one per offer (project.templates[0], the only
   // one ever used by the email) plus one "extra" entry per offer per background for every other template
   // the project defines. For every project except BMW Seattle today, templates.length === 1, so this is
@@ -149,13 +150,13 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (detailsOfferId) { setDetailsOfferId(null); return; }
+      if (detailsAssetKey) { setDetailsAssetKey(null); return; }
       if (editingOfferId) { setEditingOfferId(null); return; }
       onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, detailsOfferId, editingOfferId]);
+  }, [onClose, detailsAssetKey, editingOfferId]);
 
   // Bidirectional jump/emphasis: scroll both the comment card and its highlight/pin into view, then clear
   // the emphasis after a beat — no new dependency, just scrollIntoView + a timed state reset.
@@ -255,16 +256,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   // comment *card* itself still respects this independently in FloatingCommentColumn.
   const highlightableComments = allComments.filter((c) => showResolved || !c.resolved);
 
-  /** Every comment anchored to one specific asset (plus their replies), regardless of resolved state — used
-   * by the Asset Details dialog (always the offer's primary asset, so `assetKey` there is just the offer id),
-   * which always shows its full history. Scoped per asset, not per offer, so a comment made on one
-   * template/background variant never shows up on another asset of the same offer. */
-  const commentsForOffer = (assetKey: string) => {
-    const anchored = allComments.filter((c): c is typeof allComments[number] & { anchor: AssetCommentAnchor } => c.anchor?.kind === 'asset' && c.anchor.assetKey === assetKey);
-    const anchoredIds = new Set(anchored.map((c) => c.id));
-    const replies = allComments.filter((c) => c.parentCommentId && anchoredIds.has(c.parentCommentId));
-    return [...anchored, ...replies];
-  };
 
   /** Same, but respecting the resolved-highlight visibility rule — used for the inline pin/highlight overlay. */
   const pinsForAsset = (assetKey: string) =>
@@ -351,8 +342,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
   };
 
   const editingOffer = editingOfferId ? offers.find((o) => o.id === editingOfferId) : undefined;
-  const detailsOffer = detailsOfferId ? offers.find((o) => o.id === detailsOfferId) : undefined;
-  const detailsBg = detailsOffer ? bgFor(detailsOffer) : undefined;
+  const detailsEntry = detailsAssetKey ? entryByKey.get(detailsAssetKey) : undefined;
   const focusedEntry = focusedAssetKey ? entryByKey.get(focusedAssetKey) : undefined;
 
   const offerReviewFor = (offerId: string) => alert.offerReviews?.[offerId];
@@ -478,19 +468,6 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
     assetEntries.forEach((e) => setEntryReview(e, 'pending'));
   };
 
-  // Carousel within the Asset Details dialog — steps through allAlertOffers in order, wrapping at the ends.
-  const detailsIndex = detailsOffer ? allAlertOffers.findIndex((o) => o.id === detailsOffer.id) : -1;
-  const handleDetailsPrev = () => {
-    if (allAlertOffers.length === 0 || detailsIndex === -1) return;
-    const nextIndex = (detailsIndex - 1 + allAlertOffers.length) % allAlertOffers.length;
-    setDetailsOfferId(allAlertOffers[nextIndex].id);
-  };
-  const handleDetailsNext = () => {
-    if (allAlertOffers.length === 0 || detailsIndex === -1) return;
-    const nextIndex = (detailsIndex + 1) % allAlertOffers.length;
-    setDetailsOfferId(allAlertOffers[nextIndex].id);
-  };
-
   const handleReply = (parentCommentId: string, text: string, mentionedNames: string[]) => {
     const parent = allComments.find((c) => c.id === parentCommentId);
     addAlertComment(alert.id, parent?.track ?? 'email', { text, mentionedNames, parentCommentId });
@@ -527,9 +504,17 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {alert.subject}
-          </span>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ minWidth: 0, fontSize: 15, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {alert.subject}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, padding: '2px 8px 2px 4px', borderRadius: 100, background: 'rgba(17,16,20,0.06)' }}>
+              <img src={bmwLogoSrc} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+              <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
+                {currentProject.accountName}
+              </span>
+            </span>
+          </div>
           <span style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', whiteSpace: 'nowrap' }}>
             {`Generated ${formatRelativeTime(alert.createdAt)} by AI AutoAgent`}
           </span>
@@ -608,7 +593,7 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
                     onApprove={() => reviewFocusedAssetAndAdvance(focusedEntry, 'approved')}
                     onReject={() => reviewFocusedAssetAndAdvance(focusedEntry, 'rejected')}
                     onUndo={() => setEntryReview(focusedEntry, 'pending')}
-                    onRequestPreview={() => setDetailsOfferId(focusedEntry.offer.id)}
+                    onRequestPreview={() => setDetailsAssetKey(focusedEntry.key)}
                     onShowOfferCard={() => showOfferInOffersPanel(focusedEntry.offer.id)}
                     qcTags={qcTagsFor(focusedEntry.offer.id)}
                     activeQcKey={activeQcKey}
@@ -923,34 +908,8 @@ export const AlertDialog = ({ alert, onClose }: AlertDialogProps) => {
         <FloatingCommentButton top={floatingSelection.top} left={floatingSelection.left} onClick={handleStartComment} />
       )}
 
-      {detailsOffer && template && detailsBg && (
-        <AlertAssetDetailsDialog
-          key={detailsOffer.id}
-          offer={detailsOffer}
-          template={template}
-          backgroundUrl={detailsBg.url}
-          background={detailsBg}
-          projectId={currentProject.id}
-          comments={commentsForOffer(detailsOffer.id)}
-          activeAnchorId={activeAnchorId}
-          onClose={() => setDetailsOfferId(null)}
-          onAddComment={(text, mentionedNames, anchor) => { addAlertComment(alert.id, 'assets', { text, mentionedNames, anchor }); setShowComments(true); }}
-          onToggleResolved={(commentId) => toggleAlertCommentResolved(alert.id, commentId)}
-          onDeleteComment={(commentId) => deleteAlertComment(alert.id, commentId)}
-          onAnchorClick={handleAnchorClick}
-          onEditOffer={(view) => editOffer(detailsOffer.id, view)}
-          onReply={handleReply}
-          onToggleReaction={handleToggleReaction}
-          approvalStatus={alert.offerReviews?.[detailsOffer.id]?.status ?? 'pending'}
-          approvalDisabled={isArchived || isSent}
-          onApprove={() => setOfferAssetReview(alert.id, detailsOffer.id, 'approved')}
-          onReject={() => setOfferAssetReview(alert.id, detailsOffer.id, 'rejected')}
-          onUndo={() => setOfferAssetReview(alert.id, detailsOffer.id, 'pending')}
-          currentIndex={detailsIndex}
-          totalCount={allAlertOffers.length}
-          onPrev={handleDetailsPrev}
-          onNext={handleDetailsNext}
-        />
+      {detailsEntry && (
+        <AssetDetailsDialog asset={assetFromAlertEntry(detailsEntry, currentProject.projectName)} onClose={() => setDetailsAssetKey(null)} />
       )}
     </>,
     document.body,
