@@ -12,6 +12,10 @@ import type { ProjectWorkflowStatus } from '../components/ui/ProjectStatusBadge'
 import { ProjectBoardCard } from '../components/ui/ProjectBoardCard';
 import { ProjectsTable } from '../components/ui/ProjectsTable';
 import type { ProjectStatusInfo } from '../components/ui/ProjectsTable';
+import {
+  ProjectsFilterBar, EMPTY_PROJECT_FILTERS, deriveProjectOptions, matchesProjectFilters,
+} from '../components/ui/ProjectsFilterBar';
+import type { ProjectFilters } from '../components/ui/ProjectsFilterBar';
 import { KanbanViewIcon, TableViewIcon } from '../components/ui/AlertsKanbanBoard';
 
 type BoardTab = 'all' | 'mine';
@@ -98,6 +102,7 @@ export const ProjectsBoardPage = () => {
   const [tab, setTab] = useState<BoardTab>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ProjectFilters>(EMPTY_PROJECT_FILTERS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const myProjectCount = useMemo(() => PROJECTS.filter((p) => p.creator === CURRENT_USER.name).length, []);
@@ -108,9 +113,25 @@ export const ProjectsBoardPage = () => {
     return PROJECTS.filter((p) => p.accountName.toLowerCase().includes(q) || p.projectName.toLowerCase().includes(q));
   }, [search]);
 
-  const visibleProjects = useMemo(
+  const inTab = useMemo(
     () => (tab === 'mine' ? searched.filter((p) => p.creator === CURRENT_USER.name) : searched),
     [searched, tab],
+  );
+
+  /** The board column a project sits in — its Status, as the page shows it. */
+  const statusLabelOf = (project: Project) =>
+    BOARD_COLUMNS.find((c) => c.statuses.includes(project.workflowStatus))?.label ?? '—';
+
+  // Options come from the whole list, not the narrowed one, so a filter never
+  // loses the values that would widen it again.
+  const filterOptions = useMemo(
+    () => deriveProjectOptions(PROJECTS, BOARD_COLUMNS.map((c) => c.label), statusLabelOf),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const visibleProjects = useMemo(
+    () => inTab.filter((p) => matchesProjectFilters(p, filters, statusLabelOf)),
+    [inTab, filters], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const selectedCount = useMemo(
@@ -276,6 +297,16 @@ export const ProjectsBoardPage = () => {
           >
             {viewMode === 'kanban' ? <TableViewIcon /> : <KanbanViewIcon />}
           </IconButton>
+        </div>
+
+        <div style={{ margin: '-12px 0 0', flexShrink: 0 }}>
+          <ProjectsFilterBar
+            projects={inTab}
+            filters={filters}
+            onFilters={setFilters}
+            options={filterOptions}
+            statusOf={statusLabelOf}
+          />
         </div>
 
         {viewMode === 'table' ? (

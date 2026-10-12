@@ -34,7 +34,7 @@ export default defineConfig({
   resolve: {
     alias: { '@portal': fileURLToPath(new URL('./src/portal', import.meta.url)) },
   },
-  test: { environment: 'node', include: ['src/portal/**/*.test.ts'] },
+  test: { environment: 'node', include: ['src/portal/**/*.test.ts', 'src/components/ui/ProjectsFilterBar.test.ts'] },
   server: {
     proxy: {
       // Forwards /api/* to `vercel dev` running separately (see README/local-dev notes) —

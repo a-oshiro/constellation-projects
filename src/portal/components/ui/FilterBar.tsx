@@ -108,19 +108,26 @@ export function countFacet<T>(
  *  Without counts there is nothing to sort by, so the caller's own order stands;
  *  that order is meaningful for a list like Date Range, where alphabetical would
  *  be nonsense. */
-export function byAvailability(options: readonly string[], counts?: Record<string, number>) {
+export function byAvailability(
+  options: readonly string[], counts?: Record<string, number>, keepOrder = false,
+) {
   if (!counts) return options;
   const live = (o: string) => (counts[o] ?? 0) > 0;
   return [...options].sort((a, b) =>
     live(a) === live(b)
-      ? a.localeCompare(b, undefined, { numeric: true })
+      // `keepOrder`: the list has a natural order (Today, Yesterday, …) that
+      // alphabetical would scramble, so dead values still sink but nothing
+      // else moves.
+      ? keepOrder ? 0 : a.localeCompare(b, undefined, { numeric: true })
       : live(a) ? -1 : 1,
   );
 }
 
 export function FilterSelect({
-  label, options, value, onChange, counts, drop = "down",
+  label, options, value, onChange, counts, drop = "down", keepOrder = false,
 }: {
+  /** List the options in the order given rather than alphabetically. */
+  keepOrder?: boolean;
   /** Shown as the placeholder at all times, and names the control. */
   label: string;
   options: readonly string[];
@@ -336,6 +343,7 @@ export function FilterSelect({
             query={query}
             stackedSet={pinnedSet}
             takeFocus={open}
+            keepOrder={keepOrder}
           />
         </div>
       )}
@@ -353,8 +361,9 @@ export function FilterSelect({
  *  Owns the typed term and the keyboard cursor. The caller owns the values. */
 function FilterValueList({
   options, value, onToggle, counts, label, query = "", stackedSet,
-  takeFocus = true,
+  takeFocus = true, keepOrder = false,
 }: {
+  keepOrder?: boolean;
   options: readonly string[];
   value: readonly string[];
   onToggle: (option: string) => void;
@@ -401,6 +410,7 @@ function FilterValueList({
   const rest = byAvailability(
     stackedSet ? listed.filter((o) => !stackedSet.has(o)) : listed,
     counts,
+    keepOrder,
   );
   /** The listed options in the order they are drawn — what the arrows walk. An
    *  option that would leave nothing is skipped rather than landed on and
@@ -546,6 +556,8 @@ export interface FilterDescriptor {
   onChange?: (next: string[]) => void;
   /** Per-option result counts — see FilterSelect. */
   counts?: Record<string, number>;
+  /** List the options in the order given rather than alphabetically. */
+  keepOrder?: boolean;
   /** What the More filters side panel shows for a filter WITHOUT a list of
    *  values — a range's fields, not its chip. Falls back to `node`. */
   panel?: ReactNode;
@@ -1629,6 +1641,7 @@ function MoreFiltersMenu({
                 counts={openFilter.counts}
                 label={openFilter.label}
                 query={query}
+                keepOrder={openFilter.keepOrder}
               />
             </div>
           )}
