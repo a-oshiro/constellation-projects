@@ -16,6 +16,7 @@ import {
   ProjectsFilterBar, EMPTY_PROJECT_FILTERS, deriveProjectOptions, matchesProjectFilters,
 } from '../components/ui/ProjectsFilterBar';
 import type { ProjectFilters } from '../components/ui/ProjectsFilterBar';
+import { BulkEditProjectsDialog } from '../components/ui/bulkEdit/BulkEditProjectsDialog';
 import { KanbanViewIcon, TableViewIcon } from '../components/ui/AlertsKanbanBoard';
 
 type BoardTab = 'all' | 'mine';
@@ -103,6 +104,9 @@ export const ProjectsBoardPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<ProjectFilters>(EMPTY_PROJECT_FILTERS);
+  const [editing, setEditing] = useState(false);
+  /** Bumped after a bulk edit writes to the projects, which are mutated in place. */
+  const [version, setVersion] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const myProjectCount = useMemo(() => PROJECTS.filter((p) => p.creator === CURRENT_USER.name).length, []);
@@ -111,7 +115,7 @@ export const ProjectsBoardPage = () => {
     const q = search.trim().toLowerCase();
     if (!q) return PROJECTS;
     return PROJECTS.filter((p) => p.accountName.toLowerCase().includes(q) || p.projectName.toLowerCase().includes(q));
-  }, [search]);
+  }, [search, version]);
 
   const inTab = useMemo(
     () => (tab === 'mine' ? searched.filter((p) => p.creator === CURRENT_USER.name) : searched),
@@ -126,12 +130,12 @@ export const ProjectsBoardPage = () => {
   // loses the values that would widen it again.
   const filterOptions = useMemo(
     () => deriveProjectOptions(PROJECTS, BOARD_COLUMNS.map((c) => c.label), statusLabelOf),
-    [], // eslint-disable-line react-hooks/exhaustive-deps
+    [version], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const visibleProjects = useMemo(
     () => inTab.filter((p) => matchesProjectFilters(p, filters, statusLabelOf)),
-    [inTab, filters], // eslint-disable-line react-hooks/exhaustive-deps
+    [inTab, filters, version], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const selectedCount = useMemo(
@@ -220,6 +224,7 @@ export const ProjectsBoardPage = () => {
                 variant="outlined"
                 size="small"
                 startIcon={<EditOutlined style={{ fontSize: 16 }} />}
+                onClick={() => setEditing(true)}
                 sx={{
                   color: '#473bab', borderColor: 'rgba(99,86,225,0.5)', borderRadius: '100px', padding: '4px 10px',
                   fontSize: 13, fontFamily: 'Roboto, sans-serif', fontWeight: 500, letterSpacing: '0.46px',
@@ -343,6 +348,13 @@ export const ProjectsBoardPage = () => {
           </div>
         )}
       </div>
+      {editing && (
+        <BulkEditProjectsDialog
+          projects={PROJECTS.filter((p) => selectedIds.has(p.id))}
+          onClose={() => setEditing(false)}
+          onSaved={() => setVersion((v) => v + 1)}
+        />
+      )}
     </div>
   );
 };
