@@ -1,21 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Autocomplete, Button, Checkbox, Chip, FormControlLabel, IconButton, MenuItem, TextField } from '@mui/material';
+import { Autocomplete, Button, IconButton, MenuItem, TextField } from '@mui/material';
 import {
-  Add, Check, Close, DeleteOutlined, ExpandMore, Search, Undo,
+  Add, Check, CheckCircle, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
+  HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, Search, Undo, WarningAmber,
 } from '@mui/icons-material';
 import { PROJECTS } from '../../../data/projects';
 import type { Project } from '../../../data/projects';
 import type { Background, Template } from '../../../data/types';
-import { ACCOUNTS } from '../../../data/accounts';
-import { BACKGROUNDS, MOCK_TEAMMATES } from '../../../data/mockData';
-import { getProjectExtras, saveProjectExtras } from '../../../data/projectDefaults';
-import type { CustomVariable, ProjectAudio, ProjectLogo } from '../../../data/projectDefaults';
+import { MOCK_TEAMMATES, TEMPLATES } from '../../../data/mockData';
+import { getProjectExtras, saveProjectExtras, LOGO_LIBRARY } from '../../../data/projectDefaults';
+import type { CustomVariable, LogoSlot, ProjectAudio, ProjectLogo } from '../../../data/projectDefaults';
+import { BACKGROUND_COLLECTIONS, collectionBackgrounds, collectionName } from '../../../data/backgroundCollections';
+import { STATUS_CONFIG } from '../ProjectStatusBadge';
+import type { ProjectWorkflowStatus } from '../ProjectStatusBadge';
+import { AddTemplatesDialog } from '../AddTemplatesDialog';
 import { useSnackbar } from '../../../context/SnackbarContext';
 import bmwLogoSrc from '../../../assets/bmw-logo.png';
 import { TEMPLATE_REGISTRY } from '../../../templates';
 import { AudioPlayerRow } from './AudioPlayerRow';
 import { ProjectAvatar } from './ProjectAvatar';
+import { AddLogosDialog } from './AddLogosDialog';
+import { AddBackgroundsPanel } from './AddBackgroundsPanel';
 import { CARD_SIZE, DefaultsGroupList, groupDefaults } from './DefaultsGroupList';
 
 // ── The draft ────────────────────────────────────────────────────────────────
@@ -34,6 +40,7 @@ interface Draft {
   startDate: string;
   endDate: string;
   isEvergreen: boolean;
+  workflowStatus: ProjectWorkflowStatus;
   tags: string[];
   templates: Template[];
   backgrounds: Background[];
@@ -52,11 +59,48 @@ const REMOVED = { tag: 'REMOVED', bg: '#fdeaec', ink: '#b32833' };
 const CHANGED = { tag: 'CHANGED', bg: '#fff4e5', ink: '#8a4b00' };
 const PURPLE = '#473bab';
 
+/** The statuses a bulk edit can set, in the order the status menu lists them. */
+const STATUS_OPTIONS: { label: string; value: ProjectWorkflowStatus }[] = [
+  { label: 'In Progress', value: 'in_progress' },
+  { label: 'Awaiting Approval', value: 'awaiting_approval' },
+  { label: 'Needs Edits', value: 'needs_edits' },
+  { label: 'Approved', value: 'assets_generated' },
+  { label: 'Assets Created', value: 'assets_generated_no_approval' },
+  { label: 'Changes Made', value: 'pending_changes' },
+  { label: 'Done', value: 'done' },
+  { label: 'Expired', value: 'expired' },
+  { label: 'Archived', value: 'archived' },
+];
+const statusLabel = (v: ProjectWorkflowStatus) => STATUS_OPTIONS.find((o) => o.value === v)?.label ?? STATUS_CONFIG[v].label;
+
+/** How each status reads in the status menu: a tinted pill with its icon. */
+const STATUS_PILLS: Record<string, { bg: string; color: string; Icon: React.ElementType }> = {
+  'In Progress': { bg: '#e5f1fb', color: '#1f78c9', Icon: PendingOutlined },
+  'Awaiting Approval': { bg: '#fff1e0', color: '#d4600e', Icon: HourglassEmptyOutlined },
+  'Needs Edits': { bg: '#fff1e0', color: '#d4600e', Icon: EditNoteOutlined },
+  Approved: { bg: '#e8f5e9', color: '#2e7d32', Icon: CheckCircleOutlined },
+  'Assets Created': { bg: '#efe3f7', color: '#6a3fd1', Icon: PermMediaOutlined },
+  'Changes Made': { bg: '#fff1e0', color: '#d4600e', Icon: WarningAmber },
+  Done: { bg: '#e8f5e9', color: '#2e7d32', Icon: CheckCircle },
+  Expired: { bg: '#f0f0f2', color: '#686576', Icon: EventBusyOutlined },
+  Archived: { bg: '#f0f0f2', color: '#686576', Icon: Inventory2Outlined },
+};
+
+const StatusPill = ({ label }: { label: string }) => {
+  const style = STATUS_PILLS[label] ?? { bg: '#f0f0f2', color: '#686576', Icon: PendingOutlined };
+  const { Icon } = style;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '2px 8px 2px 6px', background: style.bg, color: style.color, fontSize: 12, fontFamily: FONT, lineHeight: 1.66, letterSpacing: '0.4px' }}>
+      <Icon style={{ fontSize: 14 }} />{label}
+    </span>
+  );
+};
+
 const draftOf = (p: Project): Draft => {
   const x = getProjectExtras(p);
   return {
     accountName: p.accountName, accountUrl: p.accountUrl, brandTag: p.brandTag, projectName: p.projectName,
-    creator: p.creator, creatorAvatar: p.creatorAvatar, startDate: p.startDate, endDate: p.endDate, isEvergreen: !!p.isEvergreen,
+    creator: p.creator, creatorAvatar: p.creatorAvatar, startDate: p.startDate, endDate: p.endDate, isEvergreen: !!p.isEvergreen, workflowStatus: p.workflowStatus,
     tags: [...x.tags], templates: [...p.templates], backgrounds: [...p.backgrounds],
     customVariables: [...x.customVariables], logos: [...x.logos], audio: [...x.audio],
   };
@@ -72,71 +116,51 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const MIXED = 'Multiple';
 
-const fieldSx = (changed?: boolean) => ({
-  '& .MuiOutlinedInput-root': { fontFamily: FONT, fontSize: 15, background: changed ? '#f4f2ff' : '#fff' },
-  // A staged change: purple outline, so it reads as "this will be applied".
-  ...(changed ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: PURPLE, borderWidth: 2 } } : {}),
+const fieldSx = () => ({
+  '& .MuiOutlinedInput-root': { fontFamily: FONT, fontSize: 15, background: '#fff' },
   // "Multiple values": the selection disagrees — light grey and italic, so it
   // reads as an absence of a value rather than as a value.
   '& input::placeholder': { fontStyle: 'italic', color: '#8c8999', opacity: 1 },
 });
 
-interface FieldMeta { changed: boolean; mixed: boolean; was?: string; wasMixed?: boolean }
+/** Whether a field was edited, and whether the selection disagrees on it: what the change count reads. */
+interface FieldMeta { changed: boolean; mixed: boolean }
 
-const ChangedTag = () => (
-  <span style={{ fontSize: 11, fontWeight: 500, fontFamily: FONT, borderRadius: 100, padding: '2px 8px', color: PURPLE, background: '#e9e6ff' }}>Changed</span>
-);
-
-/** Label, a "Changed" tag and the "Was … · Undo" line around a control. */
-const Field = ({ label, meta, onReset, hint, span, children }: {
-  label: string; meta?: FieldMeta; onReset?: () => void; hint?: React.ReactNode; span?: number; children: React.ReactNode;
+/** A label above a control, with an optional hint under it. */
+const Field = ({ label, hint, span, children }: {
+  label: string; hint?: React.ReactNode; span?: number; children: React.ReactNode;
 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: span ? `span ${span}` : undefined, minWidth: 0 }}>
-    {label && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#4b4958', fontFamily: FONT }}>
-        {label}
-        {meta?.changed && <ChangedTag />}
-      </div>
-    )}
+    {label && <div style={{ fontSize: 12, fontWeight: 500, color: '#4b4958', fontFamily: FONT }}>{label}</div>}
     {children}
-    {(meta?.changed || hint) && (
-      <div style={{ fontSize: 12, color: '#686576', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {meta?.changed ? (
-          <>
-            {meta.was !== undefined ? `Was ${meta.was} ·` : 'Edited ·'}
-            <button type="button" onClick={onReset}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: 'none', background: 'none', cursor: 'pointer', padding: 0, color: PURPLE, fontSize: 12, fontWeight: 500, fontFamily: FONT }}>
-              <Undo style={{ fontSize: 13 }} />{meta.wasMixed ? 'Keep each' : 'Undo'}
-            </button>
-          </>
-        ) : hint}
-      </div>
-    )}
+    {hint && <div style={{ fontSize: 12, color: '#686576', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{hint}</div>}
   </div>
 );
 
-const MixedText = ({ label, value, onChange, disabled, placeholder, changed }: {
-  label: string; value: string | undefined; onChange?: (v: string) => void;
-  disabled?: boolean; placeholder?: string; changed?: boolean;
-}) => (
-  <TextField
-    size="small" fullWidth value={value ?? ''} disabled={disabled}
-    placeholder={value === undefined ? MIXED : placeholder}
-    onChange={(e) => onChange?.(e.target.value)}
-    slotProps={{ htmlInput: { 'aria-label': label } }} sx={fieldSx(changed)}
-  />
-);
-
-const MixedSelect = ({ label, options, value, onChange, changed }: {
-  label: string; options: string[]; value: string | undefined; onChange: (v: string) => void; changed?: boolean;
+const MixedSelect = ({ label, options, value, onChange, renderOption }: {
+  label: string; options: string[]; value: string | undefined; onChange: (v: string) => void;
+  /** Draws an option in the menu, in place of its plain text. */
+  renderOption?: (option: string) => React.ReactNode;
 }) => (
   <Autocomplete
     size="small" fullWidth disableClearable options={options}
     value={(value ?? null) as unknown as string}
     onChange={(_, v) => v && onChange(v)}
+    // The dialog is a fixed layer at z-index 100001; the menu would otherwise open behind it.
+    slotProps={{ popper: { sx: { zIndex: 100002 } } }}
+    renderOption={renderOption ? (props, option) => {
+      const { key, ...rest } = props;
+      return <li key={key} {...rest} style={{ ...rest.style, padding: '3px 12px' }}>{renderOption(option)}</li>;
+    } : undefined}
     renderInput={(params) => (
       <TextField {...params} placeholder={value === undefined ? MIXED : undefined}
-        slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label } }} sx={fieldSx(changed)} />
+        slotProps={{
+          ...params.slotProps,
+          // With a drawn option, the chosen one is drawn in the field too; the plain text behind it is hidden.
+          input: renderOption && value !== undefined ? { ...params.slotProps?.input, startAdornment: renderOption(value) } : params.slotProps?.input,
+          htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label, ...(renderOption && value !== undefined ? { readOnly: true } : {}) },
+        }}
+        sx={{ ...fieldSx(), ...(renderOption && value !== undefined ? { '& input': { color: 'transparent', caretColor: 'transparent', cursor: 'pointer', minWidth: 0, width: 0, flexGrow: 1 } } : {}) }} />
     )}
   />
 );
@@ -154,8 +178,8 @@ const fromIso = (iso: string) => {
 
 /** A date input that can say "Multiple values": a native date control cannot
  *  show placeholder text, so while mixed it is a text field until focused. */
-const MixedDate = ({ label, value, onChange, changed }: {
-  label: string; value: string | undefined; onChange: (v: string) => void; changed?: boolean;
+const MixedDate = ({ label, value, onChange }: {
+  label: string; value: string | undefined; onChange: (v: string) => void;
 }) => {
   const [focused, setFocused] = useState(false);
   const mixed = value === undefined;
@@ -166,8 +190,8 @@ const MixedDate = ({ label, value, onChange, changed }: {
       value={mixed ? '' : toIso(value)}
       placeholder={mixed ? MIXED : undefined}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      onChange={(e) => e.target.value && onChange(fromIso(e.target.value))}
-      slotProps={{ htmlInput: { 'aria-label': label } }} sx={fieldSx(changed)}
+      onChange={(e) => onChange(e.target.value ? fromIso(e.target.value) : '')}
+      slotProps={{ htmlInput: { 'aria-label': label } }} sx={fieldSx()}
     />
   );
 };
@@ -320,7 +344,7 @@ const diffKeyOf = (list: ListKey, item: unknown): string => {
 
 const labelOf = (list: ListKey, item: unknown): string => {
   if (list === 'customVariables') { const v = item as CustomVariable; return `${v.name} = ${v.value}`; }
-  if (list === 'backgrounds') return (item as BgCollection).key;
+  if (list === 'backgrounds') return collectionName((item as BgCollection).key);
   return (item as { name: string }).name;
 };
 
@@ -351,6 +375,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const [showProjects, setShowProjects] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [addingTemplates, setAddingTemplates] = useState(false);
+  const [addingLogos, setAddingLogos] = useState<LogoSlot | null>(null);
+  const [addingBackgrounds, setAddingBackgrounds] = useState(false);
+  /** Collections added while the Add Backgrounds panel has been open. */
+  const [addedCollections, setAddedCollections] = useState<string[]>([]);
   const [showChanges, setShowChanges] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [addingVar, setAddingVar] = useState(false);
@@ -363,7 +392,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
@@ -372,21 +401,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     setDrafts((prev) => Object.fromEntries(ids.map((id) => [id, { ...prev[id], ...patch }])));
   const patchEach = (fn: (d: Draft, id: string) => Partial<Draft>) =>
     setDrafts((prev) => Object.fromEntries(ids.map((id) => [id, { ...prev[id], ...fn(prev[id], id) }])));
-  /** Puts fields back to what each project had when the dialog opened. */
-  const reset = (keys: (keyof Draft)[]) =>
-    setDrafts((prev) => Object.fromEntries(ids.map((id) => [
-      id, { ...prev[id], ...Object.fromEntries(keys.map((k) => [k, initial[id][k]])) },
-    ])));
-
   // ── Fields ────────────────────────────────────────────────────────────────
-  const accountOptions = useMemo(
-    () => [...new Set([...ACCOUNTS.map((a) => a.name), ...PROJECTS.map((p) => p.accountName)])].sort(),
-    [],
-  );
-  const brandOptions = useMemo(
-    () => [...new Set([...ACCOUNTS.map((a) => a.brand), ...PROJECTS.map((p) => p.brandTag)])].sort(),
-    [],
-  );
   const owners = useMemo(() => {
     const byName = new Map<string, string>();
     MOCK_TEAMMATES.forEach((t) => byName.set(t.name, t.avatarUrl));
@@ -394,26 +409,19 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     return byName;
   }, []);
 
-  const evergreen = new Set(ids.filter((id) => drafts[id].isEvergreen));
-  const dated = ids.filter((id) => !evergreen.has(id));
-  const endDate = common(dated.map((id) => drafts[id].endDate));
-
-  const commonTags = all[0].tags.filter((t) => all.every((d) => d.tags.includes(t)));
-  const partialTags = [...new Set(all.flatMap((d) => d.tags))]
-    .filter((t) => !commonTags.includes(t))
-    .map((t) => ({ tag: t, n: all.filter((d) => d.tags.includes(t)).length }));
-
   const changedKeys = (keys: (keyof Draft)[]) =>
     ids.some((id) => keys.some((k) => !same(drafts[id][k], initial[id][k])));
-  const fmt = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v || '\u2014'));
-  const metaOf = (key: 'accountName' | 'brandTag' | 'projectName' | 'creator' | 'startDate' | 'endDate' | 'isEvergreen'): FieldMeta => {
-    const was = common(ids.map((id) => fmt(initial[id][key])));
+  const fmt = (v: unknown) => String(v || '\u2014');
+  /** What a field's value reads as: a status by its label. */
+  const shown = (key: keyof Draft, v: unknown) => (key === 'workflowStatus' ? statusLabel(v as ProjectWorkflowStatus) : fmt(v));
+  const metaOf = (key: 'creator' | 'workflowStatus'): FieldMeta => {
     return {
-      changed: changedKeys([key]), mixed: common(ids.map((id) => fmt(drafts[id][key]))) === undefined,
-      was: was ?? MIXED, wasMixed: was === undefined,
+      changed: changedKeys([key]), mixed: common(ids.map((id) => shown(key, drafts[id][key]))) === undefined,
     };
   };
-  const tagsMeta: FieldMeta = { changed: changedKeys(['tags']), mixed: partialTags.length > 0 };
+
+  /** The status menu: the statuses a bulk edit can set, plus any status the selection already has that is not among them. */
+  const statusOptions = [...new Set([...STATUS_OPTIONS.map((o) => o.label), ...all.map((d) => statusLabel(d.workflowStatus))])];
 
   // ── Defaults ──────────────────────────────────────────────────────────────
   const refs = projects.map((p) => ({ id: p.id, name: p.projectName }));
@@ -427,8 +435,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       // The whole collection comes along, in the sizes of each project's own templates.
       patchEach((d, id) => {
         if (only && id !== only) return {};
-        const sizes = new Set(d.templates.map((t) => t.id));
-        const add = BACKGROUNDS.filter((b) => collectionKey(b.name) === key && sizes.has(b.templateId) && !d.backgrounds.some((x) => x.id === b.id));
+        const add = collectionBackgrounds(key, d.templates).filter((b) => !d.backgrounds.some((x) => x.id === b.id));
         return { backgrounds: [...d.backgrounds, ...add] };
       });
       return;
@@ -454,6 +461,31 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   };
   const cancelVariable = () => { setVarName(''); setVarValue(''); setAddingVar(false); };
 
+  // Templates: everything the library has that no selected project carries yet.
+  const templatesToAdd = TEMPLATES.filter((t) => !all.some((d) => d.templates.some((x) => x.id === t.id)));
+  const addTemplates = (templateIds: string[]) => {
+    const picked = TEMPLATES.filter((t) => templateIds.includes(t.id));
+    patchEach((d) => ({ templates: [...d.templates, ...picked.filter((t) => !d.templates.some((x) => x.id === t.id))] }));
+  };
+
+  // Logos: a library logo is added to a type ("slot"), under an id that remembers which one.
+  const libraryIdOf = (id: string) => id.split('@')[0];
+  const logosToAdd = (slot: LogoSlot) => LOGO_LIBRARY.filter((l) => !all.some((d) => d.logos.some((x) => x.slot === slot && libraryIdOf(x.id) === l.id)));
+  const addLogos = (slot: LogoSlot, libraryIds: string[]) => {
+    const picked = LOGO_LIBRARY.filter((l) => libraryIds.includes(l.id)).map((l) => ({ ...l, id: `${l.id}@${slot}`, slot }));
+    patchEach((d) => ({ logos: [...d.logos, ...picked.filter((l) => !d.logos.some((x) => x.id === l.id))] }));
+  };
+  const logoDate = (id: string, k: 'startDate' | 'endDate') =>
+    common(all.flatMap((d) => d.logos.filter((l) => l.id === id).map((l) => l[k] ?? '')));
+  const setLogoDate = (id: string, k: 'startDate' | 'endDate', v: string) =>
+    patchEach((d) => ({ logos: d.logos.map((l) => (l.id === id ? { ...l, [k]: v } : l)) }));
+
+  // Backgrounds: collections the list does not have yet, added at every size of each project's templates.
+  const addCollection = (key: string) => {
+    patchEach((d) => ({ backgrounds: [...d.backgrounds, ...collectionBackgrounds(key, d.templates).filter((b) => !d.backgrounds.some((x) => x.id === b.id))] }));
+    setAddedCollections((prev) => [...prev, key]);
+  };
+
   const group = <T,>(list: ListKey) =>
     groupDefaults<T>(refs, (id) => itemsIn(list, drafts[id]) as T[], (i) => (list === 'customVariables' ? keyOf(list, i) : diffKeyOf(list, i)),
       (i) => (list === 'customVariables' ? (i as CustomVariable).name : labelOf(list, i)));
@@ -465,15 +497,12 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     audio: group<ProjectAudio>('audio'),
   };
 
-  /** Why adding would change nothing: a background only goes to projects that have a template of its size. */
+  /** Why adding would change nothing: a collection already has every size of the project. */
   const addBlocked = (list: ListKey, key: string, only?: string): string | undefined => {
     if (list !== 'backgrounds') return undefined;
-    const fitsIn = (d: Draft) => {
-      const sizes = new Set(d.templates.map((t) => t.id));
-      return BACKGROUNDS.some((b) => collectionKey(b.name) === key && sizes.has(b.templateId) && !d.backgrounds.some((x) => x.id === b.id));
-    };
-    if (only) return fitsIn(drafts[only]) ? undefined : 'This project has no template of this size.';
-    return all.some(fitsIn) ? undefined : 'The other selected projects have no template of this size.';
+    const lacks = (d: Draft) => collectionBackgrounds(key, d.templates).some((b) => !d.backgrounds.some((x) => x.id === b.id));
+    if (only) return lacks(drafts[only]) ? undefined : 'This project already has it.';
+    return all.some(lacks) ? undefined : 'Already present in all selected projects.';
   };
 
   const handlers = (list: ListKey) => ({
@@ -487,7 +516,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); };
+  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); };
   const toggleSelected = (key: string) => setSelected((prev) => {
     const next = new Set(prev);
     if (!next.delete(key)) next.add(key);
@@ -532,22 +561,21 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     backgrounds: diffOf((d) => itemsIn('backgrounds', d), (i) => diffKeyOf('backgrounds', i), (i) => labelOf('backgrounds', i)),
     logos: diffOf((d) => itemsIn('logos', d), (i) => diffKeyOf('logos', i), (i) => labelOf('logos', i)),
     audio: diffOf((d) => itemsIn('audio', d), (i) => diffKeyOf('audio', i), (i) => labelOf('audio', i)),
-    tags: diffOf((d) => d.tags, (i) => String(i), (i) => String(i)),
   };
   const countOf = (d: { added: Change[]; removed: Change[] }) => d.added.length + d.removed.length;
 
   const INFO_FIELDS: { label: string; keys: (keyof Draft)[]; meta: FieldMeta }[] = [
-    { label: 'Account', keys: ['accountName', 'accountUrl'], meta: metaOf('accountName') },
-    { label: 'Brand', keys: ['brandTag'], meta: metaOf('brandTag') },
-    { label: 'Project name', keys: ['projectName'], meta: metaOf('projectName') },
     { label: 'Owner', keys: ['creator', 'creatorAvatar'], meta: metaOf('creator') },
-    { label: 'Start date', keys: ['startDate'], meta: metaOf('startDate') },
-    { label: 'End date', keys: ['endDate'], meta: metaOf('endDate') },
-    { label: 'Evergreen', keys: ['isEvergreen'], meta: metaOf('isEvergreen') },
+    { label: 'Status', keys: ['workflowStatus'], meta: metaOf('workflowStatus') },
   ];
-  const infoChanges = INFO_FIELDS.filter((f) => f.meta.changed).length + (tagsMeta.changed ? 1 : 0);
-  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges : countOf(diffs[s]));
-  const totalChanges = infoChanges + NAV.reduce((sum, s) => sum + countOf(diffs[s.id as ListKey]), 0);
+  const infoChanges = INFO_FIELDS.filter((f) => f.meta.changed).length;
+  const dateRange = (l: ProjectLogo) => (l.startDate || l.endDate ? `${l.startDate || '\u2026'} \u2013 ${l.endDate || '\u2026'}` : 'no dates');
+  const datesChanged = (was: ProjectLogo | undefined, l: ProjectLogo) =>
+    !!was && ((was.startDate ?? '') !== (l.startDate ?? '') || (was.endDate ?? '') !== (l.endDate ?? ''));
+  /** Logos whose run dates were edited, on any project: one change each. */
+  const logoDateIds = new Set(ids.flatMap((id) => drafts[id].logos.filter((l) => datesChanged(initial[id].logos.find((x) => x.id === l.id), l)).map((l) => l.id)));
+  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges : countOf(diffs[s]) + (s === 'logos' ? logoDateIds.size : 0));
+  const totalChanges = infoChanges + logoDateIds.size + NAV.reduce((sum, s) => sum + countOf(diffs[s.id as ListKey]), 0);
 
   /** Undoes one change on one project, leaving everything else as edited. */
   const patchOne = (id: string, fn: (d: Draft) => Partial<Draft>) =>
@@ -560,20 +588,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     INFO_FIELDS.forEach((f) => {
       if (f.keys.some((k) => !same(drafts[id][k], initial[id][k]))) {
         lines.push({
-          prefix: `${f.label}: `, name: `${fmt(initial[id][f.keys[0]])} \u2192 ${fmt(drafts[id][f.keys[0]])}`,
+          prefix: `${f.label}: `, name: `${shown(f.keys[0], initial[id][f.keys[0]])} \u2192 ${shown(f.keys[0], drafts[id][f.keys[0]])}`,
           undo: () => patchOne(id, () => Object.fromEntries(f.keys.map((k) => [k, initial[id][k]]))),
         });
       }
     });
-
-    const tagsBefore = initial[id].tags;
-    const tagsNow = drafts[id].tags;
-    tagsNow.filter((t) => !tagsBefore.includes(t)).forEach((t) => lines.push({
-      prefix: 'Tags: ', name: t, isNew: true, undo: () => patchOne(id, (d) => ({ tags: d.tags.filter((x) => x !== t) })),
-    }));
-    tagsBefore.filter((t) => !tagsNow.includes(t)).forEach((t) => lines.push({
-      prefix: 'Tags: ', name: t, struck: true, undo: () => patchOne(id, (d) => ({ tags: [...d.tags, t] })),
-    }));
 
     NAV.forEach(({ id: list, label }) => {
       if (list === 'customVariables') {
@@ -612,6 +631,14 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         }),
       }));
     });
+    drafts[id].logos.forEach((l) => {
+      const was = initial[id].logos.find((x) => x.id === l.id);
+      if (!was || !datesChanged(was, l)) return;
+      lines.push({
+        prefix: 'Logos: ', name: `${l.name} dates ${dateRange(was)} \u2192 ${dateRange(l)}`,
+        undo: () => patchOne(id, (d) => ({ logos: d.logos.map((x) => (x.id === l.id ? { ...x, startDate: was.startDate, endDate: was.endDate } : x)) })),
+      });
+    });
     return lines;
   };
   const changedProjects = projects.map((p) => ({ p, lines: projectChanges(p.id) })).filter((x) => x.lines.length > 0);
@@ -622,6 +649,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       Object.assign(p, {
         accountName: d.accountName, accountUrl: d.accountUrl, brandTag: d.brandTag, projectName: d.projectName,
         creator: d.creator, creatorAvatar: d.creatorAvatar, startDate: d.startDate, endDate: d.endDate, isEvergreen: d.isEvergreen,
+        workflowStatus: d.workflowStatus,
         templates: d.templates, backgrounds: d.backgrounds, lastUpdated: 'Just now',
       });
       saveProjectExtras(p.id, { tags: d.tags, customVariables: d.customVariables, logos: d.logos, audio: d.audio });
@@ -643,83 +671,20 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const infoView = (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
-        <Field label="Account" meta={INFO_FIELDS[0].meta} onReset={() => reset(['accountName', 'accountUrl'])}>
-          <MixedSelect label="Account" options={accountOptions} changed={INFO_FIELDS[0].meta.changed}
-            value={common(all.map((d) => d.accountName))}
-            onChange={(v) => {
-              const acc = ACCOUNTS.find((a) => a.name === v);
-              patchAll({ accountName: v, ...(acc ? { accountUrl: `https://${acc.disclosureUrl}` } : {}) });
-            }} />
-        </Field>
-        <Field label="Brand" meta={INFO_FIELDS[1].meta} onReset={() => reset(['brandTag'])}>
-          <MixedSelect label="Brand" options={brandOptions} changed={INFO_FIELDS[1].meta.changed}
-            value={common(all.map((d) => d.brandTag))} onChange={(v) => patchAll({ brandTag: v })} />
-        </Field>
-        <Field label="Project name" meta={INFO_FIELDS[2].meta} onReset={() => reset(['projectName'])}>
-          <MixedText label="Project name" changed={INFO_FIELDS[2].meta.changed}
-            value={common(all.map((d) => d.projectName))} onChange={(v) => patchAll({ projectName: v })} />
-        </Field>
-        <Field label="Owner" meta={INFO_FIELDS[3].meta} onReset={() => reset(['creator', 'creatorAvatar'])}>
-          <MixedSelect label="Owner" options={[...owners.keys()]} changed={INFO_FIELDS[3].meta.changed}
+        <Field label="Owner">
+          <MixedSelect label="Owner" options={[...owners.keys()]}
             value={common(all.map((d) => d.creator))}
             onChange={(v) => patchAll({ creator: v, creatorAvatar: owners.get(v) ?? '' })} />
         </Field>
-        <Field label="" span={2} meta={INFO_FIELDS[6].meta} onReset={() => reset(['isEvergreen'])}>
-          <FormControlLabel sx={{ ml: -1, '& .MuiFormControlLabel-label': { fontFamily: FONT, fontSize: 14 } }}
-            control={(
-              <Checkbox size="small" checked={all.every((d) => d.isEvergreen)}
-                indeterminate={INFO_FIELDS[6].meta.mixed}
-                onChange={() => patchAll({ isEvergreen: !all.every((d) => d.isEvergreen) })}
-                sx={{ '&.Mui-checked, &.MuiCheckbox-indeterminate': { color: PURPLE } }} />
-            )}
-            label="Evergreen" />
-        </Field>
-        <Field label="Start date" meta={INFO_FIELDS[4].meta} onReset={() => reset(['startDate'])}>
-          <MixedDate label="Start date" changed={INFO_FIELDS[4].meta.changed}
-            value={common(all.map((d) => d.startDate))} onChange={(v) => patchAll({ startDate: v })} />
-        </Field>
-        {dated.length === 0 ? (
-          <Field label="End date" hint={n > 1 ? 'All selected projects are evergreen' : 'Evergreen projects have no end date'}>
-            <MixedText label="End date" value="" disabled placeholder="No end date" />
-          </Field>
-        ) : (
-          <Field label="End date" meta={INFO_FIELDS[5].meta} onReset={() => reset(['endDate'])}
-            hint={evergreen.size > 0 ? 'Evergreen projects have no end date' : undefined}>
-            <MixedDate label="End date" value={endDate} changed={INFO_FIELDS[5].meta.changed}
-              onChange={(v) => patchEach((_, id) => (evergreen.has(id) ? {} : { endDate: v }))} />
-          </Field>
-        )}
-        <Field label="Tags" span={2} meta={{ ...tagsMeta, mixed: false }} onReset={() => reset(['tags'])}
-          hint={partialTags.length > 0 && (
-            <>
-              On some projects:
-              {partialTags.map((t) => (
-                <Chip key={t.tag} size="small" label={`${t.tag} · ${t.n} of ${n}`} sx={{ fontFamily: FONT, background: '#fff4e5', color: '#8a4b00' }} />
-              ))}
-            </>
-          )}>
-          <Autocomplete
-            multiple freeSolo size="small" options={[] as string[]} value={commonTags}
-            onChange={(_, next) => {
-              const added = next.filter((t) => !commonTags.includes(t));
-              const removed = commonTags.filter((t) => !next.includes(t));
-              patchEach((d) => ({
-                tags: [...d.tags.filter((t) => !removed.includes(t)), ...added.filter((t) => !d.tags.includes(t))],
-              }));
-            }}
-            renderValue={(value, getItemProps) => value.map((t, i) => {
-              const { key, ...rest } = getItemProps({ index: i });
-              return <Chip key={key} size="small" label={t} {...rest} />;
-            })}
-            renderInput={(params) => (
-              <TextField {...params} placeholder={commonTags.length ? 'Add a tag' : 'Add tags'}
-                slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': 'Tags' } }}
-                sx={fieldSx(tagsMeta.changed)} />
-            )}
-          />
+        <Field label="Status">
+          <MixedSelect label="Status" options={statusOptions} renderOption={(label) => <StatusPill label={label} />}
+            value={common(all.map((d) => statusLabel(d.workflowStatus)))}
+            onChange={(v) => {
+              const next = STATUS_OPTIONS.find((o) => o.label === v)?.value;
+              if (next) patchAll({ workflowStatus: next });
+            }} />
         </Field>
       </div>
-
     </div>
   );
 
@@ -806,7 +771,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Overline>Collections ({g.backgrounds.length})</Overline>
           <DefaultsGroupList<BgCollection> {...handlers('backgrounds')} selected={selected} onToggle={toggleSelected} layout="cards" groups={g.backgrounds}
             visual={(c) => thumbImg(c.url)}
-            title={(c) => c.key} subtitle={(c) => `${c.sizes} size${c.sizes === 1 ? '' : 's'}`}
+            title={(c) => collectionName(c.key)} subtitle={(c) => `${c.sizes} size${c.sizes === 1 ? '' : 's'}`}
             emptyText="No backgrounds on the selected projects." />
         </>
       )}
@@ -816,12 +781,24 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
             <div key={slot}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
                 <Overline>{slot} ({logoGroups(slot).length})</Overline>
-                <AddButton label="Add logos" />
+                <AddButton label="Add logos" onClick={() => setAddingLogos(slot)} />
               </div>
               <DefaultsGroupList<ProjectLogo> {...handlers('logos')} selected={selected} onToggle={toggleSelected} layout="cards" groups={logoGroups(slot)}
-                visual={() => thumbImg(bmwLogoSrc, true)}
+                visual={(l) => thumbImg(l.src ?? bmwLogoSrc, true)}
                 title={(l) => l.name} subtitle={(l) => l.scope}
-                emptyText="No logos yet for this placeholder." />
+                emptyText="No logos yet for this type."
+                footer={slot === 'Event Logo' ? (l) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                    <Labeled label="Start date">
+                      <MixedDate label={`${l.name} start date`} value={logoDate(l.id, 'startDate')}
+                        onChange={(v) => setLogoDate(l.id, 'startDate', v)} />
+                    </Labeled>
+                    <Labeled label="End date">
+                      <MixedDate label={`${l.name} end date`} value={logoDate(l.id, 'endDate')}
+                        onChange={(v) => setLogoDate(l.id, 'endDate', v)} />
+                    </Labeled>
+                  </div>
+                ) : undefined} />
             </div>
           ))}
         </div>
@@ -974,8 +951,8 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
               action={
                 selected.size > 0 ? <SelectionBar count={selected.size} bulk={n > 1} canAdd={canAddSelected} onClear={() => setSelected(new Set())} onAdd={addSelectedToAll} onRemove={removeSelectedFromAll} />
                   : section === 'customVariables' ? <AddButton label="Add variable" disabled={addingVar} onClick={() => setAddingVar(true)} />
-                  : section === 'templates' ? <AddButton label="Add templates" />
-                  : section === 'backgrounds' ? <AddButton label="Add backgrounds" />
+                  : section === 'templates' ? <AddButton label="Add templates" onClick={() => setAddingTemplates(true)} />
+                  : section === 'backgrounds' ? <AddButton label="Add backgrounds" onClick={() => { setAddedCollections([]); setAddingBackgrounds(true); }} />
                   : section === 'audio' ? <AddButton label="Add audio" />
                   : undefined
               } />
@@ -989,7 +966,21 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Button variant="outlined" onClick={requestClose} sx={button(false)}>Cancel</Button>
           <Button variant="contained" disableElevation disabled={totalChanges === 0} onClick={save} sx={button(true)}>Apply changes</Button>
         </div>
+        {addingBackgrounds && (
+          <AddBackgroundsPanel
+            available={BACKGROUND_COLLECTIONS.filter((c) => !g.backgrounds.some((x) => x.key === c.key))}
+            added={addedCollections.map((k) => BACKGROUND_COLLECTIONS.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c)}
+            projectCount={n} onPick={addCollection} onClose={() => setAddingBackgrounds(false)} />
+        )}
       </div>
+      {addingTemplates && (
+        <AddTemplatesDialog open inset={16} zIndex={100005} projectTemplateIds={new Set<string>()} availableTemplates={templatesToAdd}
+          onClose={() => setAddingTemplates(false)} onAdd={addTemplates} />
+      )}
+      {addingLogos && (
+        <AddLogosDialog logos={logosToAdd(addingLogos)} onClose={() => setAddingLogos(null)}
+          onAdd={(libraryIds) => { addLogos(addingLogos, libraryIds); setAddingLogos(null); }} />
+      )}
       {pendingRemoval && (
         <ConfirmModal id="remove-project" title={`Remove ${pendingRemoval.projectName} from this edit?`}
           body="All changes made in this edit so far will not be applied to this project. It will keep its current values."

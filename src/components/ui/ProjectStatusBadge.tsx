@@ -1,4 +1,4 @@
-import { CheckCircle, WarningAmber, PendingOutlined } from '@mui/icons-material';
+import { CheckCircle, WarningAmber, PendingOutlined, EditNoteOutlined, EventBusyOutlined, Inventory2Outlined } from '@mui/icons-material';
 import { InReviewIcon } from './InReviewIcon';
 import { LiveIcon } from './LiveIcon';
 
@@ -11,6 +11,9 @@ export type ProjectWorkflowStatus =
   | 'campaign_loaded'
   | 'live'
   | 'done'
+  | 'needs_edits'
+  | 'expired'
+  | 'archived'
   | 'draft';
 
 interface Config {
@@ -71,6 +74,25 @@ export const STATUS_CONFIG: Record<ProjectWorkflowStatus, Config> = {
     background: '#e8f5e9',
     color: '#1b5e20',
     Icon: CheckCircle,
+  },
+  needs_edits: {
+    label: 'Needs Edits',
+    background: 'rgba(225, 118, 19, 0.08)',
+    color: '#c45500',
+    opacity: 0.75,
+    Icon: EditNoteOutlined,
+  },
+  expired: {
+    label: 'Expired',
+    background: '#f0f2f4',
+    color: '#686576',
+    Icon: EventBusyOutlined,
+  },
+  archived: {
+    label: 'Archived',
+    background: '#f0f2f4',
+    color: '#686576',
+    Icon: Inventory2Outlined,
   },
   draft: {
     label: 'Draft',

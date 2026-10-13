@@ -181,7 +181,7 @@ const Coverage = ({ projects, ids, title, right, onRemoveFrom, onAddTo, addBlock
 
 export function DefaultsGroupList<T>({
   projects, groups, layout, visual, title, subtitle, renderRow, onRemoveAll, onRemoveFrom, onApplyToAll,
-  emptyText, addControl, extraRow, selected, onToggle, addBlocked, onAddTo, addBlockedFor,
+  emptyText, addControl, extraRow, selected, onToggle, addBlocked, onAddTo, addBlockedFor, footer,
 }: {
   projects: readonly ProjectRef[];
   groups: DefaultGroup<T>[];
@@ -207,6 +207,8 @@ export function DefaultsGroupList<T>({
   onToggle: (key: string) => void;
   /** Why "Add to all" would do nothing for this default, when it isn't just that every project has it. */
   addBlocked?: (key: string) => string | undefined;
+  /** Extra controls under a card, e.g. the dates of an event logo (cards only). */
+  footer?: (item: T, group: DefaultGroup<T>) => React.ReactNode;
   /** Adds a default to one project that is missing it. */
   onAddTo: (key: string, projectId: string) => void;
   addBlockedFor?: (key: string, projectId: string) => string | undefined;
@@ -260,6 +262,7 @@ export function DefaultsGroupList<T>({
                 <p style={{ margin: 0, fontSize: 11, fontFamily: FONT, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66 }}>{subtitle(g.item)}</p>
               )}
             </div>
+            {footer?.(g.item, g)}
           </Box>
         );
       })}

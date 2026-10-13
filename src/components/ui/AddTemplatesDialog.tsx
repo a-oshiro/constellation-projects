@@ -249,6 +249,9 @@ interface AddTemplatesDialogProps {
   onAdd?: (ids: string[]) => void;
   projectTemplateIds: Set<string>;
   availableTemplates: Template[];
+  /** Fills the viewport, this many px from every side, instead of the default centred box. */
+  inset?: number;
+  zIndex?: number;
 }
 
 export function AddTemplatesDialog({
@@ -257,6 +260,8 @@ export function AddTemplatesDialog({
   onAdd,
   projectTemplateIds,
   availableTemplates,
+  inset,
+  zIndex = 100000,
 }: AddTemplatesDialogProps) {
   const { widgetWidth } = useTestWidget();
   const [search, setSearch] = useState('');
@@ -294,8 +299,8 @@ export function AddTemplatesDialog({
     <div
       style={{
         position: 'fixed',
-        top: 0, right: 0, bottom: 0, left: widgetWidth,
-        zIndex: 100000,
+        top: 0, right: 0, bottom: 0, left: inset !== undefined ? 0 : widgetWidth,
+        zIndex,
         background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'left 0.2s ease',
@@ -308,10 +313,10 @@ export function AddTemplatesDialog({
         style={{
           background: '#ffffff',
           borderRadius: 8,
-          width: 'calc(100% - 80px)',
-          maxWidth: 1400,
-          height: 'calc(100% - 80px)',
-          maxHeight: 860,
+          width: inset !== undefined ? `calc(100% - ${inset * 2}px)` : 'calc(100% - 80px)',
+          maxWidth: inset !== undefined ? 'none' : 1400,
+          height: inset !== undefined ? `calc(100% - ${inset * 2}px)` : 'calc(100% - 80px)',
+          maxHeight: inset !== undefined ? 'none' : 860,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
