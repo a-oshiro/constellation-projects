@@ -4,7 +4,9 @@ import { OFFERS } from './offers';
 import { TEMPLATES, BACKGROUNDS, PROJECT_INFO, CURRENT_USER } from './mockData';
 import { SEATTLE_OFFERS } from './evergreen/seattleOffers';
 import { SEATTLE_ALERTS, buildSampleEvergreenAlerts } from './evergreen/alerts';
-import constellationLogo from '../assets/constellation-logo.png';
+import { EVERGREEN_DEALERSHIP_NAMES } from './evergreen/dealerships';
+import { LOGO_LIBRARY, getProjectExtras, saveProjectExtras } from './projectDefaults';
+import { collectionBackgrounds } from './backgroundCollections';
 
 /** Status of a single accordion section on the Project Overview page. */
 export type SectionStatus = 'done' | 'in_progress' | 'draft';
@@ -238,8 +240,8 @@ const HAND_WRITTEN_PROJECTS: Project[] = [
     workflowStatus: 'live',
     startDate: 'Aug 1, 2026',
     endDate: '∞',
-    creator: 'AI AutoAgent',
-    creatorAvatar: constellationLogo,
+    creator: 'Michael Stuart',
+    creatorAvatar: 'https://i.pravatar.cc/32?img=52',
     lastUpdated: 'Just now',
     created: '08/2026',
     accountUrl: PROJECT_INFO.accountUrl,
@@ -336,6 +338,12 @@ const MONTH_CYCLE: { start: string; end: string; created: string }[] = [
   { start: 'Dec 1, 2026', end: 'Dec 31, 2026', created: '12/2026' },
 ];
 
+/** A small stable number from a string, to vary seeds without randomness. */
+const strHash = (s: string) => [...s].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+
+/** The Evergreen projects added for the dealership list: project id → dealership, for their logo and audio. */
+const NEW_EVERGREEN = new Map<string, string>();
+
 // Usable (non swap-only) offer/template ids, reused across every generated project.
 const OFFER_ID_POOL = OFFERS.filter((o) => !o.swapOnly).map((o) => o.id);
 const TEMPLATE_ID_POOL = TEMPLATES.map((t) => t.id);
@@ -387,8 +395,8 @@ function buildGeneratedProjects(): Project[] {
       workflowStatus: 'live',
       startDate: MONTH_CYCLE[i % MONTH_CYCLE.length].start,
       endDate: '∞',
-      creator: 'AI AutoAgent',
-      creatorAvatar: constellationLogo,
+      creator: CREATOR_POOL[i % CREATOR_POOL.length].name,
+      creatorAvatar: CREATOR_POOL[i % CREATOR_POOL.length].avatar,
       lastUpdated: LAST_UPDATED_CYCLE[i % LAST_UPDATED_CYCLE.length],
       created: MONTH_CYCLE[i % MONTH_CYCLE.length].created,
       accountUrl: dealership.url,
@@ -435,10 +443,68 @@ function buildGeneratedProjects(): Project[] {
     });
   });
 
+  // One Evergreen project for every dealership on the list that does not have one yet (never a second per account).
+  const evergreenAccounts = new Set([...HAND_WRITTEN_PROJECTS, ...projects].filter((p) => p.isEvergreen).map((p) => p.accountName));
+  const usedCodes = new Set([...HAND_WRITTEN_PROJECTS, ...projects].map((p) => p.accountCode));
+  const bundle = [templateById('tmpl-2'), templateById('tmpl-4')];
+  const bundleBackgrounds = [...collectionBackgrounds('Background 1', bundle), ...collectionBackgrounds('Background 4', bundle)];
+  let serial = EVERGREEN_DEALERSHIP_COUNT + 2;
+  EVERGREEN_DEALERSHIP_NAMES.forEach((name, i) => {
+    if (evergreenAccounts.has(name)) return;
+    evergreenAccounts.add(name);
+    const letters = name.replace(/\b(BMW|of|on)\b/gi, '').replace(/[^A-Za-z]/g, '').toUpperCase();
+    let code = `${letters.slice(0, 6)}BMW`;
+    for (let n = 2; usedCodes.has(code); n += 1) code = `${letters.slice(0, 6)}${n}BMW`;
+    usedCodes.add(code);
+    const id = `proj-evergreen-${slugify(name)}`;
+    // A varied but repeatable handful of the BMW offers.
+    const pool = [...OFFER_ID_POOL].sort((a, b) => strHash(`${name}${a}`) - strHash(`${name}${b}`));
+    const offers = pool.slice(0, 3 + (strHash(name) % 5)).map(offerById);
+    const creator = CREATOR_POOL[i % CREATOR_POOL.length];
+    const month = MONTH_CYCLE[i % MONTH_CYCLE.length];
+    NEW_EVERGREEN.set(id, name);
+    projects.push({
+      id,
+      accountName: name,
+      accountCode: code,
+      projectName: `Evergreen ${name}`,
+      projectCode: `EVG${String(serial++).padStart(5, '0')}_${code}_Evergreen`,
+      brandTag: 'BMW',
+      workflowStatus: 'live',
+      startDate: month.start,
+      endDate: '∞',
+      creator: creator.name,
+      creatorAvatar: creator.avatar,
+      lastUpdated: LAST_UPDATED_CYCLE[i % LAST_UPDATED_CYCLE.length],
+      created: month.created,
+      accountUrl: `https://www.${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+      isEvergreen: true,
+      approvalEnabled: false,
+      locked: true,
+      offers,
+      // 1080 x 1080 stays first: it is the template every Evergreen email is built from.
+      templates: bundle,
+      backgrounds: bundleBackgrounds,
+      alerts: buildSampleEvergreenAlerts(offers, id),
+      sectionStatus: sectionStatusFor('live'),
+    });
+  });
+
   return projects;
 }
 
 export const PROJECTS: Project[] = [...HAND_WRITTEN_PROJECTS, ...buildGeneratedProjects()];
+
+// These carry the Roundel as their one logo (no secondary or event logo) and their own voice-over track.
+PROJECTS.forEach((project) => {
+  const dealership = NEW_EVERGREEN.get(project.id);
+  if (!dealership) return;
+  saveProjectExtras(project.id, {
+    ...getProjectExtras(project),
+    logos: [LOGO_LIBRARY[0]],
+    audio: [{ id: `audio-vo-${project.id}`, name: `VO_ENG_${dealership}`, placeholder: 'Audio 1', seconds: 12 + (strHash(dealership) % 19) }],
+  });
+});
 
 export const DEFAULT_PROJECT_ID = PROJECTS[0].id;
 
