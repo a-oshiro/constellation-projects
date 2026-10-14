@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Autocomplete, Box, Button, Checkbox, FormControlLabel, IconButton, MenuItem, Popover, TextField } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, FormControlLabel, IconButton, MenuItem, Popover, Switch, TextField } from '@mui/material';
 import {
   Add, AddCircleOutlined, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
   HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, PlayArrow, RemoveCircleOutlined, Search, Undo, WarningAmber,
@@ -58,7 +58,7 @@ interface Draft {
 
 /** Lifestyle is a list of its own, but sits in the Backgrounds section rather than having one. */
 type ListKey = 'templates' | 'backgrounds' | 'customVariables' | 'logos' | 'audio' | 'lifestyle';
-type Section = 'info' | Exclude<ListKey, 'lifestyle'>;
+type Section = 'info' | 'alerts' | Exclude<ListKey, 'lifestyle'>;
 
 const FONT = 'Roboto, sans-serif';
 
@@ -502,6 +502,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const [addingBackgrounds, setAddingBackgrounds] = useState(false);
   const [addingCollection, setAddingCollection] = useState(false);
   const [addingLifestyle, setAddingLifestyle] = useState(false);
+  // Alert settings are a layout for now: they start on their defaults and hold what is picked while the dialog is open, nothing more.
+  const [alertSettings, setAlertSettings] = useState<{ alerts: boolean; autoSend: boolean; brand: string | null; bodyQc: string | null; creativeQc: string | null }>(
+    { alerts: true, autoSend: true, brand: 'BMW', bodyQc: 'Alert Body QC Group', creativeQc: 'Creative QC' },
+  );
   const [showChanges, setShowChanges] = useState(false);
   const [changesQuery, setChangesQuery] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -694,10 +698,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
   /** Lifestyle shares the Backgrounds section, so a selected key may belong to either list. */
   const listOfKey = (key: string): ListKey | null => {
-    if (section === 'info') return null;
+    if (section === 'info' || section === 'alerts') return null;
     return section === 'backgrounds' && g.lifestyle.some((x) => x.key === key) ? 'lifestyle' : section;
   };
-  const selectable: { list: ListKey; key: string; count: number }[] = section === 'info' ? [] : [
+  const selectable: { list: ListKey; key: string; count: number }[] = section === 'info' || section === 'alerts' ? [] : [
     ...g[section].map((x) => ({ list: section as ListKey, key: x.key, count: x.projectIds.length })),
     ...(section === 'backgrounds' ? g.lifestyle.map((x) => ({ list: 'lifestyle' as ListKey, key: x.key, count: x.projectIds.length })) : []),
   ];
@@ -760,7 +764,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const ignoreChanged = IGNORE_FIELDS.filter((f) => ids.some((id) => drafts[id].ignoreProduct[f.key] !== initial[id].ignoreProduct[f.key]));
   /** Lifestyle sits in the Backgrounds section, so its changes count there. */
   const lifestyleChanges = countOf(diffs.lifestyle) + ignoreChanged.length;
-  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges
+  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges : s === 'alerts' ? 0
     : countOf(diffs[s]) + (s === 'logos' ? logoDateIds.size : 0) + (s === 'backgrounds' ? lifestyleChanges : 0));
   const totalChanges = infoChanges + logoDateIds.size + lifestyleChanges + NAV.reduce((sum, s) => sum + countOf(diffs[s.id]), 0);
 
@@ -911,6 +915,33 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       }} />
     </div>
   );
+  const alertField = (label: string, options: string[], key: 'brand' | 'bodyQc' | 'creativeQc', hint: string) => (
+    <Field label={label} hint={hint}>
+      <MixedSelect label={label} options={options} value={alertSettings[key] ?? undefined}
+        onChange={(v) => setAlertSettings((prev) => ({ ...prev, [key]: v }))} />
+    </Field>
+  );
+  const alertSwitch = (label: string, key: 'alerts' | 'autoSend', hint: string) => (
+    <div>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+        <Switch size="small" checked={alertSettings[key]} onChange={(e) => setAlertSettings((prev) => ({ ...prev, [key]: e.target.checked }))}
+          sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: PURPLE }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { background: PURPLE } }} />
+        <span style={{ fontSize: 14, fontWeight: 500, fontFamily: FONT, color: '#1f1d25' }}>{label}</span>
+      </label>
+      {/* 40px switch + 8px gap: the description lines up with the label. */}
+      <div style={{ margin: '2px 0 0 48px', fontSize: 12, fontFamily: FONT, color: '#686576', lineHeight: 1.5 }}>{hint}</div>
+    </div>
+  );
+  const alertsView = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '50%', minWidth: 480 }}>
+      {alertSwitch('Alerts enabled', 'alerts', 'Signal and New Offers alerts generate for this project. Turn it off to pause generation without losing the brand or QC groups.')}
+      {alertSwitch('Auto-send enabled', 'autoSend', 'Approved alerts queue for sending automatically once both QC groups approve them. Turning this off cancels queued sends that have not gone out yet.')}
+      {alertField('Brand', ['BMW'], 'brand', 'Only this brand\u2019s signals are written to this project. Leave blank to make it the account\u2019s catch-all alert project.')}
+      {alertField('Alert Body QC group', ['Alert Body QC Group'], 'bodyQc', 'Platform group that reviews the alert body of this project\'s alerts.')}
+      {alertField('Creative QC group', ['Creative QC'], 'creativeQc', 'Platform group that reviews the assets of this project\'s alerts.')}
+    </div>
+  );
+
   const thumbImg = (src: string, contain?: boolean) => (
     <img src={src} alt="" style={{ width: contain ? '70%' : '100%', height: contain ? '70%' : '100%', objectFit: contain ? 'contain' : 'cover' }} />
   );
@@ -1210,6 +1241,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           <nav aria-label="Sections" style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
             <NavItem label="Project Info" active={section === 'info'} changes={infoChanges} onClick={() => goTo('info')} />
+            <NavItem label="Alert Settings" active={section === 'alerts'} changes={0} onClick={() => goTo('alerts')} />
             {NAV.map((s) => (
               <NavItem key={s.id} label={s.label} active={section === s.id} count={g[s.id].length}
                 changes={sectionChanges(s.id)} onClick={() => goTo(s.id)} />
@@ -1218,8 +1250,8 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
           <section style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: 16 }}>
             <SectionHeading
-              title={section === 'info' ? 'Project Info' : NAV.find((x) => x.id === section)!.label}
-              description={section === 'info' ? undefined
+              title={section === 'info' ? 'Project Info' : section === 'alerts' ? 'Alert Settings' : NAV.find((x) => x.id === section)!.label}
+              description={section === 'info' || section === 'alerts' ? undefined
                 : `${NAV.find((x) => x.id === section)!.description}${n > 1 ? ' Each default is listed once, with how many of the selected projects have it.' : ''}`}
               action={
                 selected.size > 0 ? <SelectionBar count={selected.size} bulk={n > 1} canAdd={canAddSelected} onClear={() => setSelected(new Set())} onAdd={addSelectedToAll} onRemove={removeSelectedFromAll} />
@@ -1234,7 +1266,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
                   : section === 'audio' ? <AddButton label="Add audio" />
                   : undefined
               } />
-            {section === 'info' ? infoView : listView}
+            {section === 'info' ? infoView : section === 'alerts' ? alertsView : listView}
           </section>
         </div>
 
