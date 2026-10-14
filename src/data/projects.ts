@@ -61,6 +61,14 @@ const byTemplateIds = (templateIds: string[]) =>
 const offerById = (id: string) => OFFERS.find((o) => o.id === id)!;
 const templateById = (id: string) => TEMPLATES.find((t) => t.id === id)!;
 
+/** Every Evergreen project runs on the same two templates and two background collections, each collection at both sizes.
+ *  1080 x 1080 stays first: it is the template every Evergreen email is built from. */
+const EVERGREEN_TEMPLATES = [templateById('tmpl-2'), templateById('tmpl-4')];
+const EVERGREEN_BACKGROUNDS = [
+  ...collectionBackgrounds('Background 1', EVERGREEN_TEMPLATES), // Abstract Blue Black
+  ...collectionBackgrounds('Background 4', EVERGREEN_TEMPLATES), // Abstract Light
+];
+
 // Declared early: the generated-project builder below needs it at module-eval time.
 export const slugify = (value: string): string =>
   value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -251,12 +259,8 @@ const HAND_WRITTEN_PROJECTS: Project[] = [
     // The Alerts Lifecycle board only ever references SEATTLE_OFFERS ids, so those stay first;
     // the rest of the BMW catalog is appended purely to give the Overview's Preview panel more assets.
     offers: [...SEATTLE_OFFERS, ...OFFERS.filter((o) => !o.swapOnly)],
-    // tmpl-2 (the 1080x1080 square) must stay first — it's the only template ever used for the outbound
-    // email and for every other Evergreen project's single-asset flow. tmpl-3/tmpl-4 are extra horizontal
-    // templates: their assets are approvable in the Alert dialog's carousel but never appear in the email.
-    templates: [templateById('tmpl-2'), templateById('tmpl-3'), templateById('tmpl-4')],
-    backgrounds: byTemplateIds(['tmpl-2', 'tmpl-3', 'tmpl-4']).filter((b) =>
-      ['bg-4', 'bg-5', 'bg-13', 'bg-14', 'bg-7', 'bg-8', 'bg-9', 'bg-10', 'bg-11', 'bg-12'].includes(b.id)),
+    templates: EVERGREEN_TEMPLATES,
+    backgrounds: EVERGREEN_BACKGROUNDS,
     alerts: SEATTLE_ALERTS,
     sectionStatus: {
       offers: 'done',
@@ -381,8 +385,6 @@ function buildGeneratedProjects(): Project[] {
 
   // 8 Evergreen projects — one per account, for the first 8 dealerships.
   DEALERSHIPS.slice(0, EVERGREEN_DEALERSHIP_COUNT).forEach((dealership, i) => {
-    const templates = templatesWindow(i % TEMPLATE_ID_POOL.length, 1);
-    const backgrounds = byTemplateIds(templates.map((t) => t.id));
     const id = `proj-evergreen-${slugify(dealership.name)}`;
     const offers = offersWindow(i, 6);
     projects.push({
@@ -404,8 +406,8 @@ function buildGeneratedProjects(): Project[] {
       approvalEnabled: false,
       locked: true,
       offers,
-      templates,
-      backgrounds,
+      templates: EVERGREEN_TEMPLATES,
+      backgrounds: EVERGREEN_BACKGROUNDS,
       alerts: buildSampleEvergreenAlerts(offers, id),
       sectionStatus: sectionStatusFor('live'),
     });
@@ -446,8 +448,6 @@ function buildGeneratedProjects(): Project[] {
   // One Evergreen project for every dealership on the list that does not have one yet (never a second per account).
   const evergreenAccounts = new Set([...HAND_WRITTEN_PROJECTS, ...projects].filter((p) => p.isEvergreen).map((p) => p.accountName));
   const usedCodes = new Set([...HAND_WRITTEN_PROJECTS, ...projects].map((p) => p.accountCode));
-  const bundle = [templateById('tmpl-2'), templateById('tmpl-4')];
-  const bundleBackgrounds = [...collectionBackgrounds('Background 1', bundle), ...collectionBackgrounds('Background 4', bundle)];
   let serial = EVERGREEN_DEALERSHIP_COUNT + 2;
   EVERGREEN_DEALERSHIP_NAMES.forEach((name, i) => {
     if (evergreenAccounts.has(name)) return;
@@ -482,9 +482,8 @@ function buildGeneratedProjects(): Project[] {
       approvalEnabled: false,
       locked: true,
       offers,
-      // 1080 x 1080 stays first: it is the template every Evergreen email is built from.
-      templates: bundle,
-      backgrounds: bundleBackgrounds,
+      templates: EVERGREEN_TEMPLATES,
+      backgrounds: EVERGREEN_BACKGROUNDS,
       alerts: buildSampleEvergreenAlerts(offers, id),
       sectionStatus: sectionStatusFor('live'),
     });

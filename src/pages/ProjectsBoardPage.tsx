@@ -37,6 +37,9 @@ const BOARD_COLUMNS: BoardColumn[] = [
   { label: 'Live', statuses: ['live', 'campaign_loaded'] },
 ];
 
+/** Statuses with no board column: they show in the table and can be filtered on. */
+const OFF_BOARD_STATUS_LABELS = ['Needs Edits', 'Done', 'Expired', 'Archived', 'Draft'];
+
 const COLUMN_WIDTH = 360;
 
 const tabSx = {
@@ -124,12 +127,12 @@ export const ProjectsBoardPage = () => {
 
   /** The board column a project sits in — its Status, as the page shows it. */
   const statusLabelOf = (project: Project) =>
-    BOARD_COLUMNS.find((c) => c.statuses.includes(project.workflowStatus))?.label ?? '—';
+    BOARD_COLUMNS.find((c) => c.statuses.includes(project.workflowStatus))?.label ?? STATUS_CONFIG[project.workflowStatus].label;
 
   // Options come from the whole list, not the narrowed one, so a filter never
   // loses the values that would widen it again.
   const filterOptions = useMemo(
-    () => deriveProjectOptions(PROJECTS, BOARD_COLUMNS.map((c) => c.label), statusLabelOf),
+    () => deriveProjectOptions(PROJECTS, [...BOARD_COLUMNS.map((c) => c.label), ...OFF_BOARD_STATUS_LABELS], statusLabelOf),
     [version], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -173,7 +176,7 @@ export const ProjectsBoardPage = () => {
   const statusFor = (project: Project): ProjectStatusInfo => {
     const col = BOARD_COLUMNS.find((c) => c.statuses.includes(project.workflowStatus));
     const config = STATUS_CONFIG[col?.statuses[0] ?? project.workflowStatus];
-    return { label: col?.label ?? '—', color: config.color, background: config.background, Icon: config.Icon };
+    return { label: col?.label ?? config.label, color: config.color, background: config.background, Icon: config.Icon };
   };
 
   const handleOpenProject = (project: Project) => {

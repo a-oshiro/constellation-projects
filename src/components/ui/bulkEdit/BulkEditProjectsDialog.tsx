@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Autocomplete, Button, IconButton, MenuItem, TextField } from '@mui/material';
+import { Autocomplete, Box, Button, IconButton, MenuItem, Popover, TextField } from '@mui/material';
 import {
-  Add, Check, CheckCircle, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
-  HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, Search, Undo, WarningAmber,
+  Add, AddCircleOutlined, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
+  HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, RemoveCircleOutlined, Search, Undo, WarningAmber,
 } from '@mui/icons-material';
 import { PROJECTS } from '../../../data/projects';
 import type { Project } from '../../../data/projects';
@@ -54,9 +54,12 @@ type Section = 'info' | ListKey;
 
 const FONT = 'Roboto, sans-serif';
 
-const ADDED = { tag: 'ADDED', bg: '#e3f4ea', ink: '#1b6b3a' };
-const REMOVED = { tag: 'REMOVED', bg: '#fdeaec', ink: '#b32833' };
-const CHANGED = { tag: 'CHANGED', bg: '#fff4e5', ink: '#8a4b00' };
+/** The circled mark that leads each line of the Changes popover. */
+const CHANGE_KINDS = {
+  added: { Icon: AddCircleOutlined, color: '#2e7d32', label: 'Added' },
+  removed: { Icon: RemoveCircleOutlined, color: '#d2323f', label: 'Removed' },
+  changed: { Icon: ChangeCircleOutlined, color: '#c45500', label: 'Changed' },
+};
 const PURPLE = '#473bab';
 
 /** The statuses a bulk edit can set, in the order the status menu lists them. */
@@ -165,34 +168,141 @@ const MixedSelect = ({ label, options, value, onChange, renderOption }: {
   />
 );
 
-const toIso = (text: string) => {
+// ── Date range ───────────────────────────────────────────────────────────────
+
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+const sameDay = (a: Date | null, b: Date | null) => !!a && !!b && a.getTime() === b.getTime();
+const parseDay = (text: string | undefined) => {
+  if (!text) return null;
   const d = new Date(text);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return Number.isNaN(d.getTime()) ? null : startOfDay(d);
 };
-const fromIso = (iso: string) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+/** How a date reads in the field, and how it is kept (the same "Mon D, YYYY" the project dates use). */
+const showDay = (d: Date) => d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+const keepDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+interface Range { start: Date | null; end: Date | null }
+
+const MonthGrid = ({ month, range, hover, onPick, onHover }: {
+  month: Date; range: Range; hover: Date | null; onPick: (d: Date) => void; onHover: (d: Date | null) => void;
+}) => {
+  const first = month.getDay();
+  const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: (Date | null)[] = [
+    ...Array.from({ length: first }, () => null),
+    ...Array.from({ length: count }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1)),
+  ];
+  while (cells.length < 42) cells.push(null);
+  // While the end is still to be picked, the band follows the pointer.
+  const lo = range.start;
+  const hi = range.end ?? (lo && hover && hover > lo ? hover : null);
+  return (
+    <div style={{ width: 7 * 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 40px)', marginBottom: 4 }}>
+        {WEEKDAYS.map((w, i) => <span key={i} style={{ height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontFamily: FONT, color: '#686576' }}>{w}</span>)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 40px)', gridAutoRows: 38 }}>
+        {cells.map((d, i) => {
+          if (!d) return <span key={i} />;
+          const isLo = sameDay(d, lo);
+          const isHi = sameDay(d, hi);
+          const inBand = !!lo && !!hi && d >= lo && d <= hi;
+          return (
+            <span key={i} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: inBand ? '#e9e6ff' : undefined,
+              borderRadius: `${isLo || (inBand && d.getDay() === 0) ? 19 : 0}px ${isHi || (inBand && d.getDay() === 6) ? 19 : 0}px ${isHi || (inBand && d.getDay() === 6) ? 19 : 0}px ${isLo || (inBand && d.getDay() === 0) ? 19 : 0}px`,
+            }}>
+              <button type="button" onClick={() => onPick(d)} onMouseEnter={() => onHover(d)} onMouseLeave={() => onHover(null)}
+                aria-label={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                aria-pressed={isLo || isHi}
+                style={{
+                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer', fontSize: 14, fontFamily: FONT,
+                  background: isLo || isHi ? PURPLE : 'transparent', color: isLo || isHi ? '#fff' : '#1f1d25',
+                }}>{d.getDate()}</button>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
-/** A date input that can say "Multiple values": a native date control cannot
- *  show placeholder text, so while mixed it is a text field until focused. */
-const MixedDate = ({ label, value, onChange }: {
-  label: string; value: string | undefined; onChange: (v: string) => void;
+/** One field for a start and an end date. Clicking it opens a two-month range calendar: the first click
+ *  sets the start, the second sets the end and closes. */
+const MixedDateRange = ({ label, start, end, onChange }: {
+  label: string; start: string | undefined; end: string | undefined; onChange: (start: string, end: string) => void;
 }) => {
-  const [focused, setFocused] = useState(false);
-  const mixed = value === undefined;
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [view, setView] = useState(() => startOfMonth(new Date()));
+  const [range, setRange] = useState<Range>({ start: null, end: null });
+  const [hover, setHover] = useState<Date | null>(null);
+  const mixed = start === undefined || end === undefined;
+  const from = parseDay(start);
+  const to = parseDay(end);
+
+  const close = () => { setAnchor(null); setHover(null); };
+  const pick = (d: Date) => {
+    if (!range.start || range.end || d < range.start) {
+      setRange({ start: d, end: null });
+      onChange(keepDay(d), '');
+      return;
+    }
+    setRange({ start: range.start, end: d });
+    onChange(keepDay(range.start), keepDay(d));
+    close();
+  };
+  const arrow = { padding: 4, color: '#1f1d25' } as const;
+
   return (
-    <TextField
-      size="small" fullWidth
-      type={mixed && !focused ? 'text' : 'date'}
-      value={mixed ? '' : toIso(value)}
-      placeholder={mixed ? MIXED : undefined}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value ? fromIso(e.target.value) : '')}
-      slotProps={{ htmlInput: { 'aria-label': label } }} sx={fieldSx()}
-    />
+    <>
+      <Box component="button" type="button" aria-label={label} aria-haspopup="dialog" aria-expanded={!!anchor}
+        onClick={(e: React.MouseEvent<HTMLElement>) => { setRange({ start: from, end: to }); setView(startOfMonth(from ?? new Date())); setAnchor(e.currentTarget); }}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: '6px', width: '100%', height: 40, padding: '0 10px', boxSizing: 'border-box', background: '#fff', cursor: 'pointer',
+          border: '1px solid rgba(0,0,0,0.23)', borderRadius: '4px', fontFamily: FONT, fontSize: 12, textAlign: 'left', color: '#1f1d25',
+          '&:hover': { borderColor: 'rgba(0,0,0,0.87)' },
+          '&:focus-visible, &[aria-expanded="true"]': { outline: 'none', borderColor: PURPLE, boxShadow: `0 0 0 1px ${PURPLE}` },
+        }}>
+        <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', ...(mixed ? { fontStyle: 'italic', color: '#8c8999' } : !from && !to ? { color: '#8c8999' } : {}) }}>
+          {mixed ? MIXED : !from && !to ? 'Select dates' : `${from ? showDay(from) : '\u2026'} \u2013 ${to ? showDay(to) : '\u2026'}`}
+        </span>
+        <CalendarMonthOutlined style={{ fontSize: 18, color: '#4b4958' }} />
+      </Box>
+      <Popover
+        open={!!anchor} anchorEl={anchor} onClose={close} disableScrollLock
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }}
+        sx={{ zIndex: 100002 }}
+        slotProps={{ paper: { sx: { mt: 0.5, borderRadius: '8px', boxShadow: '0 14px 34px rgba(31,29,37,0.24)' } } }}
+      >
+        <div role="dialog" aria-label={`${label}, choose dates`} style={{ padding: '12px 16px 8px' }}>
+          <div style={{ display: 'flex', gap: 24 }}>
+            {[0, 1].map((n) => {
+              const month = addMonths(view, n);
+              return (
+                <div key={n}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 40 }}>
+                    {n === 0 ? <IconButton size="small" aria-label="Previous month" onClick={() => setView(addMonths(view, -1))} sx={arrow}><ChevronLeft /></IconButton> : <span style={{ width: 32 }} />}
+                    <span style={{ fontSize: 14, fontWeight: 500, fontFamily: FONT, color: '#1f1d25' }}>
+                      {month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </span>
+                    {n === 1 ? <IconButton size="small" aria-label="Next month" onClick={() => setView(addMonths(view, 1))} sx={arrow}><ChevronRight /></IconButton> : <span style={{ width: 32 }} />}
+                  </div>
+                  <MonthGrid month={month} range={range} hover={hover} onPick={pick} onHover={setHover} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+            <Button size="small" onClick={() => { onChange('', ''); close(); }} sx={{ textTransform: 'none', fontSize: 13, color: PURPLE }}>Clear</Button>
+          </div>
+        </div>
+      </Popover>
+    </>
   );
 };
 
@@ -381,6 +491,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   /** Collections added while the Add Backgrounds panel has been open. */
   const [addedCollections, setAddedCollections] = useState<string[]>([]);
   const [showChanges, setShowChanges] = useState(false);
+  const [changesQuery, setChangesQuery] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [addingVar, setAddingVar] = useState(false);
   const [varName, setVarName] = useState('');
@@ -426,10 +537,19 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   // ── Defaults ──────────────────────────────────────────────────────────────
   const refs = projects.map((p) => ({ id: p.id, name: p.projectName }));
 
+  /** A project's background sizes follow its templates: a template brings its size of every collection the project has. */
+  const sizesFor = (d: Draft, added: Template[]): Background[] => {
+    const keys = [...new Set(d.backgrounds.map((b) => collectionKey(b.name)))];
+    return keys.flatMap((k) => collectionBackgrounds(k, added)).filter((b) => !d.backgrounds.some((x) => x.id === b.id));
+  };
+
   const removeFrom = (list: ListKey, key: string, only?: string) =>
-    patchEach((d, id) => (only && id !== only
-      ? {}
-      : { [list]: (d[list] as unknown[]).filter((i) => keyOf(list, i) !== key) }));
+    patchEach((d, id) => {
+      if (only && id !== only) return {};
+      const kept = { [list]: (d[list] as unknown[]).filter((i) => keyOf(list, i) !== key) };
+      // Taking a template away takes its background size with it.
+      return list === 'templates' ? { ...kept, backgrounds: d.backgrounds.filter((b) => b.templateId !== key) } : kept;
+    });
   const applyToAll = (list: ListKey, key: string, only?: string) => {
     if (list === 'backgrounds') {
       // The whole collection comes along, in the sizes of each project's own templates.
@@ -438,6 +558,14 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         const add = collectionBackgrounds(key, d.templates).filter((b) => !d.backgrounds.some((x) => x.id === b.id));
         return { backgrounds: [...d.backgrounds, ...add] };
       });
+      return;
+    }
+    if (list === 'templates') {
+      const template = all.flatMap((d) => d.templates).find((t) => t.id === key);
+      if (!template) return;
+      patchEach((d, id) => ((only && id !== only) || d.templates.some((t) => t.id === key)
+        ? {}
+        : { templates: [...d.templates, template], backgrounds: [...d.backgrounds, ...sizesFor(d, [template])] }));
       return;
     }
     const item = all.flatMap((d) => d[list] as unknown[]).find((i) => keyOf(list, i) === key);
@@ -465,7 +593,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const templatesToAdd = TEMPLATES.filter((t) => !all.some((d) => d.templates.some((x) => x.id === t.id)));
   const addTemplates = (templateIds: string[]) => {
     const picked = TEMPLATES.filter((t) => templateIds.includes(t.id));
-    patchEach((d) => ({ templates: [...d.templates, ...picked.filter((t) => !d.templates.some((x) => x.id === t.id))] }));
+    patchEach((d) => {
+      const added = picked.filter((t) => !d.templates.some((x) => x.id === t.id));
+      return { templates: [...d.templates, ...added], backgrounds: [...d.backgrounds, ...sizesFor(d, added)] };
+    });
   };
 
   // Logos: a library logo is added to a type ("slot"), under an id that remembers which one.
@@ -477,8 +608,8 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   };
   const logoDate = (id: string, k: 'startDate' | 'endDate') =>
     common(all.flatMap((d) => d.logos.filter((l) => l.id === id).map((l) => l[k] ?? '')));
-  const setLogoDate = (id: string, k: 'startDate' | 'endDate', v: string) =>
-    patchEach((d) => ({ logos: d.logos.map((l) => (l.id === id ? { ...l, [k]: v } : l)) }));
+  const setLogoDates = (id: string, startDate: string, endDate: string) =>
+    patchEach((d) => ({ logos: d.logos.map((l) => (l.id === id ? { ...l, startDate, endDate } : l)) }));
 
   // Backgrounds: collections the list does not have yet, added at every size of each project's templates.
   const addCollection = (key: string) => {
@@ -642,6 +773,16 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     return lines;
   };
   const changedProjects = projects.map((p) => ({ p, lines: projectChanges(p.id) })).filter((x) => x.lines.length > 0);
+  /** The Changes popover after its search: a project that matches shows all its lines, otherwise only the lines that match. */
+  const visibleChanges = (() => {
+    const q = changesQuery.trim().toLowerCase();
+    if (!q) return changedProjects;
+    return changedProjects.flatMap(({ p, lines }) => {
+      if (p.projectName.toLowerCase().includes(q)) return [{ p, lines }];
+      const hits = lines.filter((l) => `${l.prefix}${l.name}`.toLowerCase().includes(q));
+      return hits.length ? [{ p, lines: hits }] : [];
+    });
+  })();
 
   const save = () => {
     projects.forEach((p) => {
@@ -788,14 +929,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
                 title={(l) => l.name} subtitle={(l) => l.scope}
                 emptyText="No logos yet for this type."
                 footer={slot === 'Event Logo' ? (l) => (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <Labeled label="Start date">
-                      <MixedDate label={`${l.name} start date`} value={logoDate(l.id, 'startDate')}
-                        onChange={(v) => setLogoDate(l.id, 'startDate', v)} />
-                    </Labeled>
-                    <Labeled label="End date">
-                      <MixedDate label={`${l.name} end date`} value={logoDate(l.id, 'endDate')}
-                        onChange={(v) => setLogoDate(l.id, 'endDate', v)} />
+                  <div style={{ marginTop: 4 }}>
+                    <Labeled label="Active Dates">
+                      <MixedDateRange label={`${l.name} active dates`}
+                        start={logoDate(l.id, 'startDate')} end={logoDate(l.id, 'endDate')}
+                        onChange={(from, to) => setLogoDates(l.id, from, to)} />
                     </Labeled>
                   </div>
                 ) : undefined} />
@@ -878,7 +1016,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
             <div style={{ flex: 1 }} />
             <div style={{ position: 'relative' }}>
               <Button variant="outlined" size="small" disabled={totalChanges === 0} aria-expanded={showChanges} aria-haspopup="dialog"
-                onClick={() => setShowChanges((v) => !v)}
+                onClick={() => { setShowChanges((v) => !v); setChangesQuery(''); }}
                 sx={{
                   color: PURPLE, borderColor: 'rgba(99,86,225,0.5)', borderRadius: '100px', padding: '3px 6px 3px 12px', gap: '8px',
                   fontSize: 13, fontFamily: FONT, fontWeight: 500, letterSpacing: '0.46px', textTransform: 'none', whiteSpace: 'nowrap', lineHeight: '22px',
@@ -889,7 +1027,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
               </Button>
               {showChanges && totalChanges > 0 && (
                 <>
-                  <div onClick={() => setShowChanges(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+                  <div onClick={() => { setShowChanges(false); setChangesQuery(''); }} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
                   <div role="dialog" aria-label="Changes to apply" style={{
                     position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 6, width: 420, background: '#fff', borderRadius: 12, border: '1px solid #e1ddf0', overflow: 'hidden',
                     boxShadow: '0 16px 40px rgba(31,29,37,0.22)',
@@ -899,16 +1037,29 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
                       <span style={{ flex: 1 }} />
                       <Button size="small" onClick={() => { setDrafts(initial); setShowChanges(false); }} sx={{ textTransform: 'none', fontSize: 13, color: PURPLE, minWidth: 0 }}>Undo all</Button>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 34, margin: '10px 16px 0', padding: '0 10px', border: '1px solid #e1ddf0', borderRadius: 8 }}>
+                      <Search style={{ fontSize: 16, color: '#8c8999' }} />
+                      <input value={changesQuery} onChange={(e) => setChangesQuery(e.target.value)} placeholder="Search projects or items" aria-label="Search changes"
+                        style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 13, fontFamily: FONT, color: '#1f1d25', background: 'transparent' }} />
+                      {changesQuery && (
+                        <IconButton size="small" aria-label="Clear search" onClick={() => setChangesQuery('')} sx={{ padding: '2px' }}>
+                          <Close style={{ fontSize: 16 }} />
+                        </IconButton>
+                      )}
+                    </div>
                     <div style={{ maxHeight: 360, overflowY: 'auto', padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {changedProjects.map(({ p, lines }) => (
+                      {visibleChanges.length === 0 && (
+                        <p style={{ margin: 0, fontSize: 13, fontFamily: FONT, color: '#686576' }}>No changes match this search.</p>
+                      )}
+                      {visibleChanges.map(({ p, lines }) => (
                         <div key={p.id}>
                           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: FONT, color: '#1f1d25' }}>{p.projectName}</div>
                           <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {lines.map((l, i) => {
-                              const kind = l.struck ? REMOVED : l.isNew ? ADDED : CHANGED;
+                              const kind = l.struck ? CHANGE_KINDS.removed : l.isNew ? CHANGE_KINDS.added : CHANGE_KINDS.changed;
                               return (
                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontFamily: FONT, color: '#686576', lineHeight: 1.5, padding: '2px 0' }}>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', height: 20, padding: '0 8px', borderRadius: 100, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px', background: kind.bg, color: kind.ink, flexShrink: 0 }}>{kind.tag}</span>
+                                  <kind.Icon aria-label={kind.label} role="img" style={{ fontSize: 20, color: kind.color, flexShrink: 0 }} />
                                   <span style={{ flex: 1, minWidth: 0 }}>
                                     {l.prefix.replace(/:\s*$/, '')} {'\u00b7'}{' '}
                                     <b style={{ fontWeight: 700, color: '#1f1d25', textDecoration: l.struck ? 'line-through' : undefined }}>{l.name}</b>

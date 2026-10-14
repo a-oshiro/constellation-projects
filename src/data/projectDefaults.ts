@@ -75,7 +75,8 @@ function seed(project: Project): ProjectExtras {
     VARIABLE_POOL[2],                // shared by everyone
     ...(h % 3 === 0 ? [VARIABLE_POOL[3]] : []),
   ];
-  const logos = [LOGO_LIBRARY[0], ...(h % 2 === 0 ? [LOGO_LIBRARY[1]] : []), ...(h % 5 === 0 ? [LOGO_LIBRARY[2]] : [])];
+  // Every project carries the primary logo and nothing else.
+  const logos = [LOGO_LIBRARY[0]];
   const audio: ProjectAudio[] = h % 4 === 0
     ? []
     : [{ id: h % 2 ? 'audio-jingle' : `audio-vo-${project.id}`, ...AUDIO_POOL[h % 2 ? 0 : 1], name: h % 2 ? AUDIO_POOL[0].name : `VO_ENG_${project.accountName.replace(/\s+/g, '-')}` }];
