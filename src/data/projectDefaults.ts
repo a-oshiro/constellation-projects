@@ -7,6 +7,8 @@
 // Templates and backgrounds live on the Project itself.
 
 import type { Project } from './projects';
+import { EVERGREEN_LIFESTYLE } from './lifestyle';
+import type { IgnoreProduct, LifestyleItem } from './lifestyle';
 import bmwRoundel from '../assets/bmw-logo.png';
 import bmwLogo1 from '../assets/logos/bmw-logo-1.png';
 import bmwLogo2 from '../assets/logos/bmw-logo-2.png';
@@ -35,6 +37,8 @@ export interface ProjectExtras {
   customVariables: CustomVariable[];
   logos: ProjectLogo[];
   audio: ProjectAudio[];
+  lifestyle: LifestyleItem[];
+  ignoreProduct: IgnoreProduct;
 }
 
 const VARIABLE_POOL: CustomVariable[] = [
@@ -85,6 +89,9 @@ function seed(project: Project): ProjectExtras {
     customVariables: variables,
     logos,
     audio,
+    // Evergreen projects start with a couple of vehicle clips; the others have none yet.
+    lifestyle: project.isEvergreen ? [...EVERGREEN_LIFESTYLE] : [],
+    ignoreProduct: { images: true, videos: true },
   };
 }
 

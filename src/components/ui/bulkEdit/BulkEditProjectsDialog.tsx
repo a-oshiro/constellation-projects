@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Autocomplete, Box, Button, IconButton, MenuItem, Popover, TextField } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, FormControlLabel, IconButton, MenuItem, Popover, TextField } from '@mui/material';
 import {
   Add, AddCircleOutlined, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
-  HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, RemoveCircleOutlined, Search, Undo, WarningAmber,
+  HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, PlayArrow, RemoveCircleOutlined, Search, Undo, WarningAmber,
 } from '@mui/icons-material';
 import { PROJECTS } from '../../../data/projects';
 import type { Project } from '../../../data/projects';
 import type { Background, Template } from '../../../data/types';
 import { MOCK_TEAMMATES, TEMPLATES } from '../../../data/mockData';
+import { LIFESTYLE_LIBRARY } from '../../../data/lifestyle';
+import type { IgnoreProduct, LifestyleItem } from '../../../data/lifestyle';
 import { getProjectExtras, saveProjectExtras, LOGO_LIBRARY } from '../../../data/projectDefaults';
 import type { CustomVariable, LogoSlot, ProjectAudio, ProjectLogo } from '../../../data/projectDefaults';
 import { BACKGROUND_COLLECTIONS, collectionBackgrounds, collectionName } from '../../../data/backgroundCollections';
@@ -23,6 +25,7 @@ import { ProjectAvatar } from './ProjectAvatar';
 import { AddLogosDialog } from './AddLogosDialog';
 import { AddCollectionBar } from './AddCollectionBar';
 import { AddBackgroundsDialog } from '../AddBackgroundsDialog';
+import { AddLifestyleDialog } from '../AddLifestyleDialog';
 import type { BackgroundOption } from '../AddBackgroundsDialog';
 import { CARD_SIZE, DefaultsGroupList, groupDefaults } from './DefaultsGroupList';
 
@@ -49,10 +52,13 @@ interface Draft {
   customVariables: CustomVariable[];
   logos: ProjectLogo[];
   audio: ProjectAudio[];
+  lifestyle: LifestyleItem[];
+  ignoreProduct: IgnoreProduct;
 }
 
-type ListKey = 'templates' | 'backgrounds' | 'customVariables' | 'logos' | 'audio';
-type Section = 'info' | ListKey;
+/** Lifestyle is a list of its own, but sits in the Backgrounds section rather than having one. */
+type ListKey = 'templates' | 'backgrounds' | 'customVariables' | 'logos' | 'audio' | 'lifestyle';
+type Section = 'info' | Exclude<ListKey, 'lifestyle'>;
 
 const FONT = 'Roboto, sans-serif';
 
@@ -108,6 +114,7 @@ const draftOf = (p: Project): Draft => {
     creator: p.creator, creatorAvatar: p.creatorAvatar, startDate: p.startDate, endDate: p.endDate, isEvergreen: !!p.isEvergreen, workflowStatus: p.workflowStatus,
     tags: [...x.tags], templates: [...p.templates], backgrounds: [...p.backgrounds],
     customVariables: [...x.customVariables], logos: [...x.logos], audio: [...x.audio],
+    lifestyle: [...x.lifestyle], ignoreProduct: { ...x.ignoreProduct },
   };
 };
 
@@ -310,7 +317,7 @@ const MixedDateRange = ({ label, start, end, onChange }: {
 
 // ── Dialog ───────────────────────────────────────────────────────────────────
 
-const NAV: { id: ListKey; label: string; description: string }[] = [
+const NAV: { id: Exclude<ListKey, 'lifestyle'>; label: string; description: string }[] = [
   { id: 'customVariables', label: 'Custom Variables', description: 'Values passed into every entry\u2019s templates unless the entry overrides them.' },
   { id: 'templates', label: 'Templates', description: 'What every entry renders from \u2014 and what decides the background sizes and logo slots.' },
   { id: 'backgrounds', label: 'Backgrounds', description: 'The pool entries draw their backgrounds from. Each collection brings a size for every template of the project.' },
@@ -326,13 +333,16 @@ const collectionKey = (name: string) => {
   const m = name.match(/Background\s*(\d+)$/i);
   return m ? `Background ${m[1]}` : name;
 };
-interface BgCollection { key: string; url: string; sizes: number }
+interface BgCollection { key: string; url: string; sizes: number; width: number; height: number }
 const collectionsOf = (bgs: Background[]): BgCollection[] => {
   const m = new Map<string, BgCollection>();
   bgs.forEach((b) => {
     const key = collectionKey(b.name);
     const e = m.get(key);
-    if (e) e.sizes += 1; else m.set(key, { key, url: b.url, sizes: 1 });
+    if (e) { e.sizes += 1; return; }
+    // The picture is shown at the proportions of the size it is for.
+    const t = TEMPLATES.find((x) => x.id === b.templateId);
+    m.set(key, { key, url: b.url, sizes: 1, width: t?.width ?? 1, height: t?.height ?? 1 });
   });
   return [...m.values()];
 };
@@ -491,6 +501,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const [addingLogos, setAddingLogos] = useState<LogoSlot | null>(null);
   const [addingBackgrounds, setAddingBackgrounds] = useState(false);
   const [addingCollection, setAddingCollection] = useState(false);
+  const [addingLifestyle, setAddingLifestyle] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [changesQuery, setChangesQuery] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -504,7 +515,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingLifestyle) setAddingLifestyle(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
@@ -635,6 +646,15 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     }));
   };
 
+  // Lifestyle: media of a specific vehicle, from the portal, that no selected project carries yet.
+  const lifestyleToAdd = LIFESTYLE_LIBRARY.filter((l) => !all.some((d) => d.lifestyle.some((x) => x.id === l.id)));
+  const addLifestyle = (lifestyleIds: string[]) => {
+    const picked = LIFESTYLE_LIBRARY.filter((l) => lifestyleIds.includes(l.id));
+    patchEach((d) => ({ lifestyle: [...d.lifestyle, ...picked.filter((l) => !d.lifestyle.some((x) => x.id === l.id))] }));
+  };
+  const setIgnoreProduct = (key: keyof IgnoreProduct, value: boolean) =>
+    patchEach((d) => ({ ignoreProduct: { ...d.ignoreProduct, [key]: value } }));
+
   const group = <T,>(list: ListKey) =>
     groupDefaults<T>(refs, (id) => itemsIn(list, drafts[id]) as T[], (i) => (list === 'customVariables' ? keyOf(list, i) : diffKeyOf(list, i)),
       (i) => (list === 'customVariables' ? (i as CustomVariable).name : labelOf(list, i)));
@@ -644,6 +664,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     backgrounds: group<BgCollection>('backgrounds'),
     logos: group<ProjectLogo>('logos'),
     audio: group<ProjectAudio>('audio'),
+    lifestyle: group<LifestyleItem>('lifestyle'),
   };
 
   /** Why adding would change nothing: a collection already has every size of the project. */
@@ -665,21 +686,28 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); setAddingCollection(false); };
+  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); setAddingCollection(false); setAddingLifestyle(false); };
   const toggleSelected = (key: string) => setSelected((prev) => {
     const next = new Set(prev);
     if (!next.delete(key)) next.add(key);
     return next;
   });
-  const canAddSelected = section !== 'info' && g[section].some((x) => selected.has(x.key) && x.projectIds.length < projects.length && !addBlocked(section, x.key));
+  /** Lifestyle shares the Backgrounds section, so a selected key may belong to either list. */
+  const listOfKey = (key: string): ListKey | null => {
+    if (section === 'info') return null;
+    return section === 'backgrounds' && g.lifestyle.some((x) => x.key === key) ? 'lifestyle' : section;
+  };
+  const selectable: { list: ListKey; key: string; count: number }[] = section === 'info' ? [] : [
+    ...g[section].map((x) => ({ list: section as ListKey, key: x.key, count: x.projectIds.length })),
+    ...(section === 'backgrounds' ? g.lifestyle.map((x) => ({ list: 'lifestyle' as ListKey, key: x.key, count: x.projectIds.length })) : []),
+  ];
+  const canAddSelected = selectable.some((x) => selected.has(x.key) && x.count < projects.length && !addBlocked(x.list, x.key));
   const addSelectedToAll = () => {
-    if (section === 'info') return;
-    selected.forEach((key) => applyToAll(section, key));
+    selected.forEach((key) => { const list = listOfKey(key); if (list) applyToAll(list, key); });
     setSelected(new Set());
   };
   const removeSelectedFromAll = () => {
-    if (section === 'info') return;
-    selected.forEach((key) => removeFrom(section, key));
+    selected.forEach((key) => { const list = listOfKey(key); if (list) removeFrom(list, key); });
     setSelected(new Set());
   };
 
@@ -710,6 +738,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     backgrounds: diffOf((d) => itemsIn('backgrounds', d), (i) => diffKeyOf('backgrounds', i), (i) => labelOf('backgrounds', i)),
     logos: diffOf((d) => itemsIn('logos', d), (i) => diffKeyOf('logos', i), (i) => labelOf('logos', i)),
     audio: diffOf((d) => itemsIn('audio', d), (i) => diffKeyOf('audio', i), (i) => labelOf('audio', i)),
+    lifestyle: diffOf((d) => itemsIn('lifestyle', d), (i) => diffKeyOf('lifestyle', i), (i) => labelOf('lifestyle', i)),
   };
   const countOf = (d: { added: Change[]; removed: Change[] }) => d.added.length + d.removed.length;
 
@@ -723,8 +752,17 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     !!was && ((was.startDate ?? '') !== (l.startDate ?? '') || (was.endDate ?? '') !== (l.endDate ?? ''));
   /** Logos whose run dates were edited, on any project: one change each. */
   const logoDateIds = new Set(ids.flatMap((id) => drafts[id].logos.filter((l) => datesChanged(initial[id].logos.find((x) => x.id === l.id), l)).map((l) => l.id)));
-  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges : countOf(diffs[s]) + (s === 'logos' ? logoDateIds.size : 0));
-  const totalChanges = infoChanges + logoDateIds.size + NAV.reduce((sum, s) => sum + countOf(diffs[s.id as ListKey]), 0);
+  /** Which of "ignore the product placeholder" for images and for videos were switched, on any project: one change each. */
+  const IGNORE_FIELDS: { key: keyof IgnoreProduct; label: string }[] = [
+    { key: 'images', label: 'Lifestyle images' },
+    { key: 'videos', label: 'Lifestyle videos' },
+  ];
+  const ignoreChanged = IGNORE_FIELDS.filter((f) => ids.some((id) => drafts[id].ignoreProduct[f.key] !== initial[id].ignoreProduct[f.key]));
+  /** Lifestyle sits in the Backgrounds section, so its changes count there. */
+  const lifestyleChanges = countOf(diffs.lifestyle) + ignoreChanged.length;
+  const sectionChanges = (s: Section) => (s === 'info' ? infoChanges
+    : countOf(diffs[s]) + (s === 'logos' ? logoDateIds.size : 0) + (s === 'backgrounds' ? lifestyleChanges : 0));
+  const totalChanges = infoChanges + logoDateIds.size + lifestyleChanges + NAV.reduce((sum, s) => sum + countOf(diffs[s.id]), 0);
 
   /** Undoes one change on one project, leaving everything else as edited. */
   const patchOne = (id: string, fn: (d: Draft) => Partial<Draft>) =>
@@ -743,7 +781,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       }
     });
 
-    NAV.forEach(({ id: list, label }) => {
+    ([...NAV, { id: 'lifestyle' as const, label: 'Lifestyle' }] as { id: ListKey; label: string }[]).forEach(({ id: list, label }) => {
       if (list === 'customVariables') {
         // One line per variable: a changed value reads "old → new" instead of a removal plus an addition.
         const was = initial[id].customVariables;
@@ -780,6 +818,15 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         }),
       }));
     });
+    IGNORE_FIELDS.forEach((f) => {
+      const was = initial[id].ignoreProduct[f.key];
+      const now = drafts[id].ignoreProduct[f.key];
+      if (was === now) return;
+      lines.push({
+        prefix: 'Lifestyle: ', name: `Ignore product placeholder for ${f.label.toLowerCase().replace('lifestyle ', '')}: ${was ? 'Yes' : 'No'} \u2192 ${now ? 'Yes' : 'No'}`,
+        undo: () => patchOne(id, (d) => ({ ignoreProduct: { ...d.ignoreProduct, [f.key]: was } })),
+      });
+    });
     drafts[id].logos.forEach((l) => {
       const was = initial[id].logos.find((x) => x.id === l.id);
       if (!was || !datesChanged(was, l)) return;
@@ -811,7 +858,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         workflowStatus: d.workflowStatus,
         templates: d.templates, backgrounds: d.backgrounds, lastUpdated: 'Just now',
       });
-      saveProjectExtras(p.id, { tags: d.tags, customVariables: d.customVariables, logos: d.logos, audio: d.audio });
+      saveProjectExtras(p.id, { tags: d.tags, customVariables: d.customVariables, logos: d.logos, audio: d.audio, lifestyle: d.lifestyle, ignoreProduct: d.ignoreProduct });
     });
     showSnackbar({ message: `${projects.length} project${projects.length === 1 ? '' : 's'} updated` });
     onSaved();
@@ -832,6 +879,14 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
         <Field label="Owner">
           <MixedSelect label="Owner" options={[...owners.keys()]}
+            renderOption={(name) => (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontFamily: FONT, color: '#1f1d25' }}>
+                {owners.get(name)
+                  ? <img src={owners.get(name)} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                  : <ProjectAvatar name={name} id={name} size={24} />}
+                {name}
+              </span>
+            )}
             value={common(all.map((d) => d.creator))}
             onChange={(v) => patchAll({ creator: v, creatorAvatar: owners.get(v) ?? '' })} />
         </Field>
@@ -847,6 +902,15 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     </div>
   );
 
+  /** A picture at its own proportions, as wide as the thumbnail (or as tall, when it is the taller of the two), on its light grey. */
+  const ratioImg = (src: string, width: number, height: number) => (
+    <div style={{ width: '100%', height: '100%', background: '#f0f2f4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <img src={src} alt="" style={{
+        aspectRatio: `${width} / ${height}`, objectFit: 'cover', display: 'block',
+        ...(width >= height ? { width: '100%', height: 'auto' } : { height: '100%', width: 'auto' }),
+      }} />
+    </div>
+  );
   const thumbImg = (src: string, contain?: boolean) => (
     <img src={src} alt="" style={{ width: contain ? '70%' : '100%', height: contain ? '70%' : '100%', objectFit: contain ? 'contain' : 'cover' }} />
   );
@@ -933,9 +997,45 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           )}
           <Overline>Collections ({g.backgrounds.length})</Overline>
           <DefaultsGroupList<BgCollection> {...handlers('backgrounds')} selected={selected} onToggle={toggleSelected} layout="cards" groups={g.backgrounds}
-            visual={(c) => thumbImg(c.url)}
+            visual={(c) => ratioImg(c.url, c.width, c.height)}
             title={(c) => collectionName(c.key)} subtitle={(c) => `${c.sizes} size${c.sizes === 1 ? '' : 's'}`}
             emptyText="No backgrounds on the selected projects." />
+
+          <div style={{ marginTop: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 4 }}>
+              <Overline>Lifestyle ({g.lifestyle.length})</Overline>
+              <AddButton label="Add lifestyle" onClick={() => setAddingLifestyle(true)} />
+            </div>
+            <div style={{ margin: '4px 0 16px' }}>
+              <div style={{ fontSize: 14, fontWeight: 500, fontFamily: FONT, color: '#1f1d25' }}>Ignore product placeholder</div>
+              <div style={{ display: 'flex', gap: 24, marginTop: 2 }}>
+                {IGNORE_FIELDS.map((f) => {
+                  const every = all.every((d) => d.ignoreProduct[f.key]);
+                  const some = all.some((d) => d.ignoreProduct[f.key]);
+                  return (
+                    <FormControlLabel key={f.key} sx={{ ml: -1, '& .MuiFormControlLabel-label': { fontFamily: FONT, fontSize: 14 } }} label={f.label}
+                      control={(
+                        <Checkbox size="small" checked={every} indeterminate={some && !every} onChange={() => setIgnoreProduct(f.key, !every)}
+                          sx={{ '&.Mui-checked, &.MuiCheckbox-indeterminate': { color: PURPLE } }} />
+                      )} />
+                  );
+                })}
+              </div>
+            </div>
+            <DefaultsGroupList<LifestyleItem> {...handlers('lifestyle')} selected={selected} onToggle={toggleSelected} layout="cards" groups={g.lifestyle}
+              visual={(l) => (
+                <>
+                  {ratioImg(l.poster, l.width, l.height)}
+                  {l.kind === 'video' && (
+                    <span aria-hidden="true" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 40, height: 40, borderRadius: '50%', background: 'rgba(20,18,30,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <PlayArrow style={{ fontSize: 26, color: '#fff' }} />
+                    </span>
+                  )}
+                </>
+              )}
+              title={(l) => l.name} subtitle={(l) => `${l.width} x ${l.height} | ${l.kind === 'video' ? 'Video' : 'Image'}`}
+              emptyText="No lifestyle yet on the selected projects." />
+          </div>
         </>
       )}
       {section === 'logos' && (
@@ -1145,6 +1245,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Button variant="contained" disableElevation disabled={totalChanges === 0} onClick={save} sx={button(true)}>Apply changes</Button>
         </div>
       </div>
+      {addingLifestyle && (
+        <AddLifestyleDialog items={lifestyleToAdd} onClose={() => setAddingLifestyle(false)}
+          onAdd={(lifestyleIds) => { addLifestyle(lifestyleIds); setAddingLifestyle(false); }} />
+      )}
       {addingBackgrounds && (
         <AddBackgroundsDialog options={backgroundOptions()} onClose={() => setAddingBackgrounds(false)}
           onAdd={(backgroundIds) => { addBackgrounds(backgroundIds); setAddingBackgrounds(false); }} />
