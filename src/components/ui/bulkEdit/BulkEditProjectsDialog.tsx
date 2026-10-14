@@ -21,7 +21,9 @@ import { TEMPLATE_REGISTRY } from '../../../templates';
 import { AudioPlayerRow } from './AudioPlayerRow';
 import { ProjectAvatar } from './ProjectAvatar';
 import { AddLogosDialog } from './AddLogosDialog';
-import { AddBackgroundsPanel } from './AddBackgroundsPanel';
+import { AddCollectionBar } from './AddCollectionBar';
+import { AddBackgroundsDialog } from '../AddBackgroundsDialog';
+import type { BackgroundOption } from '../AddBackgroundsDialog';
 import { CARD_SIZE, DefaultsGroupList, groupDefaults } from './DefaultsGroupList';
 
 // ── The draft ────────────────────────────────────────────────────────────────
@@ -488,8 +490,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const [addingTemplates, setAddingTemplates] = useState(false);
   const [addingLogos, setAddingLogos] = useState<LogoSlot | null>(null);
   const [addingBackgrounds, setAddingBackgrounds] = useState(false);
-  /** Collections added while the Add Backgrounds panel has been open. */
-  const [addedCollections, setAddedCollections] = useState<string[]>([]);
+  const [addingCollection, setAddingCollection] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [changesQuery, setChangesQuery] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -614,7 +615,24 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   // Backgrounds: collections the list does not have yet, added at every size of each project's templates.
   const addCollection = (key: string) => {
     patchEach((d) => ({ backgrounds: [...d.backgrounds, ...collectionBackgrounds(key, d.templates).filter((b) => !d.backgrounds.some((x) => x.id === b.id))] }));
-    setAddedCollections((prev) => [...prev, key]);
+    setAddingCollection(false);
+  };
+
+  // Individual backgrounds from the portal: only sizes some selected project has a template for, and only
+  // projects with that template receive them — there is no way to push one onto a project without its size.
+  const backgroundOptions = (): BackgroundOption[] =>
+    BACKGROUND_COLLECTIONS.flatMap((c) => collectionBackgrounds(c.key, TEMPLATES).map((bg) => {
+      const withSize = all.filter((d) => d.templates.some((t) => t.id === bg.templateId));
+      return {
+        background: bg, name: c.name, template: TEMPLATES.find((t) => t.id === bg.templateId)!,
+        withSize: withSize.length, reaches: withSize.filter((d) => !d.backgrounds.some((x) => x.id === bg.id)).length, projectCount: n,
+      };
+    })).filter((o) => o.reaches > 0);
+  const addBackgrounds = (backgroundIds: string[]) => {
+    const picked = BACKGROUND_COLLECTIONS.flatMap((c) => collectionBackgrounds(c.key, TEMPLATES)).filter((b) => backgroundIds.includes(b.id));
+    patchEach((d) => ({
+      backgrounds: [...d.backgrounds, ...picked.filter((b) => d.templates.some((t) => t.id === b.templateId) && !d.backgrounds.some((x) => x.id === b.id))],
+    }));
   };
 
   const group = <T,>(list: ListKey) =>
@@ -647,7 +665,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); };
+  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); setAddingCollection(false); };
   const toggleSelected = (key: string) => setSelected((prev) => {
     const next = new Set(prev);
     if (!next.delete(key)) next.add(key);
@@ -909,6 +927,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       )}
       {section === 'backgrounds' && (
         <>
+          {addingCollection && (
+            <AddCollectionBar available={BACKGROUND_COLLECTIONS.filter((c) => !g.backgrounds.some((x) => x.key === c.key))}
+              projectCount={n} onAdd={addCollection} onCancel={() => setAddingCollection(false)} />
+          )}
           <Overline>Collections ({g.backgrounds.length})</Overline>
           <DefaultsGroupList<BgCollection> {...handlers('backgrounds')} selected={selected} onToggle={toggleSelected} layout="cards" groups={g.backgrounds}
             visual={(c) => thumbImg(c.url)}
@@ -1103,7 +1125,12 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
                 selected.size > 0 ? <SelectionBar count={selected.size} bulk={n > 1} canAdd={canAddSelected} onClear={() => setSelected(new Set())} onAdd={addSelectedToAll} onRemove={removeSelectedFromAll} />
                   : section === 'customVariables' ? <AddButton label="Add variable" disabled={addingVar} onClick={() => setAddingVar(true)} />
                   : section === 'templates' ? <AddButton label="Add templates" onClick={() => setAddingTemplates(true)} />
-                  : section === 'backgrounds' ? <AddButton label="Add backgrounds" onClick={() => { setAddedCollections([]); setAddingBackgrounds(true); }} />
+                  : section === 'backgrounds' ? (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <AddButton label="Add backgrounds" onClick={() => setAddingBackgrounds(true)} />
+                      <AddButton label="Add collection" disabled={addingCollection} onClick={() => setAddingCollection(true)} />
+                    </div>
+                  )
                   : section === 'audio' ? <AddButton label="Add audio" />
                   : undefined
               } />
@@ -1117,13 +1144,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Button variant="outlined" onClick={requestClose} sx={button(false)}>Cancel</Button>
           <Button variant="contained" disableElevation disabled={totalChanges === 0} onClick={save} sx={button(true)}>Apply changes</Button>
         </div>
-        {addingBackgrounds && (
-          <AddBackgroundsPanel
-            available={BACKGROUND_COLLECTIONS.filter((c) => !g.backgrounds.some((x) => x.key === c.key))}
-            added={addedCollections.map((k) => BACKGROUND_COLLECTIONS.find((c) => c.key === k)).filter((c): c is NonNullable<typeof c> => !!c)}
-            projectCount={n} onPick={addCollection} onClose={() => setAddingBackgrounds(false)} />
-        )}
       </div>
+      {addingBackgrounds && (
+        <AddBackgroundsDialog options={backgroundOptions()} onClose={() => setAddingBackgrounds(false)}
+          onAdd={(backgroundIds) => { addBackgrounds(backgroundIds); setAddingBackgrounds(false); }} />
+      )}
       {addingTemplates && (
         <AddTemplatesDialog open inset={16} zIndex={100005} projectTemplateIds={new Set<string>()} availableTemplates={templatesToAdd}
           onClose={() => setAddingTemplates(false)} onAdd={addTemplates} />
