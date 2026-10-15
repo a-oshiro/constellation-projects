@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Autocomplete, Box, Button, Checkbox, FormControlLabel, IconButton, MenuItem, Popover, Switch, TextField } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, MenuItem, Popover, Switch, TextField, Tooltip } from '@mui/material';
 import {
-  Add, AddCircleOutlined, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
+  Add, AddCircleOutlined, AutoAwesome, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
   HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, PlayArrow, RemoveCircleOutlined, Search, Undo, WarningAmber,
 } from '@mui/icons-material';
 import { PROJECTS } from '../../../data/projects';
@@ -13,10 +13,11 @@ import { LIFESTYLE_LIBRARY } from '../../../data/lifestyle';
 import type { IgnoreProduct, LifestyleItem } from '../../../data/lifestyle';
 import { getProjectExtras, saveProjectExtras, LOGO_LIBRARY } from '../../../data/projectDefaults';
 import type { CustomVariable, LogoSlot, ProjectAudio, ProjectLogo } from '../../../data/projectDefaults';
-import { BACKGROUND_COLLECTIONS, collectionBackgrounds, collectionName } from '../../../data/backgroundCollections';
+import { BACKGROUND_COLLECTIONS, collectionBackgrounds, collectionName, generatedBackground } from '../../../data/backgroundCollections';
 import { STATUS_CONFIG } from '../ProjectStatusBadge';
 import type { ProjectWorkflowStatus } from '../ProjectStatusBadge';
 import { AddTemplatesDialog } from '../AddTemplatesDialog';
+import { generateBackgroundSize } from '../../../utils/generateBackgroundSize';
 import { useSnackbar } from '../../../context/SnackbarContext';
 import bmwLogoSrc from '../../../assets/bmw-logo.png';
 import { TEMPLATE_REGISTRY } from '../../../templates';
@@ -325,6 +326,9 @@ const NAV: { id: Exclude<ListKey, 'lifestyle'>; label: string; description: stri
   { id: 'audio', label: 'Audio', description: 'Template defaults and vehicle-matched Lifestyle audio for each audio placeholder.' },
 ];
 
+/** How long an AI size is expected to take, in seconds, for the countdown. */
+const GENERATION_ESTIMATE_S = 48;
+
 const LOGO_SLOTS: ProjectLogo['slot'][] = ['Primary Logo', 'Secondary Logo', 'Event Logo'];
 
 /** Backgrounds named "<size> Background N" are one creative at different sizes:
@@ -501,6 +505,15 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   const [addingLogos, setAddingLogos] = useState<LogoSlot | null>(null);
   const [addingBackgrounds, setAddingBackgrounds] = useState(false);
   const [addingCollection, setAddingCollection] = useState(false);
+  /** Collection sizes being generated ("<collection key>|<template id>"), and the size open in the preview. */
+  const [generating, setGenerating] = useState<ReadonlyMap<string, number>>(new Map());
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!generating.size) return undefined;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [generating.size]);
+  const [previewSize, setPreviewSize] = useState<{ key: string; templateId: string } | null>(null);
   const [addingLifestyle, setAddingLifestyle] = useState(false);
   // Alert settings are a layout for now: they start on their defaults and hold what is picked while the dialog is open, nothing more.
   const [alertSettings, setAlertSettings] = useState<{ alerts: boolean; autoSend: boolean; brand: string | null; bodyQc: string | null; creativeQc: string | null }>(
@@ -519,7 +532,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingLifestyle) setAddingLifestyle(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (previewSize) setPreviewSize(null); else if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingLifestyle) setAddingLifestyle(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
@@ -632,6 +645,48 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     patchEach((d) => ({ backgrounds: [...d.backgrounds, ...collectionBackgrounds(key, d.templates).filter((b) => !d.backgrounds.some((x) => x.id === b.id))] }));
     setAddingCollection(false);
   };
+
+  /** The sizes a collection has across the selected projects, in template order. */
+  const sizesOf = (key: string): Template[] =>
+    TEMPLATES.filter((t) => all.some((d) => d.backgrounds.some((b) => b.templateId === t.id && collectionKey(b.name) === key)));
+  /** Templates a collection has no size for, with the projects that have both the collection and the template. */
+  const missingSizes = (key: string): { template: Template; projects: number }[] =>
+    TEMPLATES.map((t) => ({
+      template: t,
+      projects: all.filter((d) => d.backgrounds.some((b) => collectionKey(b.name) === key)
+        && d.templates.some((x) => x.id === t.id) && !d.backgrounds.some((b) => b.templateId === t.id && collectionKey(b.name) === key)).length,
+    })).filter((m) => m.projects > 0);
+  const generateSize = async (key: string, template: Template) => {
+    const busy = `${key}|${template.id}`;
+    if (generating.has(busy)) return;
+    setNow(Date.now());
+    setGenerating((prev) => new Map(prev).set(busy, Date.now()));
+    try {
+      // Recompose the collection's size closest in proportions to the one being made.
+      const ratio = template.width / template.height;
+      const sources = all.flatMap((d) => d.backgrounds).filter((b) => collectionKey(b.name) === key && b.url);
+      const closest = (b: Background) => {
+        const t = TEMPLATES.find((x) => x.id === b.templateId);
+        return t ? Math.abs(Math.log(t.width / t.height / ratio)) : Infinity;
+      };
+      const source = [...sources].sort((x, y) => closest(x) - closest(y))[0];
+      const made = generatedBackground(key, template);
+      if (!source || !made) throw new Error('This collection has no size to generate from.');
+      const url = await generateBackgroundSize(source.url, template.width, template.height, collectionName(key));
+      const generated = { ...made, url };
+      patchEach((d) => (d.backgrounds.some((b) => collectionKey(b.name) === key) && d.templates.some((t) => t.id === template.id)
+        && !d.backgrounds.some((b) => b.templateId === template.id && collectionKey(b.name) === key)
+        ? { backgrounds: [...d.backgrounds, generated] } : {}));
+    } catch {
+      showSnackbar({ message: 'Generation failed. Please try again.', duration: 3000 });
+    } finally {
+      setGenerating((prev) => { const next = new Map(prev); next.delete(busy); return next; });
+    }
+  };
+  const previewBackground = previewSize
+    ? all.flatMap((d) => d.backgrounds).find((b) => b.templateId === previewSize.templateId && collectionKey(b.name) === previewSize.key)
+    : undefined;
+  const previewTemplate = previewSize ? TEMPLATES.find((t) => t.id === previewSize.templateId) : undefined;
 
   // Individual backgrounds from the portal: only sizes some selected project has a template for, and only
   // projects with that template receive them — there is no way to push one onto a project without its size.
@@ -1029,7 +1084,43 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Overline>Collections ({g.backgrounds.length})</Overline>
           <DefaultsGroupList<BgCollection> {...handlers('backgrounds')} selected={selected} onToggle={toggleSelected} layout="cards" groups={g.backgrounds}
             visual={(c) => ratioImg(c.url, c.width, c.height)}
-            title={(c) => collectionName(c.key)} subtitle={(c) => `${c.sizes} size${c.sizes === 1 ? '' : 's'}`}
+            title={(c) => collectionName(c.key)}
+            subtitle={(c) => (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {sizesOf(c.key).map((t) => (
+                  <button key={t.id} type="button" aria-label={`Preview ${collectionName(c.key)} at ${t.width} x ${t.height}`}
+                    onClick={() => setPreviewSize({ key: c.key, templateId: t.id })}
+                    style={{ border: 'none', cursor: 'pointer', background: '#eceaf0', color: '#4b4958', borderRadius: 100, padding: '1px 8px', fontSize: 11, fontFamily: FONT, lineHeight: 1.6 }}>
+                    {t.width} x {t.height}
+                  </button>
+                ))}
+              </div>
+            )}
+            footer={(c) => {
+              const missing = missingSizes(c.key);
+              if (!missing.length) return null;
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {missing.map(({ template: t, projects: count }) => {
+                    const busy = generating.has(`${c.key}|${t.id}`);
+                    return (
+                      <Tooltip key={t.id} title={`No ${t.width} x ${t.height} size${n > 1 ? ` in ${count} project${count === 1 ? '' : 's'}` : ''}. Generate it with AI.`}>
+                        <Chip variant="outlined" size="small" disabled={busy} onClick={() => generateSize(c.key, t)}
+                          label={(
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                              {t.width} x {t.height}
+                              <IconButton size="small" aria-label={`Generate ${t.width} x ${t.height} with AI`} disabled={busy} sx={{ p: 0.25, color: 'inherit' }}>
+                                {busy ? <CircularProgress size={14} color="inherit" /> : <AutoAwesome style={{ fontSize: 14 }} />}
+                              </IconButton>
+                            </span>
+                          )}
+                          sx={{ fontFamily: FONT, fontSize: 11, color: '#686576', borderColor: '#c9c6d3', borderStyle: 'dashed', '& .MuiChip-label': { pr: 0.5 } }} />
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              );
+            }}
             emptyText="No backgrounds on the selected projects." />
 
           <div style={{ marginTop: 32 }}>
@@ -1299,6 +1390,26 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           confirmLabel="Remove project"
           onCancel={() => setPendingRemoval(null)}
           onConfirm={() => { setRemovedIds((r) => [...r, pendingRemoval.id]); setPendingRemoval(null); }} />
+      )}
+      {generating.size > 0 && ReactDOM.createPortal(
+        <div role="status" style={{ position: 'fixed', left: 24, bottom: 24, zIndex: 100030, background: '#1f1d25', color: '#fff', fontFamily: FONT, fontSize: 14, padding: '12px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <CircularProgress size={16} color="inherit" />
+          {(() => {
+            const left = Math.max(...[...generating.values()].map((start) => GENERATION_ESTIMATE_S - Math.floor((now - start) / 1000)));
+            return left > 0 ? `Generating background. Estimated time remaining: ${left}s.` : 'Generating background. Finishing up\u2026';
+          })()}
+        </div>,
+        document.body,
+      )}
+      {previewSize && previewBackground && previewTemplate && ReactDOM.createPortal(
+        <div role="dialog" aria-label="Size preview" onClick={() => setPreviewSize(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 100020, background: 'rgba(10,9,16,0.82)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
+          <IconButton aria-label="Close preview" onClick={() => setPreviewSize(null)} sx={{ position: 'absolute', top: 16, right: 16, color: '#fff' }}><Close /></IconButton>
+          <img src={previewBackground.url} alt={`${collectionName(previewSize.key)} ${previewTemplate.width} x ${previewTemplate.height}`} onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 640, height: 'auto', aspectRatio: `${previewTemplate.width} / ${previewTemplate.height}`, objectFit: 'cover', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }} />
+          <div style={{ color: '#fff', fontFamily: FONT, fontSize: 14 }}>{collectionName(previewSize.key)} &middot; {previewTemplate.width} x {previewTemplate.height}</div>
+        </div>,
+        document.body,
       )}
       {confirmDiscard && (
         <ConfirmModal id="discard-changes" title="Discard your changes?" destructive

@@ -9,6 +9,8 @@ interface SnackbarAction {
 interface SnackbarConfig {
   message: string;
   action?: SnackbarAction;
+  /** How long it stays, in ms. Defaults to 2000. */
+  duration?: number;
 }
 
 interface SnackbarContextValue {
@@ -26,7 +28,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     setCurrent(config);
     setOpen(true);
-    timerRef.current = setTimeout(() => setOpen(false), 2000);
+    timerRef.current = setTimeout(() => setOpen(false), config.duration ?? 2000);
   }, []);
 
   const handleClose = useCallback(() => {

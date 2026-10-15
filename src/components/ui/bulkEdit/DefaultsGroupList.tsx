@@ -181,7 +181,7 @@ const Coverage = ({ projects, ids, title, right, onRemoveFrom, onAddTo, addBlock
 
 export function DefaultsGroupList<T>({
   projects, groups, layout, visual, title, subtitle, renderRow, onRemoveAll, onRemoveFrom, onApplyToAll,
-  emptyText, addControl, extraRow, selected, onToggle, addBlocked, onAddTo, addBlockedFor, footer,
+  emptyText, addControl, extraRow, selected, onToggle, addBlocked, onAddTo, addBlockedFor, footer
 }: {
   projects: readonly ProjectRef[];
   groups: DefaultGroup<T>[];
@@ -191,7 +191,7 @@ export function DefaultsGroupList<T>({
   /** Fills the 200 x 200 thumbnail (cards only). */
   visual?: (item: T) => React.ReactNode;
   title?: (item: T) => string;
-  subtitle?: (item: T) => string | undefined;
+  subtitle?: (item: T) => React.ReactNode;
   /** The body of a row (rows only). */
   renderRow?: (item: T, group: DefaultGroup<T>) => React.ReactNode;
   onRemoveAll: (key: string) => void;
@@ -259,7 +259,7 @@ export function DefaultsGroupList<T>({
                 {title?.(g.item)}
               </p>
               {subtitle?.(g.item) && (
-                <p style={{ margin: 0, fontSize: 11, fontFamily: FONT, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66 }}>{subtitle(g.item)}</p>
+                <div style={{ fontSize: 11, fontFamily: FONT, color: '#686576', letterSpacing: '0.4px', lineHeight: 1.66 }}>{subtitle(g.item)}</div>
               )}
             </div>
             {footer?.(g.item, g)}

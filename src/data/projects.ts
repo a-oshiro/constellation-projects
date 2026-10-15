@@ -65,8 +65,8 @@ const templateById = (id: string) => TEMPLATES.find((t) => t.id === id)!;
  *  1080 x 1080 stays first: it is the template every Evergreen email is built from. */
 const EVERGREEN_TEMPLATES = [templateById('tmpl-2'), templateById('tmpl-4')];
 const EVERGREEN_BACKGROUNDS = [
-  ...collectionBackgrounds('Background 1', EVERGREEN_TEMPLATES), // Abstract Blue Black
-  ...collectionBackgrounds('Background 4', EVERGREEN_TEMPLATES), // Abstract Light
+  ...collectionBackgrounds('Background 1', EVERGREEN_TEMPLATES), // City Skyline
+  ...collectionBackgrounds('Background 3', EVERGREEN_TEMPLATES), // Mansion Porch
 ];
 
 // Declared early: the generated-project builder below needs it at module-eval time.

@@ -9,16 +9,26 @@ import { BACKGROUNDS } from './mockData';
 export interface BackgroundCollection { key: string; name: string }
 
 export const BACKGROUND_COLLECTIONS: BackgroundCollection[] = [
-  { key: 'Background 1', name: 'Abstract Blue Black' },
-  { key: 'Background 2', name: 'Abstract Dark' },
-  { key: 'Background 3', name: 'Abstract Golden Shadows' },
-  { key: 'Background 4', name: 'Abstract Light' },
-  { key: 'Background 5', name: 'Abstract Orange Waves' },
+  { key: 'Background 1', name: 'City Skyline' },
+  { key: 'Background 2', name: 'Country Road Hill' },
+  { key: 'Background 3', name: 'Mansion Porch' },
+  { key: 'Background 5', name: 'Fall Foliage Road' },
   { key: 'Background 6', name: 'Abstract Purple' },
   { key: 'Background 7', name: 'Abstract Red Bokeh' },
   { key: 'Background 8', name: 'Abstract Teal Glow' },
   { key: 'Background 9', name: 'Studio Gray Gradient' },
 ];
+
+/** Templates a collection has no size for. Those sizes can be generated with AI, per project. */
+const MISSING_SIZES: Record<string, string[]> = {
+  'Background 5': ['tmpl-1', 'tmpl-4'],
+  'Background 6': ['tmpl-3'],
+  'Background 7': ['tmpl-2'],
+  'Background 8': ['tmpl-4'],
+};
+
+const hasSize = (collection: BackgroundCollection, template: Template) =>
+  !(MISSING_SIZES[collection.key] ?? []).includes(template.id);
 
 export const collectionName = (key: string) => BACKGROUND_COLLECTIONS.find((c) => c.key === key)?.name ?? key;
 
@@ -39,7 +49,13 @@ const backgroundFor = (collection: BackgroundCollection, template: Template): Ba
 /** The collection at every size of the given templates. */
 export const collectionBackgrounds = (key: string, templates: readonly Template[]): Background[] => {
   const collection = BACKGROUND_COLLECTIONS.find((c) => c.key === key);
-  return collection ? templates.map((t) => backgroundFor(collection, t)) : [];
+  return collection ? templates.filter((t) => hasSize(collection, t)).map((t) => backgroundFor(collection, t)) : [];
+};
+
+/** The size AI generates for a template the collection lacks. */
+export const generatedBackground = (key: string, template: Template): Background | null => {
+  const collection = BACKGROUND_COLLECTIONS.find((c) => c.key === key);
+  return collection ? { ...backgroundFor(collection, template), id: `gen-${key.replace(/\s+/g, '-').toLowerCase()}-${template.id}` } : null;
 };
 
 /** A picture for the collection, for the picker. */
