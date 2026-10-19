@@ -297,6 +297,15 @@ export const ProjectsBoardPage = () => {
             {visibleProjects.length} item{visibleProjects.length === 1 ? '' : 's'}
           </span>
 
+          {viewMode === 'kanban' && visibleProjects.length > 0 && (
+            <button
+              type="button" onClick={handleToggleSelectAll}
+              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontFamily: 'Roboto, sans-serif', fontWeight: 500, color: '#473bab', letterSpacing: '0.17px', whiteSpace: 'nowrap', textDecoration: 'underline' }}
+            >
+              {selectedCount === visibleProjects.length ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+
           <IconButton
             size="large"
             onClick={() => setViewMode((prev) => (prev === 'kanban' ? 'table' : 'kanban'))}

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, MenuItem, Popover, Switch, TextField, Tooltip } from '@mui/material';
 import {
-  Add, AddCircleOutlined, AutoAwesome, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore,
+  Add, AddCircleOutlined, AutoAwesome, CalendarMonthOutlined, ChangeCircleOutlined, Check, CheckCircle, ChevronLeft, ChevronRight, CheckCircleOutlined, Close, DeleteOutlined, EditNoteOutlined, EventBusyOutlined, ExpandMore, CodeOutlined, GridViewOutlined, InfoOutlined, LibraryMusicOutlined, NotificationsNoneOutlined, AccountCircleOutlined,
   HourglassEmptyOutlined, Inventory2Outlined, PendingOutlined, PermMediaOutlined, PlayArrow, RemoveCircleOutlined, Search, Undo, WarningAmber,
 } from '@mui/icons-material';
 import { PROJECTS } from '../../../data/projects';
@@ -328,6 +328,7 @@ const NAV: { id: Exclude<ListKey, 'lifestyle'>; label: string; description: stri
 
 /** How long an AI size is expected to take, in seconds, for the countdown. */
 const GENERATION_ESTIMATE_S = 48;
+const SLIDE_MS = 300;
 
 const LOGO_SLOTS: ProjectLogo['slot'][] = ['Primary Logo', 'Secondary Logo', 'Event Logo'];
 
@@ -350,17 +351,6 @@ const collectionsOf = (bgs: Background[]): BgCollection[] => {
   });
   return [...m.values()];
 };
-
-/** The pane title (H1, 16px), the pane's primary action 16px to its right, and an optional description. */
-const SectionHeading = ({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) => (
-  <div style={{ marginBottom: 24 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, minHeight: 32 }}>
-      <h1 style={{ margin: 0, fontSize: 16, fontWeight: 500, fontFamily: FONT, color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5 }}>{title}</h1>
-      {action}
-    </div>
-    {description && <p style={{ margin: '8px 0 0', fontSize: 12, fontFamily: FONT, color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43 }}>{description}</p>}
-  </div>
-);
 
 /** A small confirmation dialog layered above the editor. */
 const ConfirmModal = ({ id, title, body, confirmLabel, destructive, onConfirm, onCancel }: {
@@ -434,23 +424,27 @@ const SelectionBar = ({ count, bulk, canAdd, onClear, onAdd, onRemove }: {
   );
 };
 
-const NavItem = ({ label, active, count, changes, onClick }: {
-  label: string; active: boolean; count?: number; changes: number; onClick: () => void;
+const AccordionRow = ({ icon, label, description, count, changed, open, onToggle, first, children }: {
+  icon: React.ReactNode; label: string; description: string; count?: number; changed: boolean; open: boolean; onToggle: () => void; first?: boolean; children: React.ReactNode;
 }) => (
-  <button
-    type="button" onClick={onClick} aria-current={active ? 'page' : undefined}
-    style={{
-      display: 'flex', alignItems: 'center', gap: 10, width: '100%', border: 'none', cursor: 'pointer', textAlign: 'left',
-      borderRadius: 8, padding: '10px 12px', fontSize: 14, fontFamily: FONT,
-      background: active ? '#e9e6ff' : 'transparent', color: active ? '#2f2688' : '#1f1d25', fontWeight: active ? 500 : 400,
-    }}
-  >
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      {label}
-      {changes > 0 && <span role="img" aria-label="Edited" style={{ width: 4, height: 4, borderRadius: '50%', background: PURPLE, flexShrink: 0 }} />}
-    </span>
-    {count !== undefined && <span style={{ marginLeft: 'auto', fontSize: 12, color: '#686576', fontWeight: 400 }}>{count}</span>}
-  </button>
+  <div style={{ borderTop: first ? 'none' : '1px solid rgba(0,0,0,0.12)' }}>
+    <button
+      type="button" onClick={onToggle} aria-expanded={open}
+      style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: '16px 16px', fontFamily: FONT, color: '#1f1d25' }}
+    >
+      <span style={{ display: 'inline-flex', color: '#4b4958' }}>{icon}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 500, letterSpacing: '0.15px' }}>
+          {label}
+          {count !== undefined && <span style={{ minWidth: 20, height: 20, padding: '0 6px', boxSizing: 'border-box', borderRadius: 10, background: '#f0f0f3', fontSize: 11, fontWeight: 400, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>}
+          {changed && <span role="img" aria-label="Edited" style={{ width: 6, height: 6, borderRadius: '50%', background: PURPLE, flexShrink: 0 }} />}
+        </span>
+        <span style={{ display: 'block', fontSize: 12, color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43, marginTop: 2 }}>{description}</span>
+      </span>
+      <ExpandMore style={{ fontSize: 22, color: '#4b4958', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+    </button>
+    {open && <div style={{ padding: '4px 16px 24px' }}>{children}</div>}
+  </div>
 );
 
 /** What makes two defaults "the same one" when grouping and removing. A
@@ -486,20 +480,47 @@ interface Props {
   onSaved: () => void;
 }
 
-export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved }: Props) => {
+export const BulkEditProjectsDialog = ({ projects: allProjects, onClose: onClosed, onSaved }: Props) => {
   const { showSnackbar } = useSnackbar();
+  // The panel slides open (and shut) by easing its width, which makes the main panel beside it give up the space.
+  const slideRef = useRef<HTMLDivElement>(null);
+  const [rowWidth, setRowWidth] = useState(0);
+  /** The width the user dragged the panel to; until then it takes half the row. */
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const [resizing, setResizing] = useState(false);
+  const [edgeHover, setEdgeHover] = useState(false);
+  const minWidth = 420;
+  const maxWidth = Math.max(minWidth, rowWidth - 360);
+  const slideWidth = Math.min(maxWidth, Math.max(minWidth, dragWidth ?? Math.round(rowWidth / 2)));
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX; const startW = slideWidth;
+    setResizing(true);
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+    const onMove = (m: MouseEvent) => setDragWidth(Math.min(maxWidth, Math.max(minWidth, startW + (startX - m.clientX))));
+    const onUp = () => {
+      setResizing(false);
+      document.body.style.cursor = ''; document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+  const [slidIn, setSlidIn] = useState(false);
+  useLayoutEffect(() => {
+    const measure = () => { const row = slideRef.current?.parentElement; if (row) setRowWidth(row.clientWidth); };
+    measure();
+    window.addEventListener('resize', measure);
+    const raf = requestAnimationFrame(() => setSlidIn(true));
+    return () => { window.removeEventListener('resize', measure); cancelAnimationFrame(raf); };
+  }, []);
+  const onClose = () => { setSlidIn(false); window.setTimeout(onClosed, SLIDE_MS); };
   const initial = useMemo(
     () => Object.fromEntries(allProjects.map((p) => [p.id, draftOf(p)])) as Record<string, Draft>,
     [allProjects],
   );
-  // Projects taken out of the selection from the header; they are left out of everything below.
-  const [removedIds, setRemovedIds] = useState<string[]>([]);
-  const [pendingRemoval, setPendingRemoval] = useState<Project | null>(null);
-  const projects = allProjects.filter((p) => !removedIds.includes(p.id));
+  const projects = allProjects;
   const [drafts, setDrafts] = useState<Record<string, Draft>>(initial);
-  const [section, setSection] = useState<Section>('info');
-  const [showProjects, setShowProjects] = useState(false);
-  const [projectQuery, setProjectQuery] = useState('');
+  const [section, setSection] = useState<Section | null>('info');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [addingTemplates, setAddingTemplates] = useState(false);
   const [addingLogos, setAddingLogos] = useState<LogoSlot | null>(null);
@@ -528,11 +549,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
   const ids = projects.map((p) => p.id);
   const all = ids.map((id) => drafts[id]);
-  const dirty = removedIds.length > 0 || ids.some((id) => !same(drafts[id], initial[id]));
+  const dirty = ids.some((id) => !same(drafts[id], initial[id]));
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (previewSize) setPreviewSize(null); else if (confirmDiscard) setConfirmDiscard(false); else if (pendingRemoval) setPendingRemoval(null); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingLifestyle) setAddingLifestyle(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else if (showProjects) setShowProjects(false); else requestClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (previewSize) setPreviewSize(null); else if (confirmDiscard) setConfirmDiscard(false); else if (addingBackgrounds) setAddingBackgrounds(false); else if (addingLifestyle) setAddingLifestyle(false); else if (addingTemplates) setAddingTemplates(false); else if (addingLogos) setAddingLogos(null); else if (showChanges) setShowChanges(false); else requestClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
@@ -746,7 +767,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
 
   // ── Selection ─────────────────────────────────────────────────────────────
-  const goTo = (next: Section) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); setAddingCollection(false); setAddingLifestyle(false); };
+  const goTo = (next: Section | null) => { setSection(next); setSelected(new Set()); setAddingBackgrounds(false); setAddingCollection(false); setAddingLifestyle(false); };
   const toggleSelected = (key: string) => setSelected((prev) => {
     const next = new Set(prev);
     if (!next.delete(key)) next.add(key);
@@ -754,10 +775,10 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
   });
   /** Lifestyle shares the Backgrounds section, so a selected key may belong to either list. */
   const listOfKey = (key: string): ListKey | null => {
-    if (section === 'info' || section === 'alerts') return null;
+    if (!section || section === 'info' || section === 'alerts') return null;
     return section === 'backgrounds' && g.lifestyle.some((x) => x.key === key) ? 'lifestyle' : section;
   };
-  const selectable: { list: ListKey; key: string; count: number }[] = section === 'info' || section === 'alerts' ? [] : [
+  const selectable: { list: ListKey; key: string; count: number }[] = !section || section === 'info' || section === 'alerts' ? [] : [
     ...g[section].map((x) => ({ list: section as ListKey, key: x.key, count: x.projectIds.length })),
     ...(section === 'backgrounds' ? g.lifestyle.map((x) => ({ list: 'lifestyle' as ListKey, key: x.key, count: x.projectIds.length })) : []),
   ];
@@ -1197,15 +1218,21 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     </>
   );
 
-  return ReactDOM.createPortal(
+  // A floating right panel, in the same row as the main panel and below the top bar: it takes half the row
+  // and the main panel gives up the space.
+  return (
     <>
-      <div onClick={requestClose} style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.4)' }} />
+      <div ref={slideRef} style={{ width: slidIn ? slideWidth : 0, flexShrink: 0, overflow: 'hidden', transition: resizing ? 'none' : `width ${SLIDE_MS}ms ease-in-out`, display: 'flex', position: 'relative' }}>
+      <div role="separator" aria-orientation="vertical" aria-label="Resize panel" onMouseDown={startResize}
+        onMouseEnter={() => setEdgeHover(true)} onMouseLeave={() => setEdgeHover(false)}
+        style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 8, zIndex: 5, cursor: 'col-resize', display: 'flex', justifyContent: 'flex-start' }}>
+        <div style={{ width: 3, borderRadius: 2, background: edgeHover || resizing ? PURPLE : 'transparent', transition: 'background .12s', pointerEvents: 'none' }} />
+      </div>
       <div
         role="dialog" aria-label="Edit projects"
         style={{
-          position: 'fixed', inset: 16, zIndex: 100001, background: '#ffffff', borderRadius: 16, overflow: 'hidden',
-          display: 'flex', flexDirection: 'column',
-          boxShadow: '0px 8px 40px 8px rgba(0,0,0,0.14), 0px 20px 30px 4px rgba(0,0,0,0.12), 0px 10px 12px -6px rgba(0,0,0,0.2)',
+          width: slideWidth - 8, flexShrink: 0, margin: '8px 8px 8px 0', position: 'relative', background: '#ffffff', borderRadius: 8, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         }}
       >
         {/* Header */}
@@ -1214,52 +1241,6 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
             <span style={{ fontSize: 16, fontFamily: FONT, fontWeight: 500, color: '#1f1d25', letterSpacing: '0.15px', whiteSpace: 'nowrap' }}>
               Edit {n} project{plural}
             </span>
-            <div style={{ position: 'relative' }}>
-              <button type="button" onClick={() => { setShowProjects((v) => !v); setProjectQuery(''); }} aria-expanded={showProjects} aria-haspopup="dialog"
-                aria-label={`Selected projects, ${n}`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px 0 5px', border: '1px solid #d8d5e6', borderRadius: 100,
-                  background: showProjects ? '#f4f2ff' : '#fff', cursor: 'pointer', color: '#1f1d25', fontSize: 13, fontWeight: 500, fontFamily: FONT,
-                }}>
-                <span style={{ display: 'inline-flex' }}>
-                  {projects.slice(0, 2).map((p, i) => (
-                    <span key={p.id} style={{ marginLeft: i ? -8 : 0, display: 'inline-flex' }}><ProjectAvatar name={p.projectName} id={p.id} size={22} ring /></span>
-                  ))}
-                  {n > 2 && (
-                    <span aria-hidden="true" style={{ marginLeft: -8, width: 22, height: 22, borderRadius: '50%', background: '#e9e6ff', color: '#2f2688', fontSize: 10, fontWeight: 500, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff', boxSizing: 'border-box' }}>+{n - 2}</span>
-                  )}
-                </span>
-                {n}
-                <ExpandMore style={{ fontSize: 18, transform: showProjects ? 'rotate(180deg)' : 'none', transition: 'transform .25s' }} />
-              </button>
-              {showProjects && <div onClick={() => setShowProjects(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />}
-              <div role="dialog" aria-label="Selected projects" style={{
-                position: 'absolute', zIndex: 6, left: 0, top: 'calc(100% + 8px)', width: 300, background: '#fff', borderRadius: 12, border: '1px solid #e1ddf0', padding: 8,
-                boxShadow: '0 14px 34px rgba(31,29,37,0.22)',
-                opacity: showProjects ? 1 : 0, transform: showProjects ? 'none' : 'translateY(6px)', visibility: showProjects ? 'visible' : 'hidden',
-                transition: 'opacity .18s, transform .18s, visibility .18s',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 10px', border: '1px solid #e1ddf0', borderRadius: 8 }}>
-                  <Search style={{ fontSize: 16, color: '#8c8999' }} />
-                  <input value={projectQuery} onChange={(e) => setProjectQuery(e.target.value)} placeholder="Find a project" aria-label="Find a project"
-                    style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 13, fontFamily: FONT, color: '#1f1d25', background: 'transparent' }} />
-                </div>
-                <div style={{ marginTop: 6, maxHeight: 230, overflowY: 'auto' }}>
-                  {projects.filter((p) => p.projectName.toLowerCase().includes(projectQuery.trim().toLowerCase())).map((p) => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 4px 4px 8px', borderRadius: 8 }}>
-                      <ProjectAvatar name={p.projectName} id={p.id} size={22} />
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontFamily: FONT, color: '#1f1d25', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.projectName}</span>
-                      {n > 1 && (
-                        <IconButton size="small" aria-label={`Remove ${p.projectName} from this edit`} onClick={() => setPendingRemoval(p)}
-                          sx={{ '&:hover': { color: '#d2323f', background: '#fdeaec' } }}>
-                          <DeleteOutlined style={{ fontSize: 18 }} />
-                        </IconButton>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
             <div style={{ flex: 1 }} />
             <div style={{ position: 'relative' }}>
               <Button variant="outlined" size="small" disabled={totalChanges === 0} aria-expanded={showChanges} aria-haspopup="dialog"
@@ -1332,37 +1313,42 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         </div>
 
         {/* Body */}
-        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          <nav aria-label="Sections" style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(0,0,0,0.08)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
-            <NavItem label="Project Info" active={section === 'info'} changes={infoChanges} onClick={() => goTo('info')} />
-            <NavItem label="Alert Settings" active={section === 'alerts'} changes={0} onClick={() => goTo('alerts')} />
-            {NAV.map((s) => (
-              <NavItem key={s.id} label={s.label} active={section === s.id} count={g[s.id].length}
-                changes={sectionChanges(s.id)} onClick={() => goTo(s.id)} />
-            ))}
-          </nav>
-
-          <section style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: 16 }}>
-            <SectionHeading
-              title={section === 'info' ? 'Project Info' : section === 'alerts' ? 'Alert Settings' : NAV.find((x) => x.id === section)!.label}
-              description={section === 'info' || section === 'alerts' ? undefined
-                : `${NAV.find((x) => x.id === section)!.description}${n > 1 ? ' Each default is listed once, with how many of the selected projects have it.' : ''}`}
-              action={
-                selected.size > 0 ? <SelectionBar count={selected.size} bulk={n > 1} canAdd={canAddSelected} onClear={() => setSelected(new Set())} onAdd={addSelectedToAll} onRemove={removeSelectedFromAll} />
-                  : section === 'customVariables' ? <AddButton label="Add variable" disabled={addingVar} onClick={() => setAddingVar(true)} />
-                  : section === 'templates' ? <AddButton label="Add templates" onClick={() => setAddingTemplates(true)} />
-                  : section === 'backgrounds' ? (
+        <section style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', padding: 16 }}>
+          <div style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, overflow: 'hidden' }}>
+            {(() => {
+              const rows: { id: Section; label: string; description: string; icon: React.ReactNode; count?: number; changed: boolean }[] = [
+                { id: 'info', label: 'Project Info', description: 'The details these projects share: status, owner and dates.', icon: <InfoOutlined />, changed: infoChanges > 0 },
+                { id: 'alerts', label: 'Alert Settings', description: 'How alerts are created, sent and reviewed for these projects.', icon: <NotificationsNoneOutlined />, changed: false },
+                ...NAV.map((x) => ({
+                  id: x.id as Section, label: x.label, description: x.description, count: g[x.id].length, changed: sectionChanges(x.id) > 0,
+                  icon: { customVariables: <CodeOutlined />, templates: <GridViewOutlined />, backgrounds: <PermMediaOutlined />, logos: <AccountCircleOutlined />, audio: <LibraryMusicOutlined /> }[x.id],
+                })),
+              ];
+              return rows.map((r, i) => {
+                const open = section === r.id;
+                const actions = !open ? undefined
+                  : selected.size > 0 ? <SelectionBar count={selected.size} bulk={n > 1} canAdd={canAddSelected} onClear={() => setSelected(new Set())} onAdd={addSelectedToAll} onRemove={removeSelectedFromAll} />
+                  : r.id === 'customVariables' ? <AddButton label="Add variable" disabled={addingVar} onClick={() => setAddingVar(true)} />
+                  : r.id === 'templates' ? <AddButton label="Add templates" onClick={() => setAddingTemplates(true)} />
+                  : r.id === 'backgrounds' ? (
                     <div style={{ display: 'flex', gap: 8 }}>
                       <AddButton label="Add backgrounds" onClick={() => setAddingBackgrounds(true)} />
                       <AddButton label="Add collection" disabled={addingCollection} onClick={() => setAddingCollection(true)} />
                     </div>
                   )
-                  : section === 'audio' ? <AddButton label="Add audio" />
-                  : undefined
-              } />
-            {section === 'info' ? infoView : section === 'alerts' ? alertsView : listView}
-          </section>
-        </div>
+                  : r.id === 'audio' ? <AddButton label="Add audio" />
+                  : undefined;
+                return (
+                  <AccordionRow key={r.id} first={i === 0} icon={r.icon} label={r.label} description={r.description} count={r.count} changed={r.changed}
+                    open={open} onToggle={() => goTo(open ? null : r.id)}>
+                    {actions && <div style={{ marginBottom: 16 }}>{actions}</div>}
+                    {r.id === 'info' ? infoView : r.id === 'alerts' ? alertsView : listView}
+                  </AccordionRow>
+                );
+              });
+            })()}
+          </div>
+        </section>
 
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
@@ -1370,6 +1356,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           <Button variant="outlined" onClick={requestClose} sx={button(false)}>Cancel</Button>
           <Button variant="contained" disableElevation disabled={totalChanges === 0} onClick={save} sx={button(true)}>Apply changes</Button>
         </div>
+      </div>
       </div>
       {addingLifestyle && (
         <AddLifestyleDialog items={lifestyleToAdd} onClose={() => setAddingLifestyle(false)}
@@ -1386,13 +1373,6 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       {addingLogos && (
         <AddLogosDialog logos={logosToAdd(addingLogos)} onClose={() => setAddingLogos(null)}
           onAdd={(libraryIds) => { addLogos(addingLogos, libraryIds); setAddingLogos(null); }} />
-      )}
-      {pendingRemoval && (
-        <ConfirmModal id="remove-project" title={`Remove ${pendingRemoval.projectName} from this edit?`}
-          body="All changes made in this edit so far will not be applied to this project. It will keep its current values."
-          confirmLabel="Remove project"
-          onCancel={() => setPendingRemoval(null)}
-          onConfirm={() => { setRemovedIds((r) => [...r, pendingRemoval.id]); setPendingRemoval(null); }} />
       )}
       {generating.size > 0 && ReactDOM.createPortal(
         <div role="status" style={{ position: 'fixed', left: 24, bottom: 24, zIndex: 100030, background: '#1f1d25', color: '#fff', fontFamily: FONT, fontSize: 14, padding: '12px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1420,7 +1400,6 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
           confirmLabel="Discard changes"
           onCancel={() => setConfirmDiscard(false)} onConfirm={onClose} />
       )}
-    </>,
-    document.body,
+    </>
   );
 };
