@@ -25,6 +25,8 @@ export function groupDefaults<T>(
   itemsOf: (projectId: string) => readonly T[],
   keyOf: (item: T) => string,
   nameOf: (item: T) => string,
+  /** What each project started with: an item no project has any more is kept, with no projects, so it can be put back. */
+  originalsOf?: (projectId: string) => readonly T[],
 ): DefaultGroup<T>[] {
   const groups = new Map<string, DefaultGroup<T>>();
   for (const p of projects) {
@@ -33,6 +35,14 @@ export function groupDefaults<T>(
       const g = groups.get(key);
       if (g) g.projectIds.push(p.id);
       else groups.set(key, { key, item, projectIds: [p.id] });
+    }
+  }
+  if (originalsOf) {
+    for (const p of projects) {
+      for (const item of originalsOf(p.id)) {
+        const key = keyOf(item);
+        if (!groups.has(key)) groups.set(key, { key, item, projectIds: [] });
+      }
     }
   }
   return [...groups.values()].sort((a, b) => nameOf(a.item).localeCompare(nameOf(b.item), undefined, { numeric: true, sensitivity: 'base' }));
@@ -55,11 +65,13 @@ const AddToAllIcon = ({ blocked, total, onClick }: { blocked?: string; total: nu
   );
 };
 
-const RemoveIcon = ({ total, onClick }: { total: number; onClick: () => void }) => (
-  <Tooltip slotProps={tooltipSlots} title={total > 1 ? 'Remove from all' : 'Remove'}>
-    <IconButton size="small" aria-label={total > 1 ? 'Remove from all projects' : 'Remove'} onClick={onClick}>
-      <DeleteOutlined style={{ fontSize: 20, color: '#1f1d25' }} />
-    </IconButton>
+const RemoveIcon = ({ total, onClick, disabled }: { total: number; onClick: () => void; disabled?: boolean }) => (
+  <Tooltip slotProps={tooltipSlots} title={disabled ? 'Already removed' : total > 1 ? 'Remove from all' : 'Remove'}>
+    <span>
+      <IconButton size="small" disabled={disabled} aria-label={total > 1 ? 'Remove from all projects' : 'Remove'} onClick={onClick}>
+        <DeleteOutlined style={{ fontSize: 20, color: disabled ? undefined : '#1f1d25' }} />
+      </IconButton>
+    </span>
   </Tooltip>
 );
 
@@ -84,6 +96,12 @@ const cardSx = {
   '&:hover .dg-reveal, &:focus-within .dg-reveal, & .dg-reveal.dg-on': { opacity: 1, transform: 'none' },
 } as const;
 
+/** A removed row: its text, and the fields and icons in it, drop to the disabled text color. */
+const DISABLED_TEXT = 'rgba(0,0,0,0.38)';
+const disabledTextSx = {
+  '&, & span, & p, & label, & input, & textarea, & .MuiInputBase-root, & .MuiInputLabel-root, & .MuiSvgIcon-root, & .MuiIconButton-root': { color: DISABLED_TEXT, WebkitTextFillColor: DISABLED_TEXT },
+} as const;
+
 const roundSx = {
   width: 32, height: 32, background: '#fff', color: '#1f1d25', boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
   '&:hover': { background: PURPLE, color: '#fff' }, '&.Mui-disabled': { background: 'rgba(255,255,255,0.6)' },
@@ -100,6 +118,7 @@ const Coverage = ({ projects, ids, title, right, onRemoveFrom, onAddTo, addBlock
   const [query, setQuery] = useState('');
   const total = projects.length;
   const full = ids.length === total;
+  const gone = ids.length === 0;
   const matches = (p: ProjectRef) => p.name.toLowerCase().includes(query.trim().toLowerCase());
   const has = projects.filter((p) => ids.includes(p.id) && matches(p));
   const missing = projects.filter((p) => !ids.includes(p.id) && matches(p));
@@ -111,14 +130,14 @@ const Coverage = ({ projects, ids, title, right, onRemoveFrom, onAddTo, addBlock
     <>
       <button
         type="button" onClick={(e) => setAnchor(e.currentTarget)} aria-expanded={!!anchor} aria-haspopup="dialog"
-        aria-label={`${ids.length} of ${total} projects have this. Show which.`}
+        aria-label={gone ? 'Removed from all projects. Show which.' : `${ids.length} of ${total} projects have this. Show which.`}
         style={{
           border: 'none', cursor: 'pointer', borderRadius: 100, padding: '2px 6px 2px 8px', fontSize: 12, fontFamily: FONT, fontWeight: 500, whiteSpace: 'nowrap',
           display: 'inline-flex', alignItems: 'center', gap: 2,
-          background: full ? PURPLE : '#e9e6ff', color: full ? '#fff' : '#2f2688',
+          background: gone ? '#fdeaec' : full ? PURPLE : '#e9e6ff', color: gone ? '#a3202c' : full ? '#fff' : '#2f2688',
         }}
       >
-        {ids.length} of {total}
+        {gone ? 'Removed' : `${ids.length} of ${total}`}
         <ExpandMore style={{ fontSize: 14, transform: anchor ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
       </button>
       <Popover
@@ -225,19 +244,22 @@ export function DefaultsGroupList<T>({
       {groups.map((g) => {
         const blocked = g.projectIds.length === total ? 'Already present in all selected projects.' : addBlocked?.(g.key);
         const isSelected = selected.has(g.key);
+        const gone = g.projectIds.length === 0;
         return (
           <Box key={g.key} sx={{ width: CARD_SIZE, display: 'flex', flexDirection: 'column', gap: 1, ...cardSx }}>
             <div className="dg-thumb" style={{ position: 'relative', width: CARD_SIZE, height: CARD_SIZE, borderRadius: 12, overflow: 'hidden', background: '#f0f2f4', border: '1px solid #e7e7e9', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isSelected ? `0 0 0 3px ${PURPLE}` : undefined }}>
-              {visual?.(g.item)}
+              {gone
+                ? <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6 }}>{visual?.(g.item)}</div>
+                : visual?.(g.item)}
               <SelectBox overlay className={`dg-reveal${anySelected || isSelected ? ' dg-on' : ''}`} checked={isSelected}
                 onChange={() => onToggle(g.key)} label={`Select ${title?.(g.item) ?? 'item'}`} />
-              {total > 1 && (
+              {(total > 1 || gone) && (
                 <div style={{ position: 'absolute', top: 8, right: 8 }}>
                   {cov(g, title?.(g.item) ?? '', false)}
                 </div>
               )}
               <div className="dg-reveal dg-bar" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '28px 8px 8px', background: 'linear-gradient(transparent, rgba(20,18,30,0.65))', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                {total > 1 && (
+                {(total > 1 || gone) && (
                   <Tooltip slotProps={tooltipSlots} title={blocked ?? 'Add to all'}>
                     <span>
                       <IconButton disabled={!!blocked} aria-label="Add to all projects" onClick={() => onApplyToAll(g.key)} sx={roundSx}>
@@ -247,10 +269,12 @@ export function DefaultsGroupList<T>({
                   </Tooltip>
                 )}
                 <Tooltip slotProps={tooltipSlots} title={total > 1 ? 'Remove from all' : 'Remove'}>
-                  <IconButton aria-label={total > 1 ? 'Remove from all projects' : 'Remove'} onClick={() => onRemoveAll(g.key)}
-                    sx={{ ...roundSx, '&:hover': { background: '#d2323f', color: '#fff' } }}>
-                    <DeleteOutlined style={{ fontSize: 18 }} />
-                  </IconButton>
+                  <span>
+                    <IconButton disabled={gone} aria-label={total > 1 ? 'Remove from all projects' : 'Remove'} onClick={() => onRemoveAll(g.key)}
+                      sx={{ ...roundSx, '&:hover': { background: '#d2323f', color: '#fff' } }}>
+                      <DeleteOutlined style={{ fontSize: 18 }} />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </div>
             </div>
@@ -271,17 +295,18 @@ export function DefaultsGroupList<T>({
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {groups.map((g, i) => {
         const blocked = g.projectIds.length === total ? 'Already present in all selected projects.' : addBlocked?.(g.key);
+        const gone = g.projectIds.length === 0;
         return (
           <div key={g.key} style={{ borderTop: i ? '1px solid rgba(0,0,0,0.12)' : 'none', padding: i ? '24px 0' : '0 0 24px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', height: 40, marginLeft: -8 }}>
                 <SelectBox checked={selected.has(g.key)} onChange={() => onToggle(g.key)} label="Select" />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>{renderRow?.(g.item, g)}</div>
+              <Box sx={{ flex: 1, minWidth: 0, ...(gone ? disabledTextSx : {}) }}>{renderRow?.(g.item, g)}</Box>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 40 }}>
-                {total > 1 && cov(g, title?.(g.item) ?? '', true)}
+                {(total > 1 || gone) && cov(g, title?.(g.item) ?? '', true)}
                 <AddToAllIcon blocked={blocked} total={total} onClick={() => onApplyToAll(g.key)} />
-                <RemoveIcon total={total} onClick={() => onRemoveAll(g.key)} />
+                <RemoveIcon total={total} disabled={gone} onClick={() => onRemoveAll(g.key)} />
               </div>
             </div>
           </div>
@@ -293,14 +318,15 @@ export function DefaultsGroupList<T>({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {groups.map((g) => {
         const blocked = g.projectIds.length === total ? 'Already present in all selected projects.' : addBlocked?.(g.key);
+        const gone = g.projectIds.length === 0;
         return (
           <div key={g.key} style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, background: '#fff' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px' }}>
               <div style={{ marginLeft: -8 }}><SelectBox checked={selected.has(g.key)} onChange={() => onToggle(g.key)} label="Select" /></div>
-              <div style={{ flex: 1, minWidth: 0 }}>{renderRow?.(g.item, g)}</div>
-              {total > 1 && cov(g, title?.(g.item) ?? '', true)}
+              <Box sx={{ flex: 1, minWidth: 0, ...(gone ? disabledTextSx : {}) }}>{renderRow?.(g.item, g)}</Box>
+              {(total > 1 || gone) && cov(g, title?.(g.item) ?? '', true)}
               <AddToAllIcon blocked={blocked} total={total} onClick={() => onApplyToAll(g.key)} />
-              <RemoveIcon total={total} onClick={() => onRemoveAll(g.key)} />
+              <RemoveIcon total={total} disabled={gone} onClick={() => onRemoveAll(g.key)} />
             </div>
           </div>
         );

@@ -590,14 +590,14 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
       return;
     }
     if (list === 'templates') {
-      const template = all.flatMap((d) => d.templates).find((t) => t.id === key);
+      const template = [...all, ...ids.map((id) => initial[id])].flatMap((d) => d.templates).find((t) => t.id === key);
       if (!template) return;
       patchEach((d, id) => ((only && id !== only) || d.templates.some((t) => t.id === key)
         ? {}
         : { templates: [...d.templates, template], backgrounds: [...d.backgrounds, ...sizesFor(d, [template])] }));
       return;
     }
-    const item = all.flatMap((d) => d[list] as unknown[]).find((i) => keyOf(list, i) === key);
+    const item = [...all, ...ids.map((id) => initial[id])].flatMap((d) => d[list] as unknown[]).find((i) => keyOf(list, i) === key);
     patchEach((d, id) => ((only && id !== only) || (d[list] as unknown[]).some((i) => keyOf(list, i) === key)
       ? {}
       : { [list]: [...(d[list] as unknown[]), item] }));
@@ -716,7 +716,8 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
 
   const group = <T,>(list: ListKey) =>
     groupDefaults<T>(refs, (id) => itemsIn(list, drafts[id]) as T[], (i) => (list === 'customVariables' ? keyOf(list, i) : diffKeyOf(list, i)),
-      (i) => (list === 'customVariables' ? (i as CustomVariable).name : labelOf(list, i)));
+      (i) => (list === 'customVariables' ? (i as CustomVariable).name : labelOf(list, i)),
+      (id) => itemsIn(list, initial[id]) as T[]);
   const g = {
     customVariables: group<CustomVariable>('customVariables'),
     templates: group<Template>('templates'),
@@ -1023,6 +1024,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
     f: { name: string; type: string; value: string },
     on: { name?: (v: string) => void; value: (v: string) => void },
     placeholder?: string,
+    locked?: boolean,
   ) => (
     <div style={VAR_GRID}>
       <Labeled label="Name">
@@ -1035,7 +1037,7 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         </TextField>
       </Labeled>
       <Labeled label="Default value">
-        <TextField size="small" fullWidth value={f.value} placeholder={placeholder}
+        <TextField size="small" fullWidth value={f.value} placeholder={placeholder} disabled={locked}
           onChange={(e) => on.value(e.target.value)}
           slotProps={{ htmlInput: { 'aria-label': 'Default value' } }} sx={fieldSx()} />
       </Labeled>
@@ -1048,10 +1050,11 @@ export const BulkEditProjectsDialog = ({ projects: allProjects, onClose, onSaved
         <DefaultsGroupList<CustomVariable> {...handlers('customVariables')} selected={selected} onToggle={toggleSelected} layout="list" groups={g.customVariables}
           title={(v) => v.name}
           emptyText={addingVar ? '' : 'No custom variables on the selected projects.'}
-          renderRow={(v) => variableFields(
-            { name: v.name, type: 'Text', value: variableValue(v.name) ?? '' },
+          renderRow={(v, grp) => variableFields(
+            { name: v.name, type: 'Text', value: grp.projectIds.length ? variableValue(v.name) ?? '' : v.value },
             { value: (val) => setVariableValue(v.name, val) },
-            variableValue(v.name) === undefined ? MIXED : undefined,
+            grp.projectIds.length && variableValue(v.name) === undefined ? MIXED : undefined,
+            grp.projectIds.length === 0,
           )}
           extraRow={addingVar && (
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
