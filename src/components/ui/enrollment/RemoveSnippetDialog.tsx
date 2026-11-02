@@ -1,6 +1,6 @@
 /**
- * Confirmation dialog shown when a user removes a generated disclosure snippet from a Fees and
- * Disclosures block. Modeled on `DiscardOfferEditDialog`'s shell/copy pattern. Rendered above the
+ * Confirmation dialog shown when a user removes the account's disclosure snippet from the Fees and
+ * Disclosures page. Modeled on `DiscardOfferEditDialog`'s shell/copy pattern. Rendered above the
  * full-screen `DisclosureSnippetDialog` portal (z-index 100001), so its own overlay needs to sit
  * higher than that.
  */
@@ -40,7 +40,7 @@ export function RemoveSnippetDialog({ open, snippetName, onCancel, onConfirm }: 
         {/* Body */}
         <div style={{ padding: '8px 16px 24px' }}>
           <p style={{ margin: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 400, color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5 }}>
-            Removing “{snippetName}” deletes this generated snippet and clears the disclosure text back to blank. This can’t be undone.
+            Removing “{snippetName}” detaches it from this account. Your disclosure text is kept, so you can generate a new snippet from it later.
           </p>
         </div>
 

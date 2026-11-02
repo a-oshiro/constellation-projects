@@ -42,7 +42,7 @@ export interface AdditionalFee {
   amount: number | null;
 }
 
-/** Metadata for a disclosure block once it's been turned into a reusable text snippet via the Disclosure Snippet Builder. */
+/** Metadata for the account's disclosure snippet once it's been built via the Disclosure Snippet Builder. */
 export interface DisclosureSnippetMeta {
   id: string;
   name: string;
@@ -62,13 +62,21 @@ export interface DisclosureSnippetMeta {
 }
 
 export interface DisclosureBlock {
-  id: 'lease' | 'cash' | 'finance';
+  id: 'lease' | 'apr' | 'cash' | 'finance';
   label: string;
   optional: boolean;
   enabled: boolean;
+  /** The raw client-provided disclosure text. */
   text: string;
-  /** Present once this block's disclosure has been generated into a snippet template. */
-  snippet?: DisclosureSnippetMeta;
+  /** True once this block's text has been built into the account's snippet. */
+  inSnippet: boolean;
+}
+
+/** The single text snippet an account's disclosures are built into — one per account, covering every disclosure type. */
+export interface AccountDisclosureSnippet {
+  meta: DisclosureSnippetMeta;
+  /** The templatized snippet text, with {variable} placeholders. */
+  text: string;
 }
 
 export interface EnrollmentSettings {
@@ -81,6 +89,7 @@ export interface EnrollmentSettings {
   channels: DistributionChannel[];
   otherChannels: string[];
   disclosures: DisclosureBlock[];
+  disclosureSnippet: AccountDisclosureSnippet | null;
   docFee: number | null;
   additionalFees: AdditionalFee[];
 }
@@ -134,10 +143,12 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: false, text: '' },
-      { id: 'cash', label: 'Cash Disclosure', optional: true, enabled: false, text: '' },
-      { id: 'finance', label: 'Finance Disclosure', optional: true, enabled: false, text: '' },
+      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: false, text: '', inSnippet: false },
+      { id: 'apr', label: 'APR Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
+      { id: 'cash', label: 'Cash Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
+      { id: 'finance', label: 'Finance Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
     ],
+    disclosureSnippet: null,
     docFee: 85,
     additionalFees: [],
   };

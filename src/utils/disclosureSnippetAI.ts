@@ -86,6 +86,12 @@ function parseGenerationResponse(content: string): DisclosureSnippetGeneration {
   return { snippet: cleaned, replacements: [] };
 }
 
+/** Joins every disclosure type's raw text into one labeled source, so a single account snippet covers all of them. */
+export function buildCombinedDisclosureSource(disclosures: Array<{ label: string; text: string }>): string {
+  if (disclosures.length === 1) return disclosures[0].text;
+  return disclosures.map((d) => `${d.label}:\n${d.text.trim()}`).join('\n\n');
+}
+
 /** Sends a raw client-provided disclosure through the OpenAI-backed templatizer and returns the resulting snippet text plus its source-value mapping. */
 export async function generateDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
   // Routed through the existing /api/fetch-urls serverless function — it's a generic Responses API
