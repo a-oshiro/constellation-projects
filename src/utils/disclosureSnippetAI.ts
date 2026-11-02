@@ -1,5 +1,13 @@
 import { DISCLOSURE_VARIABLES } from '../data/disclosureVariables';
 import type { DisclosureReplacement } from './disclosureSnippetColors';
+import { DISCLOSURE_BOILERPLATE, generateMockDisclosureSnippet } from './disclosureSnippetMock';
+
+// 'live' sends disclosures to OpenAI through /api/fetch-urls; 'mock' templatizes them locally so local
+// development doesn't spend credits (or fail when the serverless API isn't running). Defaults to mock
+// under `vite dev` and live in production builds — set VITE_DISCLOSURE_AI_MODE to override either way.
+const AI_MODE: 'live' | 'mock' = import.meta.env.VITE_DISCLOSURE_AI_MODE === 'live' || import.meta.env.VITE_DISCLOSURE_AI_MODE === 'mock'
+  ? import.meta.env.VITE_DISCLOSURE_AI_MODE
+  : import.meta.env.DEV ? 'mock' : 'live';
 
 // Cheapest model in the same family as the already-proven `gpt-4o` Responses API call used by
 // fetchUrlsWithAI.ts — keeps this a low-cost call while reusing the exact same integration path.
@@ -19,8 +27,7 @@ Always:
 - Preserve the "$" sign and any punctuation that sits immediately next to a value in the source text (e.g. write $ {msrp} when the source disclosure has a dollar sign directly before that value).
 - Keep the language formal and compliant with CARS Act requirements.
 - Append, exactly once, at the end of the disclosure (after the source text, on a new line) these two paragraphs of legal text regarding Rebate and Dealer Fee offers, using their placeholders verbatim exactly as given below — do not omit them even if the source disclosure has no rebate or dealer fee language of its own. These placeholders have no original substring in the source, so never list them in "replacements":
-Price includes the following rebates: $ {leaseRebate1Amount} {leaseRebate1Name}. {leaseRebate1Disclosure} $ {leaseRebate2Amount} {leaseRebate2Name}. {leaseRebate2Disclosure} $ {leaseRebate3Amount} {leaseRebate3Name}. {leaseRebate3Disclosure} $ {leaseRebate4Amount} {leaseRebate4Name}. {leaseRebate4Disclosure} $ {leaseRebate5Amount} {leaseRebate5Name}. {leaseRebate5Disclosure} $ {leaseRebate6Amount} {leaseRebate6Name}. {leaseRebate6Disclosure}
-{leaseDealerFee1Name}: \${leaseDealerFee1Value}, {leaseDealerFee2Name}: \${leaseDealerFee2Value}, {leaseDealerFee3Name}: \${leaseDealerFee3Value}, {leaseDealerFee4Name}: \${leaseDealerFee4Value}, {leaseDealerFee5Name}: \${leaseDealerFee5Value}, {leaseDealerFee6Name}: \${leaseDealerFee6Value}. {dynamicVinList} VIN: {VIN}
+${DISCLOSURE_BOILERPLATE}
 - Return ONLY a single JSON object, no markdown code fences, no commentary, of this exact shape:
 {"snippet": "<the resulting disclosure snippet text, exactly as described above>", "replacements": [{"key": "<variableKey, no braces>", "original": "<the exact original substring from the source disclosure that this variable replaced, verbatim, no leading $ if the $ stayed in the snippet as literal text>"}]}
 - Include exactly one "replacements" entry per distinct placeholder you introduced FROM THE SOURCE TEXT (skip the fixed rebate/dealer-fee/VIN boilerplate placeholders above, since they were not present in the source).`;
@@ -94,6 +101,8 @@ export function buildCombinedDisclosureSource(disclosures: Array<{ label: string
 
 /** Sends a raw client-provided disclosure through the OpenAI-backed templatizer and returns the resulting snippet text plus its source-value mapping. */
 export async function generateDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
+  if (AI_MODE === 'mock') return generateMockDisclosureSnippet(rawDisclosureText);
+
   // Routed through the existing /api/fetch-urls serverless function — it's a generic Responses API
   // proxy with nothing URL-specific in its own logic, so it's reused here rather than duplicating it.
   const response = await fetch('/api/fetch-urls', {

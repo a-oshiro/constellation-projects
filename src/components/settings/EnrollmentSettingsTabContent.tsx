@@ -48,7 +48,11 @@ export const EnrollmentSettingsTabContent = ({
         {tabLabel}
       </h1>
     </div>
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 32px' }}>
+    {/* Fees and Disclosures follows the Figma layout: content aligned with the page title, no extra top inset. */}
+    <div style={{
+      flex: 1, minHeight: 0, overflowY: 'auto',
+      padding: tabId === 'enrollment-fees-disclosures' ? '0 16px 16px' : '24px 32px',
+    }}>
       {tabId === 'enrollment-vehicles' && <VehiclesTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-vin-priorities' && <VinPrioritiesTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}

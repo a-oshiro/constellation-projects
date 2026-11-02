@@ -10,6 +10,7 @@ import { CURRENT_USER } from '../../../data/mockData';
 import { useSnackbar } from '../../../context/SnackbarContext';
 import { DisclosureSnippetDialog } from './DisclosureSnippetDialog';
 import { RemoveSnippetDialog } from './RemoveSnippetDialog';
+import { RemoveDisclosureDialog } from './RemoveDisclosureDialog';
 import pageTextLinkIcon from '../../../assets/icons/disclosures/page-text-link.svg';
 import pageTextAddIcon from '../../../assets/icons/disclosures/page-text-add.svg';
 import plusSmallIcon from '../../../assets/icons/disclosures/plus-small.svg';
@@ -31,7 +32,10 @@ const BulkDisclosureUploadIcon = () => (
   </svg>
 );
 
-/** Renders a Figma icon asset as a mask, tinted to `color` — matches Figma's "Masked Icon" color overrides for assets exported in black. */
+/**
+ * Renders a Figma icon asset as a mask, tinted to `color` — matches Figma's "Masked Icon" color overrides.
+ * Button icons pass `currentColor` so they follow the button's text color, including its disabled state.
+ */
 const MaskedIcon = ({ src, size, color = '#473bab' }: { src: string; size: number; color?: string }) => (
   <span
     aria-hidden
@@ -188,7 +192,12 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
   // Blocks already built into the snippet that the user reopened via "Update Disclosure" — holds the
   // in-progress text so "Cancel" can drop it without touching the saved disclosure.
   const [drafts, setDrafts] = useState<Partial<Record<DisclosureBlock['id'], string>>>({});
-  const [expandedIds, setExpandedIds] = useState<Set<DisclosureBlock['id']>>(new Set());
+  // Selected rows are expanded by default; this tracks the ones the user (or a finished generation) collapsed.
+  const [collapsedIds, setCollapsedIds] = useState<Set<DisclosureBlock['id']>>(new Set());
+  // Unchecking a row that already has disclosure text asks for confirmation first.
+  const [uncheckRequestId, setUncheckRequestId] = useState<DisclosureBlock['id'] | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   // `firstGeneration` — the dialog opened straight after the snippet was first created, so closing it
   // confirms creation with a snackbar (matching the Figma flow's "Done" → "Snippet generated.").
   const [snippetDialog, setSnippetDialog] = useState<{ firstGeneration: boolean } | null>(null);
@@ -210,22 +219,33 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
     });
   };
 
-  const toggleExpanded = (id: DisclosureBlock['id']) => {
-    setExpandedIds((prev) => {
+  const setCollapsed = (id: DisclosureBlock['id'], collapsed: boolean) => {
+    setCollapsedIds((prev) => {
+      if (prev.has(id) === collapsed) return prev;
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (collapsed) next.add(id);
+      else next.delete(id);
       return next;
     });
   };
 
+  const uncheckDisclosure = (id: DisclosureBlock['id']) => {
+    clearDraft(id);
+    setCollapsed(id, false);
+    updateDisclosure(id, { enabled: false, text: '', inSnippet: false });
+  };
+
   const handleToggleEnabled = (d: DisclosureBlock, checked: boolean) => {
     if (checked) {
+      setCollapsed(d.id, false);
       updateDisclosure(d.id, { enabled: true });
       return;
     }
-    clearDraft(d.id);
-    updateDisclosure(d.id, { enabled: false, text: '', inSnippet: false });
+    if (d.inSnippet || editText(d).trim() !== '') {
+      setUncheckRequestId(d.id);
+      return;
+    }
+    uncheckDisclosure(d.id);
   };
 
   const handleEditTextChange = (d: DisclosureBlock, value: string) => {
@@ -234,15 +254,17 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
   };
 
   /**
-   * Builds the account snippet from every disclosure already in it plus `block`'s current text, so the one
-   * snippet always covers all disclosure types. `generate` creates the first snippet, `update` regenerates
-   * the existing snippet in place, and `new` creates a fresh snippet that replaces (detaches) the current one.
+   * Builds the account snippet from every checked disclosure with text — `block`'s current (possibly
+   * draft) text plus every other disclosure's saved text — so the one snippet always covers all disclosure
+   * types added. `generate` creates the first snippet, `update` regenerates the existing snippet in place,
+   * and `new` creates a fresh snippet that replaces (detaches) the current one.
    */
   const runSnippetAction = async (block: DisclosureBlock, action: SnippetAction) => {
     const blockText = editText(block).trim();
-    const included = settings.disclosures.filter((d) => d.enabled && (d.id === block.id || d.inSnippet));
+    const sourceTextFor = (d: DisclosureBlock) => (d.id === block.id ? blockText : d.text.trim());
+    const included = settings.disclosures.filter((d) => d.enabled && sourceTextFor(d) !== '');
     const sourceText = buildCombinedDisclosureSource(
-      included.map((d) => ({ label: d.label, text: d.id === block.id ? blockText : d.text })),
+      included.map((d) => ({ label: d.label, text: sourceTextFor(d) })),
     );
 
     setBusy({ id: block.id, action });
@@ -263,11 +285,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
         )),
       });
       clearDraft(block.id);
-      setExpandedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(block.id);
-        return next;
-      });
+      included.forEach((d) => setCollapsed(d.id, true));
       if (action === 'generate') setSnippetDialog({ firstGeneration: true });
       else showSnackbar({ message: action === 'update' ? 'Snippet updated.' : 'Snippet generated.' });
     } catch (err) {
@@ -277,6 +295,63 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
       }));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const uncheckBlock = settings.disclosures.find((d) => d.id === uncheckRequestId);
+  // The other disclosures the snippet is rebuilt from once `uncheckBlock` is removed.
+  const remainingInSnippet = settings.disclosures.filter((d) => d.enabled && d.inSnippet && d.id !== uncheckRequestId);
+
+  const closeRemoveDialog = () => {
+    setUncheckRequestId(null);
+    setRemoveError(null);
+  };
+
+  /**
+   * Removes `uncheckBlock` and, when it was part of the account snippet, regenerates the snippet in place
+   * from the remaining disclosures. Nothing changes unless regeneration succeeds, so a failure leaves the
+   * disclosure checked and the snippet untouched. Removing the snippet's last disclosure detaches the snippet.
+   */
+  const handleConfirmRemove = async () => {
+    if (!uncheckBlock) return;
+    const id = uncheckBlock.id;
+    const disclosures = settings.disclosures.map((d) => (d.id === id ? { ...d, enabled: false, text: '', inSnippet: false } : d));
+
+    if (!snippet || !uncheckBlock.inSnippet) {
+      uncheckDisclosure(id);
+      closeRemoveDialog();
+      return;
+    }
+
+    if (remainingInSnippet.length === 0) {
+      onChange({ disclosures, disclosureSnippet: null });
+      clearDraft(id);
+      setCollapsed(id, false);
+      closeRemoveDialog();
+      showSnackbar({ message: 'Disclosure removed. Snippet detached.' });
+      return;
+    }
+
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      const sourceText = buildCombinedDisclosureSource(remainingInSnippet.map((d) => ({ label: d.label, text: d.text })));
+      const { snippet: generatedText, replacements } = await generateDisclosureSnippet(sourceText);
+      onChange({
+        disclosures,
+        disclosureSnippet: {
+          meta: { ...snippet.meta, sourceText, replacements, updatedAt: new Date().toISOString() },
+          text: generatedText,
+        },
+      });
+      clearDraft(id);
+      setCollapsed(id, false);
+      closeRemoveDialog();
+      showSnackbar({ message: 'Disclosure removed. Snippet regenerated.' });
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : 'Something went wrong while regenerating the snippet.');
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -327,7 +402,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
           variant="outlined"
           disabled={empty || !!busy}
           onClick={() => runSnippetAction(d, 'new')}
-          startIcon={<img src={pageTextAddIcon} width={18} height={18} alt="" />}
+          startIcon={<MaskedIcon src={pageTextAddIcon} size={18} color="currentColor" />}
           sx={OUTLINED_SMALL_BUTTON_SX}
         >
           Generate New Snippet
@@ -337,7 +412,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
           disableElevation
           disabled={empty || !!busy}
           onClick={() => runSnippetAction(d, 'update')}
-          startIcon={<img src={refreshIcon} width={18} height={18} alt="" />}
+          startIcon={<MaskedIcon src={refreshIcon} size={18} color="currentColor" />}
           sx={CONTAINED_SMALL_BUTTON_SX}
         >
           Update Snippet
@@ -354,7 +429,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
           {!snippet && (
             <Button
               variant="outlined"
-              startIcon={<img src={pageTextLinkIcon} width={18} height={18} alt="" />}
+              startIcon={<MaskedIcon src={pageTextLinkIcon} size={18} color="currentColor" />}
               sx={OUTLINED_SMALL_BUTTON_SX}
             >
               Select Existing Snippet
@@ -392,7 +467,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Button
               variant="outlined"
-              startIcon={<img src={plusSmallIcon} width={18} height={18} alt="" />}
+              startIcon={<MaskedIcon src={plusSmallIcon} size={18} color="currentColor" />}
               sx={OUTLINED_SMALL_BUTTON_SX}
             >
               Add General Disclosure
@@ -406,8 +481,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {settings.disclosures.map((d) => {
             const editing = isEditing(d);
-            const collapsible = d.enabled && d.inSnippet && !editing;
-            const expanded = collapsible && expandedIds.has(d.id);
+            const expanded = d.enabled && !collapsedIds.has(d.id);
             return (
               <div
                 key={d.id}
@@ -441,10 +515,11 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
                       />
                     )}
                   </label>
-                  {collapsible && (
+                  {d.enabled && (
                     <IconButton
                       aria-label={expanded ? `Collapse ${d.label}` : `Expand ${d.label}`}
-                      onClick={() => toggleExpanded(d.id)}
+                      aria-expanded={expanded}
+                      onClick={() => setCollapsed(d.id, expanded)}
                       sx={{ padding: '5px' }}
                     >
                       <img
@@ -458,7 +533,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
                   )}
                 </div>
 
-                {(editing || expanded) && (
+                {expanded && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 50, paddingBottom: 8 }}>
                     <TextField
                       multiline
@@ -474,7 +549,7 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
                         <Button
                           variant="text"
                           onClick={() => setDrafts((prev) => ({ ...prev, [d.id]: d.text }))}
-                          startIcon={<img src={arrowsRepeatIcon} width={18} height={18} alt="" />}
+                          startIcon={<MaskedIcon src={arrowsRepeatIcon} size={18} color="currentColor" />}
                           sx={TEXT_SMALL_BUTTON_SX}
                         >
                           Update Disclosure
@@ -506,6 +581,20 @@ const DisclosuresPanel = ({ settings, onChange, accountName, accountBrand }: Fee
           onSave={(text, meta) => onChange({ disclosureSnippet: { meta, text } })}
         />
       )}
+
+      <RemoveDisclosureDialog
+        open={!!uncheckBlock}
+        disclosureLabel={uncheckBlock?.label ?? ''}
+        snippetEffect={
+          !snippet || !uncheckBlock?.inSnippet ? 'none'
+            : remainingInSnippet.length === 0 ? 'detach'
+              : 'regenerate'
+        }
+        busy={removing}
+        error={removeError}
+        onCancel={closeRemoveDialog}
+        onConfirm={handleConfirmRemove}
+      />
 
       <RemoveSnippetDialog
         open={removeOpen && !!snippet}
