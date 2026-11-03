@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Alert, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome } from '@mui/icons-material';
 import type { DisclosureBlock, DisclosureSnippetMeta, EnrollmentSettings } from '../../../data/enrollmentSettings';
@@ -38,26 +38,27 @@ const MaskedIcon = ({ src, size, color = '#473bab' }: { src: string; size: numbe
   />
 );
 
-const SMALL_BUTTON_BASE_SX = {
-  borderRadius: 100, textTransform: 'capitalize', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-  letterSpacing: '0.46px', lineHeight: '22px', minWidth: 0, whiteSpace: 'nowrap',
+// Medium buttons, matching the page footer's other actions (Discard/Save on the other settings pages).
+const MEDIUM_BUTTON_BASE_SX = {
+  borderRadius: 100, textTransform: 'none', fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+  letterSpacing: '0.4px', lineHeight: '24px', minWidth: 0, whiteSpace: 'nowrap',
   '& .MuiButton-startIcon': { marginLeft: 0, marginRight: '8px' },
 };
 
-const OUTLINED_SMALL_BUTTON_SX = {
-  ...SMALL_BUTTON_BASE_SX,
-  padding: '3px 10px', color: '#473bab', borderColor: 'rgba(99,86,225,0.5)',
+const OUTLINED_MEDIUM_BUTTON_SX = {
+  ...MEDIUM_BUTTON_BASE_SX,
+  padding: '5px 15px', color: '#473bab', borderColor: 'rgba(99,86,225,0.5)',
   '&:hover': { borderColor: '#473bab', background: 'rgba(99,86,225,0.04)' },
 };
 
-const CONTAINED_SMALL_BUTTON_SX = {
-  ...SMALL_BUTTON_BASE_SX,
-  padding: '4px 10px', background: '#473bab', color: '#ffffff',
+const CONTAINED_MEDIUM_BUTTON_SX = {
+  ...MEDIUM_BUTTON_BASE_SX,
+  padding: '6px 16px', background: '#473bab', color: '#ffffff',
   '&:hover': { background: '#3d3396' },
   '&.Mui-disabled': { background: 'rgba(17,16,20,0.08)', color: 'rgba(17,16,20,0.38)' },
 };
 
-const TEXT_SMALL_BUTTON_SX = { ...SMALL_BUTTON_BASE_SX, padding: '4px 5px', color: '#473bab' };
+const TEXT_MEDIUM_BUTTON_SX = { ...MEDIUM_BUTTON_BASE_SX, padding: '6px 8px', color: '#473bab' };
 
 const SECTION_CARD_STYLE: CSSProperties = {
   border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 4,
@@ -277,83 +278,100 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     onChange({ disclosures: snippet.disclosures });
   };
 
+  let footer: ReactNode = null;
+  if (!snippet) {
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          Add disclosures above to generate a snippet or select an existing one.
+        </p>
+        <Button
+          variant="outlined"
+          startIcon={<MaskedIcon src={pageTextLinkIcon} size={20} color="currentColor" />}
+          sx={OUTLINED_MEDIUM_BUTTON_SX}
+        >
+          Select Existing Snippet
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled={!canGenerate}
+          onClick={handleGenerateSnippet}
+          startIcon={<AutoAwesome style={{ fontSize: 18 }} />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Generate Snippet
+        </Button>
+      </>
+    );
+  } else if (changedBlocks.length > 0) {
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          Changes made to {changedBlocks.map((d, i) => (
+            <span key={d.id}>
+              {i > 0 && (i === changedBlocks.length - 1 ? ' and ' : ', ')}
+              <strong style={{ fontWeight: 700 }}>{d.label}</strong>
+            </span>
+          ))} {changedBlocks.length === 1 ? 'disclosure' : 'disclosures'}. Update or generate a new snippet to apply.
+          <br />
+          If you exit, all changes will be lost.
+        </p>
+        <Button variant="text" onClick={handleDiscardChanges} sx={TEXT_MEDIUM_BUTTON_SX}>
+          Discard Changes
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled={anyGenerating || included.length === 0}
+          onClick={() => setUpdateOpen(true)}
+          startIcon={<MaskedIcon src={refreshIcon} size={20} color="currentColor" />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Update Snippet
+        </Button>
+      </>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100%', paddingBottom: footer ? 0 : 16, boxSizing: 'border-box' }}>
       <div style={SECTION_CARD_STYLE}>
         <p style={OVERLINE_STYLE}>Snippet</p>
         {snippet ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8,
+            border: '1px solid #473bab', background: 'rgba(99,86,225,0.08)',
+          }}>
+            <img src={pageTextLinkIcon} width={20} height={20} alt="" style={{ flexShrink: 0 }} />
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8,
-              border: '1px solid #473bab', background: 'rgba(99,86,225,0.08)',
+              display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden',
+              fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.17px', lineHeight: 1.43,
             }}>
-              <img src={pageTextLinkIcon} width={20} height={20} alt="" style={{ flexShrink: 0 }} />
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden',
-                fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.17px', lineHeight: 1.43,
-              }}>
-                <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{accountName} Snippet:</span>
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{snippet.meta.name}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 28 }}>
-                <IconButton aria-label="Edit snippet" onClick={() => setSnippetDialog({})} sx={{ padding: '5px' }}>
-                  <MaskedIcon src={pencilIcon} size={20} />
-                </IconButton>
-                <IconButton aria-label="Remove snippet" onClick={() => setRemoveOpen(true)} sx={{ padding: '5px' }}>
-                  <MaskedIcon src={circleXIcon} size={20} />
-                </IconButton>
-              </div>
+              <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{accountName} Snippet:</span>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{snippet.meta.name}</span>
             </div>
-            {changedBlocks.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
-                  Changes made to {changedBlocks.map((d, i) => (
-                    <span key={d.id}>
-                      {i > 0 && (i === changedBlocks.length - 1 ? ' and ' : ', ')}
-                      <strong style={{ fontWeight: 700 }}>{d.label}</strong>
-                    </span>
-                  ))} {changedBlocks.length === 1 ? 'disclosure' : 'disclosures'}. Update or generate a new snippet to apply.
-                  <br />
-                  If you exit, all changes will be lost.
-                </p>
-                <Button variant="text" onClick={handleDiscardChanges} sx={TEXT_SMALL_BUTTON_SX}>
-                  Discard Changes
-                </Button>
-                <Button
-                  variant="contained"
-                  disableElevation
-                  disabled={anyGenerating || included.length === 0}
-                  onClick={() => setUpdateOpen(true)}
-                  startIcon={<MaskedIcon src={refreshIcon} size={18} color="currentColor" />}
-                  sx={CONTAINED_SMALL_BUTTON_SX}
-                >
-                  Update Snippet
-                </Button>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 28 }}>
+              <IconButton aria-label="Edit snippet" onClick={() => setSnippetDialog({})} sx={{ padding: '5px' }}>
+                <MaskedIcon src={pencilIcon} size={20} />
+              </IconButton>
+              <IconButton aria-label="Remove snippet" onClick={() => setRemoveOpen(true)} sx={{ padding: '5px' }}>
+                <MaskedIcon src={circleXIcon} size={20} />
+              </IconButton>
+            </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
-              Add disclosures below to generate a snippet or select an existing one.
-            </p>
-            <Button
-              variant="outlined"
-              startIcon={<MaskedIcon src={pageTextLinkIcon} size={18} color="currentColor" />}
-              sx={OUTLINED_SMALL_BUTTON_SX}
-            >
-              Select Existing Snippet
-            </Button>
-            <Button
-              variant="contained"
-              disableElevation
-              disabled={!canGenerate}
-              onClick={handleGenerateSnippet}
-              startIcon={<AutoAwesome style={{ fontSize: 16 }} />}
-              sx={CONTAINED_SMALL_BUTTON_SX}
-            >
-              Generate Snippet
-            </Button>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8,
+            border: '1px dashed #c9c7d1', background: '#f9fafa',
+          }}>
+            <MaskedIcon src={pageTextLinkIcon} size={20} color="#9c99a9" />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <p style={{ ...BODY2_SECONDARY_STYLE, color: '#1f1d25', fontWeight: 500 }}>No snippet attached yet</p>
+              <p style={BODY2_SECONDARY_STYLE}>
+                Once generated or selected, this account's snippet appears here.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -375,6 +393,17 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
           />
         ))}
       </div>
+
+      {footer && (
+        // Stays pinned to the bottom of the page's scroll area so the snippet actions are always reachable.
+        <div style={{
+          position: 'sticky', bottom: 0, zIndex: 2, margin: '0 -16px', marginTop: 'auto',
+          display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px',
+          background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.12)',
+        }}>
+          {footer}
+        </div>
+      )}
 
       {snippetDialog && snippet && (
         <DisclosureSnippetDialog
