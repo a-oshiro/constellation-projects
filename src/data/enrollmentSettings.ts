@@ -61,15 +61,25 @@ export interface DisclosureSnippetMeta {
   replacements: DisclosureReplacement[];
 }
 
+/** A disclosure type's raw text templatized into {variable} placeholders — generated automatically as the raw text is entered. */
+export interface DisclosureTemplate {
+  /** The templatized text, with {variable} placeholders (editable). */
+  text: string;
+  /** Which {variable} replaced which exact substring of `sourceText` — powers the value/variable color-matching. */
+  replacements: DisclosureReplacement[];
+  /** The raw disclosure text this template was generated from. */
+  sourceText: string;
+  generatedAt: string;
+}
+
 export interface DisclosureBlock {
-  id: 'lease' | 'apr' | 'cash' | 'finance';
+  id: 'lease' | 'apr' | 'finance' | 'cash';
   label: string;
-  optional: boolean;
-  enabled: boolean;
   /** The raw client-provided disclosure text. */
   text: string;
-  /** True once this block's text has been built into the account's snippet. */
-  inSnippet: boolean;
+  template: DisclosureTemplate | null;
+  /** "Apply to automated offers" — whether this type's template is combined into the account snippet. */
+  includeInSnippet: boolean;
 }
 
 /** The single text snippet an account's disclosures are built into — one per account, covering every disclosure type. */
@@ -77,6 +87,8 @@ export interface AccountDisclosureSnippet {
   meta: DisclosureSnippetMeta;
   /** The templatized snippet text, with {variable} placeholders. */
   text: string;
+  /** The disclosures as they were when the snippet was last generated or updated — what "Discard Changes" restores. */
+  disclosures: DisclosureBlock[];
 }
 
 export interface EnrollmentSettings {
@@ -97,6 +109,12 @@ export interface EnrollmentSettings {
 function vehicle(id: string, model: string, year: number, selected: boolean): VehicleModelYear {
   return { id, model, year, selected, trimsMode: 'core', offerMode: 'oem' };
 }
+
+// TEST DATA — Lease and Cash start pre-filled so combining several disclosure types into one snippet can be
+// tried without pasting text each time. Their templates are generated on first view of the Disclosures page.
+// Reset both to '' to start the page empty again.
+const SAMPLE_LEASE_DISCLOSURE = "$2,999 due at signing, which includes an $895 document fee and any dealer ad-on's, 10,000 annual miles, $0.20 per mile thereafter, no security deposit required. Subject to credit approval by BMW Financial. Lease terms based on 2025 BMW X3 xDrive30i with MSRP of $52,750 less $1,200 dealer participation for total MSRP of $51,550. Excludes taxes, license, registration, and government fees. Prices may vary depending on vehicle. Offer expires 11/30/2026. Subject to prior sale.";
+const SAMPLE_CASH_DISCLOSURE = 'Cash price of $48,995 for 2025 BMW X3 xDrive30i with MSRP of $52,750 less $3,755 dealer discount, plus an $895 document fee. Excludes taxes, license, registration, and government fees. Prices may vary depending on vehicle. Offer expires 11/30/2026. Subject to prior sale.';
 
 /** Builds a brand-new default settings object — called once per project the first time its dialog opens. */
 export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
@@ -143,10 +161,10 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: false, text: '', inSnippet: false },
-      { id: 'apr', label: 'APR Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
-      { id: 'cash', label: 'Cash Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
-      { id: 'finance', label: 'Finance Disclosure', optional: true, enabled: false, text: '', inSnippet: false },
+      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true },
+      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true },
+      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true },
+      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true },
     ],
     disclosureSnippet: null,
     docFee: 85,

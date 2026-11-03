@@ -34,7 +34,7 @@ const ENROLLMENT_SETTINGS_TABS = [
   { id: 'enrollment-vin-priorities', label: 'VIN Priorities' },
   { id: 'enrollment-aged-discounts', label: 'Aged discount preferences' },
   { id: 'enrollment-creative-distribution', label: 'Creative and Distribution' },
-  { id: 'enrollment-fees-disclosures', label: 'Fees and Disclosures' },
+  { id: 'enrollment-fees-disclosures', label: 'Disclosures' },
 ] as const;
 
 const ALL_ACCOUNT_TABS = [...ACCOUNT_TABS, ...ENROLLMENT_SETTINGS_TABS];
@@ -60,15 +60,37 @@ export const AccountSettingsPage = () => {
   // the switcher navigates to a different account, since this page doesn't remount on a route param change.
   const [savedEnrollment, setSavedEnrollment] = useState<EnrollmentSettings>(() => getSavedEnrollmentSettings(`account:${account.id}`));
   const [draftEnrollment, setDraftEnrollment] = useState<EnrollmentSettings>(savedEnrollment);
+  // Tracked separately from `draftEnrollment !== savedEnrollment`: auto-saved patches (Disclosures) update
+  // both objects, which would otherwise read as unsaved changes on the other Enrollment Settings tabs.
+  const [isEnrollmentDirty, setIsEnrollmentDirty] = useState(false);
   useEffect(() => {
     const s = getSavedEnrollmentSettings(`account:${account.id}`);
     setSavedEnrollment(s);
     setDraftEnrollment(s);
+    setIsEnrollmentDirty(false);
   }, [account.id]);
-  const isEnrollmentDirty = draftEnrollment !== savedEnrollment;
-  const handleEnrollmentChange = (patch: Partial<EnrollmentSettings>) => setDraftEnrollment((prev) => ({ ...prev, ...patch }));
-  const handleEnrollmentSave = () => { saveEnrollmentSettings(`account:${account.id}`, draftEnrollment); setSavedEnrollment(draftEnrollment); };
-  const handleEnrollmentDiscard = () => setDraftEnrollment(savedEnrollment);
+  const handleEnrollmentChange = (patch: Partial<EnrollmentSettings>) => {
+    setDraftEnrollment((prev) => ({ ...prev, ...patch }));
+    setIsEnrollmentDirty(true);
+  };
+  /** Disclosures saves as you go — the patch is applied to the saved settings too, leaving other tabs' unsaved edits as drafts. */
+  const handleEnrollmentAutoSave = (patch: Partial<EnrollmentSettings>) => {
+    setDraftEnrollment((prev) => ({ ...prev, ...patch }));
+    setSavedEnrollment((prev) => {
+      const next = { ...prev, ...patch };
+      saveEnrollmentSettings(`account:${account.id}`, next);
+      return next;
+    });
+  };
+  const handleEnrollmentSave = () => {
+    saveEnrollmentSettings(`account:${account.id}`, draftEnrollment);
+    setSavedEnrollment(draftEnrollment);
+    setIsEnrollmentDirty(false);
+  };
+  const handleEnrollmentDiscard = () => {
+    setDraftEnrollment(savedEnrollment);
+    setIsEnrollmentDirty(false);
+  };
 
   const filteredSwitcherAccounts = useMemo(
     () => ACCOUNTS.filter((a) => a.name.toLowerCase().includes(switcherSearch.toLowerCase())),
@@ -243,7 +265,7 @@ export const AccountSettingsPage = () => {
           accountName={account.name}
           accountBrand={account.brand}
           settings={draftEnrollment}
-          onChange={handleEnrollmentChange}
+          onChange={activeTab.id === 'enrollment-fees-disclosures' ? handleEnrollmentAutoSave : handleEnrollmentChange}
           isDirty={isEnrollmentDirty}
           onSave={handleEnrollmentSave}
           onDiscard={handleEnrollmentDiscard}

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Popover, TextField, InputAdornment } from '@mui/material';
 import { Search } from '@mui/icons-material';
@@ -106,9 +107,11 @@ function buildChipSpan(key: string, color: string | undefined): HTMLSpanElement 
   span.contentEditable = 'false';
   span.dataset.variableKey = key;
   span.style.cssText = [
-    'display:inline-flex', 'align-items:center', 'gap:4px', 'border:1px solid transparent',
-    'border-radius:4px', 'padding:2px 6px', 'margin:0 1px', 'font-family:Roboto, sans-serif',
-    'font-size:13px', 'color:#1f1d25', 'cursor:pointer', 'vertical-align:baseline', 'white-space:nowrap',
+    // MUI Chip size="small" proportions (24px tall, 11px chip/label type) with its trailing delete icon.
+    'display:inline-flex', 'align-items:center', 'gap:2px', 'border:1px solid transparent', 'box-sizing:border-box',
+    'height:24px', 'border-radius:4px', 'padding:0 4px 0 8px', 'margin:0 1px', 'font-family:Roboto, sans-serif',
+    'font-size:11px', 'line-height:18px', 'letter-spacing:0.16px', 'color:#1f1d25', 'cursor:pointer',
+    'vertical-align:middle', 'white-space:nowrap',
   ].join(';');
   styleChipSpan(span, color);
 
@@ -119,8 +122,8 @@ function buildChipSpan(key: string, color: string | undefined): HTMLSpanElement 
   const svgNs = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNs, 'svg');
   svg.setAttribute('viewBox', '0 0 20 20');
-  svg.setAttribute('width', '13');
-  svg.setAttribute('height', '13');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
   svg.style.cssText = 'flex-shrink:0;';
   svg.dataset.role = 'remove-variable';
   const path = document.createElementNS(svgNs, 'path');
@@ -234,6 +237,8 @@ export interface DisclosureSnippetEditorHandle {
 interface DisclosureSnippetEditorProps {
   initialValue: string;
   onChange: (value: string) => void;
+  /** Overrides for the editable area's typography/sizing (e.g. the compact template pane on the Disclosures page). */
+  contentStyle?: CSSProperties;
 }
 
 interface PickerState {
@@ -245,7 +250,7 @@ interface PickerState {
 const TYPING_DEBOUNCE_MS = 600;
 
 export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle, DisclosureSnippetEditorProps>(
-  ({ initialValue, onChange }, ref) => {
+  ({ initialValue, onChange, contentStyle }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const valueRef = useRef(initialValue);
     const historyRef = useRef<string[]>([]);
@@ -505,6 +510,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             minHeight: 400,
+            ...contentStyle,
           }}
         />
 

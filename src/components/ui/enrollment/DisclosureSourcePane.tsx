@@ -1,45 +1,6 @@
 import { useMemo } from 'react';
 import type { DisclosureReplacement } from '../../../utils/disclosureSnippetColors';
-import { hexToRgba } from '../../../utils/disclosureSnippetColors';
-
-interface Segment {
-  text: string;
-  color?: string;
-}
-
-/** Finds each replacement's `original` substring in `sourceText` (skipping ones with no active color, and never re-matching a span already claimed by an earlier replacement), then slices the source into plain/colored segments in left-to-right order. */
-function buildHighlightSegments(sourceText: string, replacements: DisclosureReplacement[], colors: Record<string, string>): Segment[] {
-  const claimed: { start: number; end: number; color: string }[] = [];
-
-  for (const r of replacements) {
-    const color = colors[r.key];
-    if (!color || !r.original) continue;
-    let searchFrom = 0;
-    while (searchFrom <= sourceText.length) {
-      const idx = sourceText.indexOf(r.original, searchFrom);
-      if (idx === -1) break;
-      const end = idx + r.original.length;
-      const overlaps = claimed.some((m) => idx < m.end && end > m.start);
-      if (!overlaps) {
-        claimed.push({ start: idx, end, color });
-        break;
-      }
-      searchFrom = idx + 1;
-    }
-  }
-
-  claimed.sort((a, b) => a.start - b.start);
-
-  const segments: Segment[] = [];
-  let cursor = 0;
-  for (const m of claimed) {
-    if (m.start > cursor) segments.push({ text: sourceText.slice(cursor, m.start) });
-    segments.push({ text: sourceText.slice(m.start, m.end), color: m.color });
-    cursor = m.end;
-  }
-  if (cursor < sourceText.length) segments.push({ text: sourceText.slice(cursor) });
-  return segments;
-}
+import { buildHighlightSegments, hexToRgba } from '../../../utils/disclosureSnippetColors';
 
 interface DisclosureSourcePaneProps {
   sourceText: string;

@@ -99,6 +99,64 @@ export function buildCombinedDisclosureSource(disclosures: Array<{ label: string
   return disclosures.map((d) => `${d.label}:\n${d.text.trim()}`).join('\n\n');
 }
 
+const normalizeSentence = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+
+function splitSentences(paragraph: string): string[] {
+  return paragraph.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Combines each disclosure type's resulting template into one account snippet. A sentence that appears
+ * in more than one template (the rebate/dealer-fee boilerplate every template ends with, or shared legal
+ * lines like "Subject to prior sale.") is written once, after the type-specific text, keeping the
+ * paragraph it first appeared in; sentences unique to one template stay in place, in template order.
+ */
+export function consolidateDisclosureTemplates(templates: string[]): string {
+  const parsed = templates.map((t) => t.split(/\n+/).map(splitSentences).filter((p) => p.length > 0));
+
+  const templateCount = new Map<string, number>();
+  for (const paragraphs of parsed) {
+    for (const key of new Set(paragraphs.flat().map(normalizeSentence))) {
+      templateCount.set(key, (templateCount.get(key) ?? 0) + 1);
+    }
+  }
+
+  const own: string[] = [];
+  const shared = new Map<string, string[]>();
+  const seen = new Set<string>();
+  parsed.forEach((paragraphs, ti) => {
+    paragraphs.forEach((sentences, pi) => {
+      const ownSentences: string[] = [];
+      for (const sentence of sentences) {
+        const key = normalizeSentence(sentence);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if ((templateCount.get(key) ?? 0) > 1) {
+          const group = shared.get(`${ti}:${pi}`) ?? [];
+          group.push(sentence);
+          shared.set(`${ti}:${pi}`, group);
+        } else {
+          ownSentences.push(sentence);
+        }
+      }
+      if (ownSentences.length) own.push(ownSentences.join(' '));
+    });
+  });
+
+  return [...own, ...Array.from(shared.values(), (s) => s.join(' '))].join('\n\n');
+}
+
+/** Every distinct {key, original} pair across the templates' replacements, in order — powers the snippet's comparison-view colors. */
+export function mergeDisclosureReplacements(lists: DisclosureReplacement[][]): DisclosureReplacement[] {
+  const seen = new Set<string>();
+  return lists.flat().filter((r) => {
+    const id = `${r.key}\u0000${r.original}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 /** Sends a raw client-provided disclosure through the OpenAI-backed templatizer and returns the resulting snippet text plus its source-value mapping. */
 export async function generateDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
   if (AI_MODE === 'mock') return generateMockDisclosureSnippet(rawDisclosureText);

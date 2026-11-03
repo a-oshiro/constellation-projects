@@ -5,11 +5,12 @@ import { VehiclesTab } from '../ui/enrollment/VehiclesTab';
 import { VinPrioritiesTab } from '../ui/enrollment/VinPrioritiesTab';
 import { AgedDiscountsTab } from '../ui/enrollment/AgedDiscountsTab';
 import { CreativeDistributionTab } from '../ui/enrollment/CreativeDistributionTab';
-import { FeesDisclosuresTab } from '../ui/enrollment/FeesDisclosuresTab';
+import { DisclosuresTab } from '../ui/enrollment/DisclosuresTab';
 
 /** The Account Settings page's own left-nav already lists these one-per-row (unlike
  * `EnrollmentSettingsPanel`, which has its own internal sub-nav) — so this just wraps the bare tab
- * content + a Save/Discard footer, same session-only store as every other Enrollment Settings consumer. */
+ * content + a Save/Discard footer, same session-only store as every other Enrollment Settings consumer.
+ * Disclosures has no footer: its changes are saved automatically (see AccountSettingsPage). */
 export const ENROLLMENT_LEAF_TAB_IDS = [
   'enrollment-vehicles', 'enrollment-vin-priorities', 'enrollment-aged-discounts',
   'enrollment-creative-distribution', 'enrollment-fees-disclosures',
@@ -48,7 +49,7 @@ export const EnrollmentSettingsTabContent = ({
         {tabLabel}
       </h1>
     </div>
-    {/* Fees and Disclosures follows the Figma layout: content aligned with the page title, no extra top inset. */}
+    {/* Disclosures follows the Figma layout: content aligned with the page title, no extra top inset. */}
     <div style={{
       flex: 1, minHeight: 0, overflowY: 'auto',
       padding: tabId === 'enrollment-fees-disclosures' ? '0 16px 16px' : '24px 32px',
@@ -58,10 +59,10 @@ export const EnrollmentSettingsTabContent = ({
       {tabId === 'enrollment-aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-fees-disclosures' && (
-        <FeesDisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
+        <DisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
       )}
     </div>
-    <div style={{
+    {tabId !== 'enrollment-fees-disclosures' && <div style={{
       display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px',
       borderTop: '1px solid rgba(0,0,0,0.12)', flexShrink: 0,
     }}>
@@ -90,6 +91,6 @@ export const EnrollmentSettingsTabContent = ({
       >
         Save
       </Button>
-    </div>
+    </div>}
   </div>
 );
