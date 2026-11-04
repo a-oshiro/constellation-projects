@@ -234,8 +234,9 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
         {/* Body */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
           {/* Left: editor */}
-          <div style={{ flex: 1, background: '#f0f2f4', overflow: 'auto', padding: 24, display: 'flex', justifyContent: 'center' }}>
-            <div style={{ width: '100%', background: '#ffffff', borderRadius: 12, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, minWidth: 0, background: '#f0f2f4', overflow: 'hidden', padding: 24, display: 'flex', justifyContent: 'center' }}>
+            {/* The card keeps its toolbar and footer in place; only the content area between them scrolls. */}
+            <div style={{ width: '100%', background: '#ffffff', borderRadius: 12, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Toolbar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 16px', borderBottom: '1px solid #ececec', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 16, marginRight: 12 }}>
@@ -299,7 +300,7 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
               </div>
 
               {/* Content */}
-              <div style={{ padding: '20px 24px 32px', flex: 1 }}>
+              <div style={{ padding: '20px 24px 32px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {mode === 'write' && splitView ? (
                   <div style={{ display: 'flex', gap: 24 }}>
                     <div style={{ flex: 1, minWidth: 0, paddingRight: 24, borderRight: '1px solid #ececec' }}>
