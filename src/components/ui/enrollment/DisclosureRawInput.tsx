@@ -38,6 +38,8 @@ function withLeadingDollarSigns(segments: HighlightSegment[]): HighlightSegment[
 interface DisclosureRawInputProps {
   value: string;
   onChange: (value: string) => void;
+  /** Fired when the textarea loses focus — the Disclosures page builds the template then. */
+  onBlur?: () => void;
   replacements: DisclosureReplacement[];
   colors: Record<string, string>;
   placeholder?: string;
@@ -45,7 +47,7 @@ interface DisclosureRawInputProps {
   ariaLabel: string;
 }
 
-export function DisclosureRawInput({ value, onChange, replacements, colors, placeholder, height, ariaLabel }: DisclosureRawInputProps) {
+export function DisclosureRawInput({ value, onChange, onBlur, replacements, colors, placeholder, height, ariaLabel }: DisclosureRawInputProps) {
   const mirrorRef = useRef<HTMLDivElement>(null);
   const segments = useMemo(() => withLeadingDollarSigns(buildHighlightSegments(value, replacements, colors)), [value, replacements, colors]);
 
@@ -73,6 +75,7 @@ export function DisclosureRawInput({ value, onChange, replacements, colors, plac
         aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         onScroll={(e) => { if (mirrorRef.current) mirrorRef.current.scrollTop = e.currentTarget.scrollTop; }}
         spellCheck={false}
         style={{

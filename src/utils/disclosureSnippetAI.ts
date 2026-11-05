@@ -1,4 +1,5 @@
 import { DISCLOSURE_VARIABLES } from '../data/disclosureVariables';
+import type { DisclosureIssue } from '../data/enrollmentSettings';
 import type { DisclosureReplacement } from './disclosureSnippetColors';
 import { DISCLOSURE_BOILERPLATE, generateMockDisclosureSnippet } from './disclosureSnippetMock';
 
@@ -28,8 +29,9 @@ Always:
 - Keep the language formal and compliant with CARS Act requirements.
 - Append, exactly once, at the end of the disclosure (after the source text, on a new line) these two paragraphs of legal text regarding Rebate and Dealer Fee offers, using their placeholders verbatim exactly as given below — do not omit them even if the source disclosure has no rebate or dealer fee language of its own. These placeholders have no original substring in the source, so never list them in "replacements":
 ${DISCLOSURE_BOILERPLATE}
+- Report anything in the source disclosure that stops it from working as a reusable automated-offer template, as "issues". Use severity "failure" for language the client must change (e.g. eligibility conditions such as "who have leased or financed" that limit the offer to a group the platform cannot identify the viewer as part of), "warning" for things a human should double-check (e.g. mentions of a loyalty, conquest, military or other named program), and "change" for something you deliberately left as-is that may read oddly in the result (e.g. a fee already stated inside a sentence, which the appended dealer-fee sentence may repeat). Quote the exact source wording in each message. Return an empty list when there is nothing to report.
 - Return ONLY a single JSON object, no markdown code fences, no commentary, of this exact shape:
-{"snippet": "<the resulting disclosure snippet text, exactly as described above>", "replacements": [{"key": "<variableKey, no braces>", "original": "<the exact original substring from the source disclosure that this variable replaced, verbatim, no leading $ if the $ stayed in the snippet as literal text>"}]}
+{"snippet": "<the resulting disclosure snippet text, exactly as described above>", "replacements": [{"key": "<variableKey, no braces>", "original": "<the exact original substring from the source disclosure that this variable replaced, verbatim, no leading $ if the $ stayed in the snippet as literal text>"}], "issues": [{"severity": "failure" | "warning" | "change", "title": "<short title>", "message": "<one or two sentences explaining the problem and what to do>"}]}
 - Include exactly one "replacements" entry per distinct placeholder you introduced FROM THE SOURCE TEXT (skip the fixed rebate/dealer-fee/VIN boilerplate placeholders above, since they were not present in the source).`;
 
 function buildUserPrompt(rawDisclosureText: string): string {
@@ -70,27 +72,37 @@ function stripCodeFences(text: string): string {
 export interface DisclosureSnippetGeneration {
   snippet: string;
   replacements: DisclosureReplacement[];
+  issues: DisclosureIssue[];
 }
+
+const ISSUE_SEVERITIES: ReadonlySet<string> = new Set(['failure', 'warning', 'change']);
+
+const isDisclosureIssue = (i: unknown): i is DisclosureIssue => {
+  const issue = i as DisclosureIssue;
+  return !!issue && typeof issue === 'object' && ISSUE_SEVERITIES.has(issue.severity)
+    && typeof issue.title === 'string' && typeof issue.message === 'string';
+};
 
 // Lenient JSON parse: the prompt asks for a single {"snippet","replacements"} object, but if the model
 // ever wraps that in stray prose the snippet is still usable — it just loses its comparison-view
-// highlighting (replacements: []) rather than failing the whole generation.
+// highlighting and warnings (replacements: [], issues: []) rather than failing the whole generation.
 function parseGenerationResponse(content: string): DisclosureSnippetGeneration {
   const cleaned = stripCodeFences(content);
   try {
-    const parsed = JSON.parse(cleaned) as { snippet?: unknown; replacements?: unknown };
+    const parsed = JSON.parse(cleaned) as { snippet?: unknown; replacements?: unknown; issues?: unknown };
     if (typeof parsed.snippet === 'string') {
       const replacements = Array.isArray(parsed.replacements)
         ? parsed.replacements.filter(
             (r): r is DisclosureReplacement => !!r && typeof r === 'object' && typeof (r as DisclosureReplacement).key === 'string' && typeof (r as DisclosureReplacement).original === 'string',
           )
         : [];
-      return { snippet: parsed.snippet, replacements };
+      const issues = Array.isArray(parsed.issues) ? parsed.issues.filter(isDisclosureIssue) : [];
+      return { snippet: parsed.snippet, replacements, issues };
     }
   } catch {
     // fall through to the raw-text fallback below
   }
-  return { snippet: cleaned, replacements: [] };
+  return { snippet: cleaned, replacements: [], issues: [] };
 }
 
 /** Joins every disclosure type's raw text into one labeled source, so a single account snippet covers all of them. */

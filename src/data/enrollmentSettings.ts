@@ -61,6 +61,17 @@ export interface DisclosureSnippetMeta {
   replacements: DisclosureReplacement[];
 }
 
+/**
+ * Something in a raw disclosure the templatizer couldn't safely turn into a reusable template, shown in
+ * the Disclosure Warnings dialog. `failure` needs the client to change the disclosure, `warning` needs a
+ * human check, `change` explains something the templatizer left as-is.
+ */
+export interface DisclosureIssue {
+  severity: 'failure' | 'warning' | 'change';
+  title: string;
+  message: string;
+}
+
 /** A disclosure type's raw text templatized into {variable} placeholders — generated automatically as the raw text is entered. */
 export interface DisclosureTemplate {
   /** The templatized text, with {variable} placeholders (editable). */
@@ -70,6 +81,8 @@ export interface DisclosureTemplate {
   /** The raw disclosure text this template was generated from. */
   sourceText: string;
   generatedAt: string;
+  /** Problems found in the raw disclosure while templatizing it — drives the "Warnings (n)" tag. */
+  issues: DisclosureIssue[];
 }
 
 export interface DisclosureBlock {
@@ -77,6 +90,8 @@ export interface DisclosureBlock {
   label: string;
   /** The raw client-provided disclosure text. */
   text: string;
+  /** Who entered the raw text — a client (submitted for review) or a Constellation internal user. */
+  addedBy: 'client' | 'internal';
   template: DisclosureTemplate | null;
   /** "Apply to automated offers" — whether this type's template is combined into the account snippet. */
   includeInSnippet: boolean;
@@ -161,10 +176,10 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true },
-      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true },
-      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true },
-      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true },
+      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal' },
+      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true, addedBy: 'internal' },
+      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true, addedBy: 'internal' },
+      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal' },
     ],
     disclosureSnippet: null,
     docFee: 85,

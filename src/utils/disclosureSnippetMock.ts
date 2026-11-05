@@ -3,6 +3,7 @@
 // per-offer values (dates, rates, mileage, dollar amounts, model year) for {variable} placeholders and
 // reports each swap in `replacements`, so the comparison view still color-matches source and outcome.
 
+import type { DisclosureIssue } from '../data/enrollmentSettings';
 import type { DisclosureReplacement } from './disclosureSnippetColors';
 import type { DisclosureSnippetGeneration } from './disclosureSnippetAI';
 
@@ -27,9 +28,46 @@ const DOLLAR_KEY_HINTS: Array<{ key: string; after?: RegExp; before?: RegExp }> 
   { key: 'msrp', before: /msrp of\s*$/i },
 ];
 
+// Stand-ins for the warnings the live prompt is asked to report — one per severity, matching the
+// examples in the Figma "Disclosure Warnings" dialog.
+const ELIGIBILITY_RE = /\b(?:who|that) (?:have|has|currently) (?:leased|financed|purchased|owned)(?: or (?:leased|financed|purchased|owned))?\b/i;
+const NAMED_PROGRAM_RE = /\b(loyalty|conquest|military|college grad(?:uate)?)\b/i;
+const STATED_DOC_FEE_RE = /\$\s?\d[\d,]*(?:\.\d{2})? (?:document|doc|documentation) fee/i;
+
+function findMockDisclosureIssues(rawDisclosureText: string): DisclosureIssue[] {
+  const issues: DisclosureIssue[] = [];
+  const eligibility = ELIGIBILITY_RE.exec(rawDisclosureText);
+  if (eligibility) {
+    issues.push({
+      severity: 'failure',
+      title: 'Conditional eligibility',
+      message: `"${eligibility[0]}" limits the offer to existing owners or lessees. The platform cannot tell who is viewing, so it cannot say whether this payment applies to them. Send back.`,
+    });
+  }
+  const program = NAMED_PROGRAM_RE.exec(rawDisclosureText);
+  if (program) {
+    const name = program[1].charAt(0).toUpperCase() + program[1].slice(1).toLowerCase();
+    issues.push({
+      severity: 'warning',
+      title: `Mentions "${name}"`,
+      message: 'Check the offer does not depend on a rebate or loyalty program. Generic language is usually fine; a named program with an amount is not.',
+    });
+  }
+  const docFee = STATED_DOC_FEE_RE.exec(rawDisclosureText);
+  if (docFee) {
+    issues.push({
+      severity: 'change',
+      title: 'Document fee already stated',
+      message: `"${docFee[0]}" states a fee inside a sentence, so it was left in place — the appended dealer-fee sentence may repeat it.`,
+    });
+  }
+  return issues;
+}
+
 export async function generateMockDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
   await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
 
+  const issues = findMockDisclosureIssues(rawDisclosureText);
   const replacements: DisclosureReplacement[] = [];
   const usedKeys = new Map<string, string>();
 
@@ -60,5 +98,5 @@ export async function generateMockDisclosureSnippet(rawDisclosureText: string): 
   });
   text = text.replace(/\b(?:19|20)\d{2}\b(?=\s+[A-Z])/g, (m) => placeholder('modelYear', m));
 
-  return { snippet: `${text.trim()}\n\n${DISCLOSURE_BOILERPLATE}`, replacements };
+  return { snippet: `${text.trim()}\n\n${DISCLOSURE_BOILERPLATE}`, replacements, issues };
 }

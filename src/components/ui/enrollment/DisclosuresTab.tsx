@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { Alert, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome } from '@mui/icons-material';
 import type { DisclosureBlock, DisclosureSnippetMeta, DisclosureTemplate, EnrollmentSettings } from '../../../data/enrollmentSettings';
@@ -14,6 +14,7 @@ import { DisclosureSnippetDialog } from './DisclosureSnippetDialog';
 import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
 import type { DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
 import { DisclosureRawInput } from './DisclosureRawInput';
+import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
 import { RemoveSnippetDialog } from './RemoveSnippetDialog';
 import { UpdateSnippetDialog } from './UpdateSnippetDialog';
 import pageTextLinkIcon from '../../../assets/icons/disclosures/page-text-link.svg';
@@ -64,9 +65,8 @@ const SECTION_CARD_STYLE: CSSProperties = {
   border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 4,
 };
 
-const OVERLINE_STYLE: CSSProperties = {
-  margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '1px', lineHeight: 2.66,
-  textTransform: 'uppercase', whiteSpace: 'nowrap',
+const SUBTITLE2_STYLE: CSSProperties = {
+  margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', lineHeight: 1.57,
 };
 
 const BODY2_SECONDARY_STYLE: CSSProperties = {
@@ -75,9 +75,6 @@ const BODY2_SECONDARY_STYLE: CSSProperties = {
 
 /** Height of each side of the raw/template split view — both scroll independently past it (Figma: 273px). */
 const SPLIT_PANE_HEIGHT = 273;
-
-/** How long the raw text must sit unchanged before its template is (re)generated. */
-const TEMPLATE_DEBOUNCE_MS = 900;
 
 interface DisclosuresTabProps {
   settings: EnrollmentSettings;
@@ -136,7 +133,6 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const timersRef = useRef<Partial<Record<DisclosureBlock['id'], ReturnType<typeof setTimeout>>>>({});
   const [generatingIds, setGeneratingIds] = useState<Set<DisclosureBlock['id']>>(new Set());
   const [errors, setErrors] = useState<Partial<Record<DisclosureBlock['id'], string>>>({});
   // Only one disclosure type card is open at a time — expanding another closes it.
@@ -146,11 +142,6 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
   const [snippetDialog, setSnippetDialog] = useState<{ closeMessage?: string } | null>(null);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
-
-  useEffect(() => {
-    const timers = timersRef.current;
-    return () => Object.values(timers).forEach(clearTimeout);
-  }, []);
 
   const patchDisclosure = (id: DisclosureBlock['id'], patch: Partial<DisclosureBlock>) => {
     const disclosures = settingsRef.current.disclosures.map((d) => (d.id === id ? { ...d, ...patch } : d));
@@ -185,11 +176,11 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     setGenerating(id, true);
     setErrors((e) => ({ ...e, [id]: undefined }));
     try {
-      const { snippet: text, replacements } = await generateDisclosureSnippet(sourceText);
+      const { snippet: text, replacements, issues } = await generateDisclosureSnippet(sourceText);
       // Dropped if the raw text changed while this was in flight — a newer generation is already queued.
       const current = settingsRef.current.disclosures.find((d) => d.id === id);
       if (current?.text.trim() !== sourceText) return;
-      patchDisclosure(id, { template: { text, replacements, sourceText, generatedAt: new Date().toISOString() } });
+      patchDisclosure(id, { template: { text, replacements, sourceText, issues, generatedAt: new Date().toISOString() } });
     } catch (err) {
       if (settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() !== sourceText) return;
       setErrors((e) => ({ ...e, [id]: err instanceof Error ? err.message : 'Something went wrong while generating this template.' }));
@@ -210,21 +201,22 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
   }, []);
 
   const handleRawTextChange = (d: DisclosureBlock, value: string) => {
-    clearTimeout(timersRef.current[d.id]);
-    const trimmed = value.trim();
-    if (trimmed === '') {
+    if (value.trim() === '') {
       patchDisclosure(d.id, { text: value, template: null });
       setGenerating(d.id, false);
       setErrors((e) => ({ ...e, [d.id]: undefined }));
       return;
     }
-    patchDisclosure(d.id, { text: value });
-    if (d.template?.sourceText === trimmed) {
-      setGenerating(d.id, false);
-      return;
-    }
-    setGenerating(d.id, true);
-    timersRef.current[d.id] = setTimeout(() => generateTemplate(d.id, trimmed), TEMPLATE_DEBOUNCE_MS);
+    // Typing into an empty disclosure makes this user its author.
+    patchDisclosure(d.id, d.text.trim() === '' ? { text: value, addedBy: 'internal' } : { text: value });
+  };
+
+  // The template is (re)built once the user leaves the raw text, not on every keystroke.
+  const handleRawTextBlur = (id: DisclosureBlock['id']) => {
+    const d = settingsRef.current.disclosures.find((b) => b.id === id);
+    const trimmed = d?.text.trim() ?? '';
+    if (!d || trimmed === '' || hasCurrentTemplate(d) || generatingIds.has(id)) return;
+    generateTemplate(id, trimmed);
   };
 
   const toggleExpanded = (id: DisclosureBlock['id']) => {
@@ -244,6 +236,13 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
 
   const anyGenerating = generatingIds.size > 0;
   const canGenerate = included.length > 0 && !anyGenerating;
+  const blockStatus = (d: DisclosureBlock): DisclosureSnippetStatus | null => {
+    if (changedBlocks.some((c) => c.id === d.id)) return 'edited';
+    if (!snippet || d.text.trim() === '') return null;
+    const saved = snippet.disclosures.find((s) => s.id === d.id);
+    return saved?.includeInSnippet && saved.template ? 'applied' : 'not_applied';
+  };
+
   // Disclosure types edited since the snippet was last generated/updated (raw text, template, or "Apply to automated offers").
   const changedBlocks = useMemo(() => {
     if (!snippet) return [];
@@ -258,6 +257,7 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
       buildDefaultSnippetName(accountName), accountName, accountBrand, consolidated.sourceText, consolidated.replacements,
     );
     onChange({ disclosureSnippet: { meta, text: consolidated.text, disclosures: settings.disclosures } });
+    setExpandedId(null);
     setSnippetDialog({ closeMessage: 'Snippet generated.' });
   };
 
@@ -277,25 +277,33 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
       },
     });
     setUpdateOpen(false);
-    setSnippetDialog({ closeMessage: 'Snippet updated.' });
+    setExpandedId(null);
+    showSnackbar({ message: 'Snippet updated.' });
   };
 
   /** Restores every disclosure to how it was when the snippet was last generated/updated. */
   const handleDiscardChanges = () => {
     if (!snippet) return;
-    Object.values(timersRef.current).forEach(clearTimeout);
-    timersRef.current = {};
     setGeneratingIds(new Set());
     setErrors({});
     onChange({ disclosures: snippet.disclosures });
   };
 
-  let footer: ReactNode = null;
+  const labelList = (blocks: DisclosureBlock[]) => blocks.map((d, i) => (
+    <span key={d.id}>
+      {i > 0 && (i === blocks.length - 1 ? ' and ' : ', ')}
+      <strong style={{ fontWeight: 700 }}>{d.label}</strong>
+    </span>
+  ));
+
+  let footer: ReactNode;
   if (!snippet) {
     footer = (
       <>
         <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
-          Add disclosures above to generate a snippet or select an existing one.
+          {included.length === 0 ? 'Add disclosures to generate snippet.' : (
+            <>Template created for {labelList(included)} {included.length === 1 ? 'disclosure' : 'disclosures'}. Generate snippet to apply.</>
+          )}
         </p>
         <Button
           variant="outlined"
@@ -320,12 +328,7 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     footer = (
       <>
         <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
-          Changes made to {changedBlocks.map((d, i) => (
-            <span key={d.id}>
-              {i > 0 && (i === changedBlocks.length - 1 ? ' and ' : ', ')}
-              <strong style={{ fontWeight: 700 }}>{d.label}</strong>
-            </span>
-          ))} {changedBlocks.length === 1 ? 'disclosure' : 'disclosures'}. Update or generate a new snippet to apply.
+          Changes made to {labelList(changedBlocks)} {changedBlocks.length === 1 ? 'disclosure' : 'disclosures'}. Update snippet to apply.
           <br />
           If you exit, all changes will be lost.
         </p>
@@ -344,12 +347,33 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
         </Button>
       </>
     );
+  } else {
+    // Snippet up to date: the actions stay visible but disabled until a disclosure is edited.
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          Edit disclosure templates to update the snippet.
+        </p>
+        <Button variant="text" disabled sx={{ ...TEXT_MEDIUM_BUTTON_SX, '&.Mui-disabled': { color: 'rgba(17,16,20,0.38)' } }}>
+          Discard Changes
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled
+          startIcon={<MaskedIcon src={refreshIcon} size={20} color="currentColor" />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Update Snippet
+        </Button>
+      </>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100%', paddingBottom: footer ? 0 : 16, boxSizing: 'border-box' }}>
-      <div style={SECTION_CARD_STYLE}>
-        <p style={OVERLINE_STYLE}>Snippet</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100%', boxSizing: 'border-box' }}>
+      <div style={{ ...SECTION_CARD_STYLE, gap: 8 }}>
+        <p style={SUBTITLE2_STYLE}>Automated Offers Snippet</p>
         {snippet ? (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8,
@@ -379,9 +403,9 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
           }}>
             <MaskedIcon src={pageTextLinkIcon} size={20} color="#9c99a9" />
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <p style={{ ...BODY2_SECONDARY_STYLE, color: '#1f1d25', fontWeight: 500 }}>No snippet attached yet</p>
+              <p style={{ ...BODY2_SECONDARY_STYLE, color: '#1f1d25', fontWeight: 500 }}>No snippet attached to this account yet.</p>
               <p style={BODY2_SECONDARY_STYLE}>
-                Once generated or selected, this account's snippet appears here.
+                Select an existing snippet or generate a new one from the disclosure templates.
               </p>
             </div>
           </div>
@@ -394,11 +418,12 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
             key={d.id}
             block={d}
             expanded={expandedId === d.id}
-            edited={changedBlocks.some((c) => c.id === d.id)}
+            status={blockStatus(d)}
             generating={generatingIds.has(d.id)}
             error={errors[d.id]}
             onToggle={() => toggleExpanded(d.id)}
             onRawTextChange={(value) => handleRawTextChange(d, value)}
+            onRawTextBlur={() => handleRawTextBlur(d.id)}
             onTemplateChange={(text) => patchTemplate(d.id, { text })}
             onReplacementAdded={(replacement) => addTemplateReplacement(d.id, replacement)}
             onIncludeChange={(includeInSnippet) => patchDisclosure(d.id, { includeInSnippet })}
@@ -407,16 +432,14 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
         ))}
       </div>
 
-      {footer && (
-        // Stays pinned to the bottom of the page's scroll area so the snippet actions are always reachable.
-        <div style={{
-          position: 'sticky', bottom: 0, zIndex: 2, margin: '0 -16px', marginTop: 'auto',
-          display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px',
-          background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.12)',
-        }}>
-          {footer}
-        </div>
-      )}
+      {/* Stays pinned to the bottom of the page's scroll area so the snippet actions are always reachable. */}
+      <div style={{
+        position: 'sticky', bottom: 0, zIndex: 2, margin: '0 -16px', marginTop: 'auto',
+        display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px',
+        background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.12)',
+      }}>
+        {footer}
+      </div>
 
       {snippetDialog && snippet && (
         <DisclosureSnippetDialog
@@ -452,15 +475,51 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
   );
 };
 
+/**
+ * Where a disclosure stands against the account snippet: `edited` since the snippet was last
+ * generated/updated, or — when unchanged — whether the snippet includes it.
+ */
+type DisclosureSnippetStatus = 'edited' | 'applied' | 'not_applied';
+
+const TAG_TONES = {
+  purple: { background: 'rgba(99,86,225,0.08)', color: '#473bab' },
+  blue: { background: '#EBF5FB', color: '#01579b' },
+  green: { background: 'rgba(46,125,50,0.08)', color: '#1b5e20' },
+  orange: { background: 'rgba(239,108,0,0.1)', color: '#9a4400' },
+} as const;
+
+const STATUS_TAGS: Record<DisclosureSnippetStatus, { label: string; tone: keyof typeof TAG_TONES }> = {
+  edited: { label: 'Edited', tone: 'blue' },
+  applied: { label: 'Applied in snippet', tone: 'green' },
+  not_applied: { label: 'Not applied in snippet', tone: 'orange' },
+};
+
+/** Small tag in a disclosure card's header (MUI Chip size="small", Figma's 8px-radius tag look). */
+const HeaderTag = ({ label, tone, onClick }: { label: string; tone: keyof typeof TAG_TONES; onClick?: () => void }) => (
+  <Chip
+    label={label}
+    size="small"
+    onClick={onClick && ((e: MouseEvent) => { e.stopPropagation(); onClick(); })}
+    // Keeps Enter/Space on the tag from also toggling the card it sits in.
+    onKeyDown={onClick && ((e: KeyboardEvent) => e.stopPropagation())}
+    sx={{
+      height: 24, borderRadius: '8px', ...TAG_TONES[tone],
+      fontSize: 11, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.16px', lineHeight: '18px',
+      '& .MuiChip-label': { padding: '0 8px', textDecoration: onClick ? 'underline' : 'none' },
+      '&.MuiChip-clickable:hover': { background: TAG_TONES[tone].background, filter: 'brightness(0.96)' },
+    }}
+  />
+);
+
 interface DisclosureAccordionProps {
   block: DisclosureBlock;
   expanded: boolean;
-  /** Changed since the snippet was last generated/updated. */
-  edited: boolean;
+  status: DisclosureSnippetStatus | null;
   generating: boolean;
   error: string | undefined;
   onToggle: () => void;
   onRawTextChange: (value: string) => void;
+  onRawTextBlur: () => void;
   onTemplateChange: (text: string) => void;
   onReplacementAdded: (replacement: DisclosureReplacement) => void;
   onIncludeChange: (include: boolean) => void;
@@ -469,11 +528,13 @@ interface DisclosureAccordionProps {
 
 /** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
 const DisclosureAccordion = ({
-  block, expanded, edited, generating, error, onToggle, onRawTextChange, onTemplateChange, onReplacementAdded, onIncludeChange, onDismissError,
+  block, expanded, status, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onDismissError,
 }: DisclosureAccordionProps) => {
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const template = block.template;
   const showTemplate = !!template && !generating;
+  const issues = showTemplate ? template.issues : [];
+  const [warningsOpen, setWarningsOpen] = useState(false);
 
   // Only variables mapped back to a raw value AND still present in the template get a color, so a
   // variable the user removed from the template also drops its highlight on the raw side.
@@ -502,26 +563,11 @@ const DisclosureAccordion = ({
           {block.label}
         </span>
         {block.text.trim() !== '' && (
-          <Chip
-            label="Added by internal user"
-            size="small"
-            sx={{
-              height: 24, borderRadius: '8px', background: 'rgba(99,86,225,0.08)', color: '#473bab',
-              fontSize: 11, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.16px', lineHeight: '18px',
-              '& .MuiChip-label': { padding: '0 8px' },
-            }}
-          />
+          <HeaderTag label={block.addedBy === 'client' ? 'Added by client' : 'Added by internal user'} tone="purple" />
         )}
-        {edited && (
-          <Chip
-            label="Edited"
-            size="small"
-            sx={{
-              height: 24, borderRadius: '8px', background: '#EBF5FB', color: '#01579b',
-              fontSize: 11, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.16px', lineHeight: '18px',
-              '& .MuiChip-label': { padding: '0 8px' },
-            }}
-          />
+        {status && <HeaderTag {...STATUS_TAGS[status]} />}
+        {issues.length > 0 && (
+          <HeaderTag label={`Warnings (${issues.length})`} tone="orange" onClick={() => setWarningsOpen(true)} />
         )}
         <span style={{ flex: 1 }} />
         <IconButton
@@ -548,6 +594,7 @@ const DisclosureAccordion = ({
                 ariaLabel={`${block.label} raw disclosure`}
                 value={block.text}
                 onChange={onRawTextChange}
+                onBlur={onRawTextBlur}
                 replacements={showTemplate ? template.replacements : []}
                 colors={colors}
                 placeholder={`Paste the client's ${block.label} disclosure here.`}
@@ -558,9 +605,9 @@ const DisclosureAccordion = ({
               <p style={paneHeaderStyle}>Resulting Template</p>
               <div style={{ height: SPLIT_PANE_HEIGHT, overflowY: 'auto' }}>
                 {generating ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...BODY2_SECONDARY_STYLE }}>
-                    <CircularProgress size={14} sx={{ color: '#473bab' }} />
-                    Generating template...
+                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, ...BODY2_SECONDARY_STYLE }}>
+                    <CircularProgress size={20} sx={{ color: '#473bab' }} />
+                    Building template...
                   </div>
                 ) : template ? (
                   <DisclosureSnippetEditor
@@ -604,6 +651,13 @@ const DisclosureAccordion = ({
           />
         </>
       )}
+
+      <DisclosureWarningsDialog
+        open={warningsOpen && issues.length > 0}
+        disclosureLabel={block.label}
+        issues={issues}
+        onClose={() => setWarningsOpen(false)}
+      />
     </div>
   );
 };
