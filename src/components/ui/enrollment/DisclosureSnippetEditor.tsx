@@ -269,6 +269,8 @@ interface DisclosureSnippetEditorProps {
   resolveOriginal?: (key: string) => string | undefined;
   /** A selection was turned into a variable via "Transform into variable" — the new {key → original} mapping, so the raw side can color-match it. */
   onReplacementAdded?: (replacement: DisclosureReplacement) => void;
+  /** Shows the text (chips included) without allowing edits — e.g. a previous snippet version. */
+  readOnly?: boolean;
 }
 
 interface PickerState {
@@ -288,7 +290,7 @@ const TRANSFORM_SPLIT_RE = /^(\s*\$?\s*)([\s\S]*?)(\s*)$/;
 const TYPING_DEBOUNCE_MS = 600;
 
 export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle, DisclosureSnippetEditorProps>(
-  ({ initialValue, onChange, contentStyle, resolveOriginal, onReplacementAdded }, ref) => {
+  ({ initialValue, onChange, contentStyle, resolveOriginal, onReplacementAdded, readOnly = false }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const valueRef = useRef(initialValue);
     const historyRef = useRef<string[]>([]);
@@ -303,7 +305,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
     const [search, setSearch] = useState('');
     // Floating "Transform into variable" menu, shown under a plain-text selection.
     const [transformAnchor, setTransformAnchor] = useState<{ getBoundingClientRect: () => DOMRect } | null>(null);
-    const canTransform = !!onReplacementAdded;
+    const canTransform = !!onReplacementAdded && !readOnly;
 
     const colorFor = (key: string) => chipColorsRef.current?.[key];
 
@@ -429,6 +431,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
     };
 
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (readOnly) return;
       const target = e.target as HTMLElement;
       const chip = target.closest('[data-variable-key]') as HTMLElement | null;
       if (!chip || !containerRef.current?.contains(chip)) return;
@@ -459,7 +462,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
     // bold/italic/underlined/struck-through immediately, with no raw ** / * / ~~ ever shown to the user.
     const applyFormat = (type: DisclosureFormatType) => {
       const container = containerRef.current;
-      if (!container) return;
+      if (!container || readOnly) return;
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
       const range = sel.getRangeAt(0);
@@ -498,6 +501,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
     };
 
     const openAddVariablePicker = (anchorEl: HTMLElement) => {
+      if (readOnly) return;
       const container = containerRef.current;
       const sel = window.getSelection();
       let range: Range | null = null;
@@ -559,7 +563,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
 
     const undo = () => {
       const container = containerRef.current;
-      if (!container) return;
+      if (!container || readOnly) return;
       flushPendingBurst();
       const prev = historyRef.current.pop();
       if (prev === undefined) return;
@@ -613,7 +617,9 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
       <>
         <div
           ref={containerRef}
-          contentEditable
+          contentEditable={!readOnly}
+          // Read-only chips drop their remove icon (they can't be removed).
+          className={readOnly ? 'disclosure-editor-readonly' : undefined}
           suppressContentEditableWarning
           onInput={handleNativeInput}
           onKeyDown={handleKeyDown}
@@ -633,6 +639,8 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
             ...contentStyle,
           }}
         />
+
+        {readOnly && <style>{'.disclosure-editor-readonly svg[data-role="remove-variable"]{display:none}.disclosure-editor-readonly [data-variable-key]{cursor:default;padding-right:8px !important}'}</style>}
 
         {canTransform && (
           <Popper

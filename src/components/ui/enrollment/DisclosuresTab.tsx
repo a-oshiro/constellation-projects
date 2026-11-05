@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { Alert, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome } from '@mui/icons-material';
-import type { DisclosureBlock, DisclosureSnippetMeta, DisclosureTemplate, EnrollmentSettings } from '../../../data/enrollmentSettings';
+import type {
+  DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion, DisclosureTemplate, EnrollmentSettings,
+} from '../../../data/enrollmentSettings';
 import {
   buildCombinedDisclosureSource, consolidateDisclosureTemplates, generateDisclosureSnippet, mergeDisclosureReplacements,
 } from '../../../utils/disclosureSnippetAI';
@@ -116,6 +118,21 @@ function buildSnippetMeta(
     createdBy: CURRENT_USER.name,
     sourceText,
     replacements,
+  };
+}
+
+function buildSnippetVersion(
+  name: string,
+  text: string,
+  sourceText: string,
+  replacements: DisclosureReplacement[],
+  disclosures: DisclosureBlock[],
+): DisclosureSnippetVersion {
+  return {
+    id: `version-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name, text, sourceText, replacements, disclosures,
+    createdAt: new Date().toISOString(),
+    createdBy: CURRENT_USER.name,
   };
 }
 
@@ -256,7 +273,8 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     const meta = buildSnippetMeta(
       buildDefaultSnippetName(accountName), accountName, accountBrand, consolidated.sourceText, consolidated.replacements,
     );
-    onChange({ disclosureSnippet: { meta, text: consolidated.text, disclosures: settings.disclosures } });
+    const version = buildSnippetVersion(meta.name, consolidated.text, meta.sourceText, meta.replacements, settings.disclosures);
+    onChange({ disclosureSnippet: { meta, text: consolidated.text, disclosures: settings.disclosures, versions: [version] } });
     setExpandedId(null);
     setSnippetDialog({ closeMessage: 'Snippet generated.' });
   };
@@ -274,11 +292,48 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
         },
         text,
         disclosures: settings.disclosures,
+        versions: [
+          ...snippet.versions,
+          buildSnippetVersion(snippet.meta.name, text, consolidated.sourceText, consolidated.replacements, settings.disclosures),
+        ],
       },
     });
     setUpdateOpen(false);
     setExpandedId(null);
     showSnackbar({ message: 'Snippet updated.' });
+  };
+
+  /** Saved from the snippet dialog: the edited text/metadata become a new version, built from the same disclosures. */
+  const handleSnippetSave = (text: string, meta: DisclosureSnippetMeta) => {
+    if (!snippet) return;
+    const version = buildSnippetVersion(meta.name, text, meta.sourceText, meta.replacements, snippet.disclosures);
+    onChange({ disclosureSnippet: { ...snippet, meta, text, versions: [...snippet.versions, version] } });
+  };
+
+  /**
+   * Restoring a previous version copies it forward as a new current version (history is never rewritten)
+   * and brings back the disclosures it was built from, on this page too.
+   */
+  const handleRestoreVersion = (versionId: string) => {
+    if (!snippet) return;
+    const restored = snippet.versions.find((v) => v.id === versionId);
+    if (!restored) return;
+    const version = buildSnippetVersion(
+      snippet.meta.name, restored.text, restored.sourceText, restored.replacements, restored.disclosures,
+    );
+    setGeneratingIds(new Set());
+    setErrors({});
+    onChange({
+      disclosures: restored.disclosures,
+      disclosureSnippet: {
+        ...snippet,
+        meta: { ...snippet.meta, sourceText: restored.sourceText, replacements: restored.replacements, updatedAt: version.createdAt },
+        text: restored.text,
+        disclosures: restored.disclosures,
+        versions: [...snippet.versions, version],
+      },
+    });
+    showSnackbar({ message: 'Version restored.' });
   };
 
   /** Restores every disclosure to how it was when the snippet was last generated/updated. */
@@ -450,7 +505,10 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
             if (snippetDialog.closeMessage) showSnackbar({ message: snippetDialog.closeMessage });
             setSnippetDialog(null);
           }}
-          onSave={(text, meta) => onChange({ disclosureSnippet: { ...snippet, meta, text } })}
+          disclosures={snippet.disclosures}
+          versions={snippet.versions}
+          onSave={handleSnippetSave}
+          onRestoreVersion={handleRestoreVersion}
         />
       )}
 

@@ -6,18 +6,20 @@ import {
 import {
   Close, ContentCopy, InfoOutlined, DataObject, AutoAwesome, FolderOutlined,
   Undo as UndoIcon, FormatBold, FormatItalic, FormatUnderlined, FormatStrikethrough,
-  ImageSearchOutlined, ViewColumnOutlined, ExpandMore,
+  ImageSearchOutlined, ViewColumnOutlined, ExpandMore, History,
 } from '@mui/icons-material';
 import { useTestWidget } from '../../../context/TestWidgetContext';
-import type { DisclosureSnippetMeta } from '../../../data/enrollmentSettings';
+import type { DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion } from '../../../data/enrollmentSettings';
 import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
 import type { DisclosureFormatType, DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
 import { renderFormattedHtml, substituteVariablesWithSamples } from '../../../utils/disclosureSnippetFormatting';
 import { buildVariableColorMap, findActiveVariableKeys } from '../../../utils/disclosureSnippetColors';
 import { DisclosureSourcePane } from './DisclosureSourcePane';
+import { SnippetVersionHistory } from './SnippetVersionHistory';
 
 const SIDE_TABS = [
   { id: 'metadata', label: 'Metadata', Icon: InfoOutlined },
+  { id: 'history', label: 'History', Icon: History },
   { id: 'rules', label: 'Rules', Icon: DataObject },
   { id: 'ai', label: 'Build w/ AI', Icon: AutoAwesome },
 ] as const;
@@ -124,11 +126,20 @@ interface DisclosureSnippetDialogProps {
   disclosureLabel: string;
   initialText: string;
   initialSnippet: DisclosureSnippetMeta;
+  /** The disclosures the current snippet was built from — the comparison view shows one source section per included type. */
+  disclosures: DisclosureBlock[];
+  /** Saved versions, oldest first (the last is current) — the History tab. */
+  versions: DisclosureSnippetVersion[];
   onClose: () => void;
   onSave: (text: string, snippet: DisclosureSnippetMeta) => void;
+  onRestoreVersion: (versionId: string) => void;
 }
 
-export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialSnippet, onClose, onSave }: DisclosureSnippetDialogProps) {
+const SECTION_TITLE_STYLE: React.CSSProperties = { margin: '0 0 12px', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' };
+
+export function DisclosureSnippetDialog({
+  disclosureLabel, initialText, initialSnippet, disclosures, versions, onClose, onSave, onRestoreVersion,
+}: DisclosureSnippetDialogProps) {
   const { widgetWidth } = useTestWidget();
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const addVariableBtnRef = useRef<HTMLButtonElement>(null);
@@ -138,6 +149,14 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
   const [sideTab, setSideTab] = useState<SideTabId>('metadata');
   const [text, setText] = useState(initialText);
   const [dirty, setDirty] = useState(false);
+  // A previous version shown read-only in the editor (History tab) — null while editing the current one.
+  const [viewingVersionId, setViewingVersionId] = useState<string | null>(null);
+  // Bumped to remount the editor with fresh text after a restore.
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  const currentVersionId = versions.at(-1)?.id;
+  const viewingVersion = viewingVersionId && viewingVersionId !== currentVersionId
+    ? versions.find((v) => v.id === viewingVersionId) ?? null
+    : null;
 
   const [name, setName] = useState(initialSnippet.name);
   const [tags, setTags] = useState<string[]>(initialSnippet.tags);
@@ -177,15 +196,37 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
   // substring (`initialSnippet.replacements`) AND still present in the live text get one; anything else
   // (a manually added/replaced variable) stays the default gray chip.
   const chipColors = useMemo(
-    () => buildVariableColorMap(initialSnippet.replacements, findActiveVariableKeys(text)),
-    [text, initialSnippet.replacements],
+    () => (viewingVersion
+      ? buildVariableColorMap(viewingVersion.replacements, findActiveVariableKeys(viewingVersion.text))
+      : buildVariableColorMap(initialSnippet.replacements, findActiveVariableKeys(text))),
+    [text, initialSnippet.replacements, viewingVersion],
+  );
+
+  // One source section per disclosure type the shown version was built from (Figma: "APR Disclosure",
+  // "Finance Disclosure"), each highlighted with its own template's value ↔ variable mapping.
+  const sourceSections = useMemo(
+    () => (viewingVersion?.disclosures ?? disclosures).filter((d) => d.includeInSnippet && d.template && d.text.trim() !== ''),
+    [viewingVersion, disclosures],
   );
 
   useEffect(() => {
     // `mode` is included because switching Write/Preview remounts the editor at a different JSX
     // position when splitView is active, which resets its internal color state.
     editorRef.current?.applyChipColors(splitView ? chipColors : null);
-  }, [splitView, chipColors, mode]);
+  }, [splitView, chipColors, mode, viewingVersion, editorEpoch]);
+
+  const handleSelectVersion = (versionId: string) => {
+    setViewingVersionId(versionId === currentVersionId ? null : versionId);
+  };
+
+  const handleRestoreVersion = () => {
+    if (!viewingVersion) return;
+    onRestoreVersion(viewingVersion.id);
+    setText(viewingVersion.text);
+    setDirty(false);
+    setViewingVersionId(null);
+    setEditorEpoch((n) => n + 1);
+  };
 
   const handleSave = () => {
     const snippet: DisclosureSnippetMeta = {
@@ -203,8 +244,11 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
     setDirty(false);
   };
 
-  const fileSizeLabel = formatBytes(new Blob([text]).size);
-  const previewHtml = renderFormattedHtml(substituteVariablesWithSamples(text));
+  const shownText = viewingVersion?.text ?? text;
+  const fileSizeLabel = formatBytes(new Blob([shownText]).size);
+  const previewHtml = renderFormattedHtml(substituteVariablesWithSamples(shownText));
+  const editorKey = `${viewingVersion?.id ?? 'current'}-${editorEpoch}`;
+  const canSave = dirty && !viewingVersion;
 
   return ReactDOM.createPortal(
     <>
@@ -234,9 +278,41 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
         {/* Body */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
           {/* Left: editor */}
-          <div style={{ flex: 1, minWidth: 0, background: '#f0f2f4', overflow: 'hidden', padding: 24, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0, background: '#f0f2f4', overflow: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {viewingVersion && (
+              <div
+                role="status"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '6px 8px 6px 16px', borderRadius: 8, flexShrink: 0,
+                  background: '#e5f2fa', color: '#01579b', fontSize: 12, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.17px',
+                }}
+              >
+                <InfoOutlined style={{ fontSize: 20, color: '#0288d1' }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  You are currently viewing a previous version. Go to the latest version, or restore this one to edit it.
+                </span>
+                <Button
+                  variant="text"
+                  onClick={handleRestoreVersion}
+                  sx={{ borderRadius: 100, textTransform: 'none', fontSize: 13, fontWeight: 500, color: '#473bab', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  Restore This Version
+                </Button>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  onClick={() => setViewingVersionId(null)}
+                  sx={{
+                    borderRadius: 100, textTransform: 'none', fontSize: 13, fontWeight: 500, background: '#473bab', padding: '4px 10px',
+                    whiteSpace: 'nowrap', '&:hover': { background: '#3d3396' },
+                  }}
+                >
+                  Go To Latest Version
+                </Button>
+              </div>
+            )}
             {/* The card keeps its toolbar and footer in place; only the content area between them scrolls. */}
-            <div style={{ width: '100%', background: '#ffffff', borderRadius: 12, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ width: '100%', background: '#ffffff', borderRadius: 12, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Toolbar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 16px', borderBottom: '1px solid #ececec', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 16, marginRight: 12 }}>
@@ -303,22 +379,43 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
               <div style={{ padding: '20px 24px 32px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {mode === 'write' && splitView ? (
                   <div style={{ display: 'flex', gap: 24 }}>
-                    <div style={{ flex: 1, minWidth: 0, paddingRight: 24, borderRight: '1px solid #ececec' }}>
-                      <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        Source Disclaimer
-                      </p>
-                      <DisclosureSourcePane sourceText={initialSnippet.sourceText} replacements={initialSnippet.replacements} colors={chipColors} />
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: 24, borderRight: '1px solid #ececec', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                      {sourceSections.length > 0 ? sourceSections.map((d) => (
+                        <section key={d.id}>
+                          <p style={SECTION_TITLE_STYLE}>{d.label} Disclosure</p>
+                          <DisclosureSourcePane sourceText={d.text.trim()} replacements={d.template!.replacements} colors={chipColors} />
+                        </section>
+                      )) : (
+                        <section>
+                          <p style={SECTION_TITLE_STYLE}>Source Disclaimer</p>
+                          <DisclosureSourcePane
+                            sourceText={viewingVersion?.sourceText ?? initialSnippet.sourceText}
+                            replacements={viewingVersion?.replacements ?? initialSnippet.replacements}
+                            colors={chipColors}
+                          />
+                        </section>
+                      )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25' }}>
-                        Outcome Snippet
-                      </p>
-                      <DisclosureSnippetEditor ref={editorRef} initialValue={text} onChange={handleEditorChange} />
+                      <p style={SECTION_TITLE_STYLE}>Outcome Snippet</p>
+                      <DisclosureSnippetEditor
+                        key={editorKey}
+                        ref={editorRef}
+                        initialValue={shownText}
+                        onChange={handleEditorChange}
+                        readOnly={!!viewingVersion}
+                      />
                     </div>
                   </div>
                 ) : (
                   <div style={{ display: mode === 'write' ? 'block' : 'none' }}>
-                    <DisclosureSnippetEditor ref={editorRef} initialValue={text} onChange={handleEditorChange} />
+                    <DisclosureSnippetEditor
+                      key={editorKey}
+                      ref={editorRef}
+                      initialValue={shownText}
+                      onChange={handleEditorChange}
+                      readOnly={!!viewingVersion}
+                    />
                   </div>
                 )}
                 {mode === 'preview' && (
@@ -477,6 +574,17 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
                 </div>
               )}
 
+              {sideTab === 'history' && (
+                <SnippetVersionHistory
+                  versions={versions}
+                  currentVersionId={currentVersionId}
+                  viewingVersionId={viewingVersion?.id ?? null}
+                  onSelect={handleSelectVersion}
+                  canSaveVersion={canSave}
+                  onSaveVersion={handleSave}
+                  popperSlotProps={POPPER_SLOT_PROPS}
+                />
+              )}
               {sideTab === 'rules' && (
                 <div style={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#9c99a9' }}>Coming soon.</div>
               )}
@@ -489,11 +597,15 @@ export function DisclosureSnippetDialog({ disclosureLabel, initialText, initialS
 
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }}>
-          <Tooltip title={dirty ? '' : 'Snippet created. No new changes to save.'} disableHoverListener={dirty} slotProps={POPPER_SLOT_PROPS}>
+          <Tooltip
+            title={viewingVersion ? 'Restore this version to edit it.' : dirty ? '' : 'Snippet created. No new changes to save.'}
+            disableHoverListener={canSave}
+            slotProps={POPPER_SLOT_PROPS}
+          >
             <span>
               <Button
                 onClick={handleSave}
-                disabled={!dirty}
+                disabled={!canSave}
                 variant="contained"
                 sx={{
                   borderRadius: 100, textTransform: 'capitalize', fontSize: 14, fontWeight: 500,

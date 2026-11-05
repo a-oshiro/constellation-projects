@@ -97,6 +97,20 @@ export interface DisclosureBlock {
   includeInSnippet: boolean;
 }
 
+/** One saved state of the account snippet — a new one is recorded on generate, update, Save and restore. */
+export interface DisclosureSnippetVersion {
+  id: string;
+  /** The snippet's name when this version was saved. */
+  name: string;
+  text: string;
+  sourceText: string;
+  replacements: DisclosureReplacement[];
+  /** The disclosures this version was built from — what the comparison view shows and what restoring brings back. */
+  disclosures: DisclosureBlock[];
+  createdAt: string;
+  createdBy: string;
+}
+
 /** The single text snippet an account's disclosures are built into — one per account, covering every disclosure type. */
 export interface AccountDisclosureSnippet {
   meta: DisclosureSnippetMeta;
@@ -104,6 +118,8 @@ export interface AccountDisclosureSnippet {
   text: string;
   /** The disclosures as they were when the snippet was last generated or updated — what "Discard Changes" restores. */
   disclosures: DisclosureBlock[];
+  /** Every saved version, oldest first — the last one is the current snippet. */
+  versions: DisclosureSnippetVersion[];
 }
 
 export interface EnrollmentSettings {
