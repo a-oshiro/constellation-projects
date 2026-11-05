@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Popover, TextField, InputAdornment } from '@mui/material';
-import { Search } from '@mui/icons-material';
+import { Popover, Popper, Paper, ButtonBase, TextField, InputAdornment } from '@mui/material';
+import { DataObject, Search } from '@mui/icons-material';
 import { DISCLOSURE_VARIABLES } from '../../../data/disclosureVariables';
 import { hexToRgba } from '../../../utils/disclosureSnippetColors';
+import type { DisclosureReplacement } from '../../../utils/disclosureSnippetColors';
 
 // ── DOM <-> string conversion ──────────────────────────────────────────────
 // The editable container's direct/nested children are one of: plain text nodes (which may contain
@@ -220,6 +221,27 @@ function applyRange(range: Range) {
   sel?.addRange(range);
 }
 
+/** Viewport position just below a range — collapsed carets at the start of an empty line report a 0×0 rect, so fall back to the container's top-left. */
+function anchorPositionFor(range: Range, container: HTMLElement): { top: number; left: number } {
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0) {
+    const fallback = container.getBoundingClientRect();
+    return { top: fallback.top + 24, left: fallback.left };
+  }
+  return { top: rect.bottom, left: rect.left };
+}
+
+/** The live selection's range when it's a non-empty run of plain text inside `container` (no chips) — what "Transform into variable" acts on. */
+function getTransformableRange(container: HTMLElement): Range | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (!container.contains(range.commonAncestorContainer)) return null;
+  if (range.toString().trim() === '') return null;
+  if (range.cloneContents().querySelector('[data-variable-key]')) return null;
+  return range;
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export type DisclosureFormatType = 'bold' | 'italic' | 'underline' | 'strikethrough';
@@ -239,18 +261,34 @@ interface DisclosureSnippetEditorProps {
   onChange: (value: string) => void;
   /** Overrides for the editable area's typography/sizing (e.g. the compact template pane on the Disclosures page). */
   contentStyle?: CSSProperties;
+  /**
+   * The raw value a variable was templatized from. When given, removing a chip puts that value back as
+   * plain text (instead of just deleting the chip), and selecting plain text offers "Transform into
+   * variable" — the Disclosures page's template panes, where every chip maps back to the raw disclosure.
+   */
+  resolveOriginal?: (key: string) => string | undefined;
+  /** A selection was turned into a variable via "Transform into variable" — the new {key → original} mapping, so the raw side can color-match it. */
+  onReplacementAdded?: (replacement: DisclosureReplacement) => void;
 }
 
 interface PickerState {
   open: boolean;
   anchorEl: HTMLElement | null;
-  mode: 'insert' | 'replace';
+  /** Used instead of `anchorEl` when the picker opens at the caret/selection (typing `{`, "Transform into variable"). */
+  anchorPosition: { top: number; left: number } | null;
+  mode: 'insert' | 'replace' | 'transform';
 }
+
+const CLOSED_PICKER: PickerState = { open: false, anchorEl: null, anchorPosition: null, mode: 'insert' };
+
+// A transformed selection keeps any surrounding whitespace and a leading "$" as literal text: "$2,999"
+// becomes "$" + {key} with original "2,999" — the same convention the AI templatizer follows.
+const TRANSFORM_SPLIT_RE = /^(\s*\$?\s*)([\s\S]*?)(\s*)$/;
 
 const TYPING_DEBOUNCE_MS = 600;
 
 export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle, DisclosureSnippetEditorProps>(
-  ({ initialValue, onChange, contentStyle }, ref) => {
+  ({ initialValue, onChange, contentStyle, resolveOriginal, onReplacementAdded }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const valueRef = useRef(initialValue);
     const historyRef = useRef<string[]>([]);
@@ -259,9 +297,13 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
     const savedRangeRef = useRef<Range | null>(null);
     const targetChipRef = useRef<HTMLElement | null>(null);
     const chipColorsRef = useRef<Record<string, string> | null>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
-    const [picker, setPicker] = useState<PickerState>({ open: false, anchorEl: null, mode: 'insert' });
+    const [picker, setPicker] = useState<PickerState>(CLOSED_PICKER);
     const [search, setSearch] = useState('');
+    // Floating "Transform into variable" menu, shown under a plain-text selection.
+    const [transformAnchor, setTransformAnchor] = useState<{ getBoundingClientRect: () => DOMRect } | null>(null);
+    const canTransform = !!onReplacementAdded;
 
     const colorFor = (key: string) => chipColorsRef.current?.[key];
 
@@ -297,6 +339,28 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
       }, TYPING_DEBOUNCE_MS);
     };
 
+    // Typing "{" opens the variable picker at the caret instead of inserting the brace. Native
+    // `beforeinput` (not keydown) so it also catches IME, on-screen keyboards and programmatic text input.
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return undefined;
+      const handleBeforeInput = (e: InputEvent) => {
+        if (e.inputType !== 'insertText' || e.data !== '{') return;
+        e.preventDefault();
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0).cloneRange();
+        if (!container.contains(range.commonAncestorContainer)) return;
+        savedRangeRef.current = range;
+        targetChipRef.current = null;
+        setTransformAnchor(null);
+        setSearch('');
+        setPicker({ open: true, anchorEl: null, anchorPosition: anchorPositionFor(range, container), mode: 'insert' });
+      };
+      container.addEventListener('beforeinput', handleBeforeInput);
+      return () => container.removeEventListener('beforeinput', handleBeforeInput);
+    }, []);
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -329,6 +393,41 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
 
     const closePicker = () => setPicker((p) => ({ ...p, open: false }));
 
+    const updateTransformMenu = () => {
+      const container = containerRef.current;
+      if (!canTransform || !container) return;
+      const range = getTransformableRange(container);
+      if (!range) {
+        setTransformAnchor(null);
+        return;
+      }
+      const rect = range.getBoundingClientRect();
+      setTransformAnchor({ getBoundingClientRect: () => rect });
+    };
+
+    // Hides the menu as soon as the selection collapses or leaves the editor (click elsewhere, typing, arrow keys).
+    useEffect(() => {
+      if (!canTransform) return undefined;
+      const handleSelectionChange = () => {
+        const container = containerRef.current;
+        if (!container || !getTransformableRange(container)) setTransformAnchor(null);
+      };
+      document.addEventListener('selectionchange', handleSelectionChange);
+      return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    }, [canTransform]);
+
+    const openTransformPicker = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const range = getTransformableRange(container);
+      setTransformAnchor(null);
+      if (!range) return;
+      savedRangeRef.current = range.cloneRange();
+      targetChipRef.current = null;
+      setSearch('');
+      setPicker({ open: true, anchorEl: null, anchorPosition: anchorPositionFor(range, container), mode: 'transform' });
+    };
+
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
       const chip = target.closest('[data-variable-key]') as HTMLElement | null;
@@ -340,7 +439,10 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
       if (isRemove) {
         flushPendingBurst();
         historyRef.current.push(valueRef.current);
-        chip.remove();
+        const original = resolveOriginal?.(chip.dataset.variableKey ?? '');
+        if (original) chip.replaceWith(document.createTextNode(original));
+        else chip.remove();
+        container.normalize();
         const newValue = serialize(container);
         valueRef.current = newValue;
         onChange(newValue);
@@ -348,7 +450,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
         targetChipRef.current = chip;
         savedRangeRef.current = null;
         setSearch('');
-        setPicker({ open: true, anchorEl: chip, mode: 'replace' });
+        setPicker({ open: true, anchorEl: chip, anchorPosition: null, mode: 'replace' });
       }
     };
 
@@ -405,7 +507,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
       savedRangeRef.current = range;
       targetChipRef.current = null;
       setSearch('');
-      setPicker({ open: true, anchorEl, mode: 'insert' });
+      setPicker({ open: true, anchorEl, anchorPosition: null, mode: 'insert' });
     };
 
     const handleSelectVariable = (key: string) => {
@@ -427,6 +529,22 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
         range.setStartAfter(chip);
         range.collapse(true);
         applyRange(range);
+      } else if (picker.mode === 'transform' && savedRangeRef.current && container.contains(savedRangeRef.current.startContainer)) {
+        const range = savedRangeRef.current;
+        const [, prefix, original, suffix] = TRANSFORM_SPLIT_RE.exec(range.toString()) ?? ['', '', range.toString(), ''];
+        range.deleteContents();
+        const fragment = document.createDocumentFragment();
+        if (prefix) fragment.appendChild(document.createTextNode(prefix));
+        const chip = buildChipSpan(key, colorFor(key));
+        fragment.appendChild(chip);
+        if (suffix) fragment.appendChild(document.createTextNode(suffix));
+        range.insertNode(fragment);
+        container.normalize();
+        const caret = document.createRange();
+        caret.setStartAfter(chip);
+        caret.collapse(true);
+        applyRange(caret);
+        if (original) onReplacementAdded?.({ key, original });
       } else if (picker.mode === 'replace' && targetChipRef.current) {
         const newChip = buildChipSpan(key, colorFor(key));
         targetChipRef.current.replaceWith(newChip);
@@ -501,6 +619,8 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onClick={handleContainerClick}
+          onMouseUp={updateTransformMenu}
+          onKeyUp={(e) => { if (e.shiftKey) updateTransformMenu(); }}
           style={{
             outline: 'none',
             fontFamily: 'Roboto, sans-serif',
@@ -514,10 +634,40 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
           }}
         />
 
+        {canTransform && (
+          <Popper
+            open={!!transformAnchor && !picker.open}
+            anchorEl={transformAnchor}
+            placement="bottom-start"
+            sx={{ zIndex: 100002 }}
+            modifiers={[{ name: 'offset', options: { offset: [0, 4] } }]}
+          >
+            <Paper elevation={4} sx={{ borderRadius: '8px', padding: '4px 0' }}>
+              <ButtonBase
+                // mousedown would otherwise collapse the selection before the click lands.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={openTransformPicker}
+                sx={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 16px', width: '100%', justifyContent: 'flex-start',
+                  fontSize: 14, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', lineHeight: 1.5,
+                  '&:hover': { background: 'rgba(17,16,20,0.04)' },
+                }}
+              >
+                <DataObject style={{ fontSize: 20, color: 'rgba(17,16,20,0.56)' }} />
+                Transform into variable
+              </ButtonBase>
+            </Paper>
+          </Popper>
+        )}
+
         <Popover
           open={picker.open}
+          anchorReference={picker.anchorPosition ? 'anchorPosition' : 'anchorEl'}
           anchorEl={picker.anchorEl}
+          anchorPosition={picker.anchorPosition ?? undefined}
           onClose={closePicker}
+          // The Popover's focus trap moves focus to its paper after `autoFocus` runs; refocus the search so typing right after "{" lands in it.
+          slotProps={{ transition: { onEntered: () => searchInputRef.current?.focus() } }}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
           sx={{ zIndex: 100002 }}
@@ -525,6 +675,7 @@ export const DisclosureSnippetEditor = forwardRef<DisclosureSnippetEditorHandle,
           <div style={{ width: 300, padding: 12 }}>
             <TextField
               autoFocus
+              inputRef={searchInputRef}
               size="small"
               fullWidth
               placeholder="Search variables"

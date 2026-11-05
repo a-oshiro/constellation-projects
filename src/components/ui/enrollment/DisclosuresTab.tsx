@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Alert, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome } from '@mui/icons-material';
-import type { DisclosureBlock, DisclosureSnippetMeta, EnrollmentSettings } from '../../../data/enrollmentSettings';
+import type { DisclosureBlock, DisclosureSnippetMeta, DisclosureTemplate, EnrollmentSettings } from '../../../data/enrollmentSettings';
 import {
   buildCombinedDisclosureSource, consolidateDisclosureTemplates, generateDisclosureSnippet, mergeDisclosureReplacements,
 } from '../../../utils/disclosureSnippetAI';
@@ -157,6 +157,18 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     // Updated right away (not on the next render) so two templates finishing back to back don't overwrite each other.
     settingsRef.current = { ...settingsRef.current, disclosures };
     onChangeRef.current({ disclosures });
+  };
+
+  // Reads the latest template (not the render's closure) so a text change and a new replacement made by the same editor action both land.
+  const patchTemplate = (id: DisclosureBlock['id'], patch: Partial<DisclosureTemplate>) => {
+    const template = settingsRef.current.disclosures.find((d) => d.id === id)?.template;
+    if (template) patchDisclosure(id, { template: { ...template, ...patch } });
+  };
+
+  const addTemplateReplacement = (id: DisclosureBlock['id'], replacement: DisclosureReplacement) => {
+    const replacements = settingsRef.current.disclosures.find((d) => d.id === id)?.template?.replacements ?? [];
+    if (replacements.some((r) => r.key === replacement.key && r.original === replacement.original)) return;
+    patchTemplate(id, { replacements: [...replacements, replacement] });
   };
 
   const setGenerating = (id: DisclosureBlock['id'], generating: boolean) => {
@@ -387,7 +399,8 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
             error={errors[d.id]}
             onToggle={() => toggleExpanded(d.id)}
             onRawTextChange={(value) => handleRawTextChange(d, value)}
-            onTemplateChange={(text) => d.template && patchDisclosure(d.id, { template: { ...d.template, text } })}
+            onTemplateChange={(text) => patchTemplate(d.id, { text })}
+            onReplacementAdded={(replacement) => addTemplateReplacement(d.id, replacement)}
             onIncludeChange={(includeInSnippet) => patchDisclosure(d.id, { includeInSnippet })}
             onDismissError={() => setErrors((e) => ({ ...e, [d.id]: undefined }))}
           />
@@ -449,13 +462,14 @@ interface DisclosureAccordionProps {
   onToggle: () => void;
   onRawTextChange: (value: string) => void;
   onTemplateChange: (text: string) => void;
+  onReplacementAdded: (replacement: DisclosureReplacement) => void;
   onIncludeChange: (include: boolean) => void;
   onDismissError: () => void;
 }
 
 /** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
 const DisclosureAccordion = ({
-  block, expanded, edited, generating, error, onToggle, onRawTextChange, onTemplateChange, onIncludeChange, onDismissError,
+  block, expanded, edited, generating, error, onToggle, onRawTextChange, onTemplateChange, onReplacementAdded, onIncludeChange, onDismissError,
 }: DisclosureAccordionProps) => {
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const template = block.template;
@@ -554,6 +568,8 @@ const DisclosureAccordion = ({
                     ref={editorRef}
                     initialValue={template.text}
                     onChange={onTemplateChange}
+                    resolveOriginal={(key) => template.replacements.find((r) => r.key === key)?.original}
+                    onReplacementAdded={onReplacementAdded}
                     contentStyle={{ fontSize: 12, lineHeight: '28px', letterSpacing: '0.15px', minHeight: SPLIT_PANE_HEIGHT }}
                   />
                 ) : (
