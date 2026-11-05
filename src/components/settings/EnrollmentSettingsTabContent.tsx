@@ -25,6 +25,7 @@ export function isEnrollmentLeafTabId(id: string): id is EnrollmentLeafTabId {
 interface EnrollmentSettingsTabContentProps {
   tabId: EnrollmentLeafTabId;
   tabLabel: string;
+  accountId: string;
   accountName: string;
   accountBrand: string;
   settings: EnrollmentSettings;
@@ -35,7 +36,7 @@ interface EnrollmentSettingsTabContentProps {
 }
 
 export const EnrollmentSettingsTabContent = ({
-  tabId, tabLabel, accountName, accountBrand, settings, onChange, isDirty, onSave, onDiscard,
+  tabId, tabLabel, accountId, accountName, accountBrand, settings, onChange, isDirty, onSave, onDiscard,
 }: EnrollmentSettingsTabContentProps) => (
   <div style={{
     flex: 1, minWidth: 0, background: '#ffffff', borderRadius: 16, overflow: 'hidden',
@@ -60,7 +61,7 @@ export const EnrollmentSettingsTabContent = ({
       {tabId === 'enrollment-aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
       {tabId === 'enrollment-fees-disclosures' && (
-        <DisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
+        <DisclosuresTab settings={settings} onChange={onChange} accountId={accountId} accountName={accountName} accountBrand={accountBrand} />
       )}
     </div>
     {tabId !== 'enrollment-fees-disclosures' && <div style={{

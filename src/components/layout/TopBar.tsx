@@ -1,11 +1,20 @@
 import { forwardRef, useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TextField, Menu, MenuItem, CircularProgress, useMediaQuery } from '@mui/material';
-import { Search, CheckCircle } from '@mui/icons-material';
+import { TextField, Menu, MenuItem, ListSubheader, CircularProgress, useMediaQuery } from '@mui/material';
+import { Search, CheckCircle, Check } from '@mui/icons-material';
 import constellationLockup from '../../assets/constellation-lockup.svg';
 import { CURRENT_USER } from '../../data/mockData';
 import { useGlobalSearch } from '../../portal/lib/global-search';
+import { useNotifications } from '../../context/notifications';
+import { useUserRole } from '../../context/userRole';
+import type { UserRole } from '../../context/userRole';
+import { ActivityTray } from './ActivityTray';
+
+const ROLE_OPTIONS: Array<{ role: UserRole; label: string }> = [
+  { role: 'internal', label: 'Internal user (Constellation)' },
+  { role: 'client', label: 'Client user' },
+];
 
 const AIAgentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 30 30" fill="none">
@@ -161,6 +170,11 @@ export const TopBar = () => {
   const { pathname } = useLocation();
   const { setQuery, frozen } = useGlobalSearch();
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [activityAnchor, setActivityAnchor] = useState<HTMLElement | null>(null);
+  const [roleAnchor, setRoleAnchor] = useState<HTMLElement | null>(null);
+  const { role, setRole } = useUserRole();
+  const { notifications } = useNotifications();
+  const unreadCount = notifications.filter((n) => n.audience === role && !n.read).length;
 
   // The platform search narrows the Portal; elsewhere it stays a plain field.
   // GlobalSearchProvider drops the term when the route changes, so clear the box too.
@@ -259,7 +273,22 @@ export const TopBar = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
         <IconBtn title="AI Agent"><AIAgentIcon /></IconBtn>
         <IconBtn title="Messages"><MessagesIcon /></IconBtn>
-        <IconBtn title="Notifications"><NotificationIcon /></IconBtn>
+        <div style={{ position: 'relative', display: 'flex' }}>
+          <IconBtn title="Notifications" onClick={(e) => setActivityAnchor(e.currentTarget)}><NotificationIcon /></IconBtn>
+          {unreadCount > 0 && (
+            <span
+              aria-label={`${unreadCount} unread`}
+              style={{
+                position: 'absolute', top: 0, right: 0, minWidth: 14, height: 14, padding: '0 3px', boxSizing: 'border-box',
+                borderRadius: 7, background: '#6356e1', color: '#ffffff', fontSize: 9, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+              }}
+            >
+              {unreadCount}
+            </span>
+          )}
+        </div>
+        <ActivityTray anchorEl={activityAnchor} onClose={() => setActivityAnchor(null)} />
         <IconBtn title="Settings" onClick={(e) => setSettingsAnchor(e.currentTarget)}>
           <SettingsIcon />
         </IconBtn>
@@ -279,11 +308,48 @@ export const TopBar = () => {
           </MenuItem>
         </Menu>
 
-        <img
-          src={CURRENT_USER.avatarUrl}
-          alt="User"
-          style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', marginLeft: 8, cursor: 'pointer', flexShrink: 0 }}
-        />
+        <button
+          type="button"
+          title={role === 'client' ? 'Viewing as a client user' : 'Viewing as an internal user'}
+          onClick={(e) => setRoleAnchor(e.currentTarget)}
+          style={{ position: 'relative', padding: 0, marginLeft: 8, border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0, display: 'flex' }}
+        >
+          <img
+            src={CURRENT_USER.avatarUrl}
+            alt="User"
+            style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
+          />
+          {role === 'client' && (
+            // Marks the client view so it's never mistaken for the internal one.
+            <span style={{
+              position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', padding: '0 4px', borderRadius: 4,
+              background: '#d4951c', color: '#ffffff', fontSize: 8, fontWeight: 500, fontFamily: 'Roboto, sans-serif', lineHeight: '12px',
+            }}>
+              CLIENT
+            </span>
+          )}
+        </button>
+        <Menu
+          anchorEl={roleAnchor}
+          open={!!roleAnchor}
+          onClose={() => setRoleAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{ paper: { style: { minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', borderRadius: 8 } } }}
+        >
+          <ListSubheader sx={{ fontSize: 11, fontFamily: 'Roboto, sans-serif', lineHeight: '28px', color: '#686576' }}>View as</ListSubheader>
+          {ROLE_OPTIONS.map((o) => (
+            <MenuItem
+              key={o.role}
+              selected={role === o.role}
+              onClick={() => { setRole(o.role); setRoleAnchor(null); }}
+              sx={{ fontSize: 13, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', gap: 1 }}
+            >
+              <Check style={{ fontSize: 16, color: '#473bab', visibility: role === o.role ? 'visible' : 'hidden' }} />
+              {o.label}
+            </MenuItem>
+          ))}
+        </Menu>
       </div>
     </div>
   );

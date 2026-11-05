@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react';
-import { Alert, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
+import type { CSSProperties, ReactNode } from 'react';
+import { Alert, Button, Checkbox, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome } from '@mui/icons-material';
+import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
 import type {
   DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion, DisclosureTemplate, EnrollmentSettings,
 } from '../../../data/enrollmentSettings';
@@ -17,6 +18,15 @@ import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
 import type { DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
 import { DisclosureRawInput } from './DisclosureRawInput';
 import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
+import { HeaderTag, MaskedIcon } from './DisclosureUi';
+import { ClientDisclosuresView } from './ClientDisclosuresView';
+import { useUserRole } from '../../../context/userRole';
+import { useNotifications } from '../../../context/notifications';
+import {
+  BODY2_SECONDARY_STYLE, CONTAINED_MEDIUM_BUTTON_SX, OUTLINED_MEDIUM_BUTTON_SX, SECTION_CARD_STYLE, SUBTITLE2_STYLE,
+  TEXT_MEDIUM_BUTTON_SX,
+} from './disclosureStyles';
+import type { TagTone } from './disclosureStyles';
 import { RemoveSnippetDialog } from './RemoveSnippetDialog';
 import { UpdateSnippetDialog } from './UpdateSnippetDialog';
 import pageTextLinkIcon from '../../../assets/icons/disclosures/page-text-link.svg';
@@ -25,65 +35,30 @@ import circleXIcon from '../../../assets/icons/disclosures/circle-x.svg';
 import chevronTopIcon from '../../../assets/icons/disclosures/chevron-top-small.svg';
 import refreshIcon from '../../../assets/icons/disclosures/refresh.svg';
 
-/**
- * Renders a Figma icon asset as a mask, tinted to `color` — matches Figma's "Masked Icon" color overrides.
- * Button icons pass `currentColor` so they follow the button's text color, including its disabled state.
- */
-const MaskedIcon = ({ src, size, color = '#473bab' }: { src: string; size: number; color?: string }) => (
-  <span
-    aria-hidden
-    style={{
-      display: 'inline-block', width: size, height: size, flexShrink: 0, backgroundColor: color,
-      // Quoted — Vite inlines small SVGs as data URIs, which contain characters an unquoted url() can't hold.
-      WebkitMaskImage: `url(${JSON.stringify(src)})`, maskImage: `url(${JSON.stringify(src)})`,
-      WebkitMaskSize: 'contain', maskSize: 'contain', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
-    }}
-  />
-);
-
-// Medium buttons, matching the page footer's other actions (Discard/Save on the other settings pages).
-const MEDIUM_BUTTON_BASE_SX = {
-  borderRadius: 100, textTransform: 'none', fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif',
-  letterSpacing: '0.4px', lineHeight: '24px', minWidth: 0, whiteSpace: 'nowrap',
-  '& .MuiButton-startIcon': { marginLeft: 0, marginRight: '8px' },
-};
-
-const OUTLINED_MEDIUM_BUTTON_SX = {
-  ...MEDIUM_BUTTON_BASE_SX,
-  padding: '5px 15px', color: '#473bab', borderColor: 'rgba(99,86,225,0.5)',
-  '&:hover': { borderColor: '#473bab', background: 'rgba(99,86,225,0.04)' },
-};
-
-const CONTAINED_MEDIUM_BUTTON_SX = {
-  ...MEDIUM_BUTTON_BASE_SX,
-  padding: '6px 16px', background: '#473bab', color: '#ffffff',
-  '&:hover': { background: '#3d3396' },
-  '&.Mui-disabled': { background: 'rgba(17,16,20,0.08)', color: 'rgba(17,16,20,0.38)' },
-};
-
-const TEXT_MEDIUM_BUTTON_SX = { ...MEDIUM_BUTTON_BASE_SX, padding: '6px 8px', color: '#473bab' };
-
-const SECTION_CARD_STYLE: CSSProperties = {
-  border: '1px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 4,
-};
-
-const SUBTITLE2_STYLE: CSSProperties = {
-  margin: 0, fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', lineHeight: 1.57,
-};
-
-const BODY2_SECONDARY_STYLE: CSSProperties = {
-  margin: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#686576', letterSpacing: '0.17px', lineHeight: 1.43,
-};
-
 /** Height of each side of the raw/template split view — both scroll independently past it (Figma: 273px). */
 const SPLIT_PANE_HEIGHT = 273;
 
 interface DisclosuresTabProps {
   settings: EnrollmentSettings;
   onChange: (patch: Partial<EnrollmentSettings>) => void;
+  /**
+   * The account these disclosures belong to — set on the account Settings page. The project-scoped
+   * Enrollment Settings panel has none, so it always shows the internal view and raises no notifications.
+   */
+  accountId?: string;
   accountName: string;
   accountBrand: string;
 }
+
+/** Client users submit raw disclosures for review; internal users build them into the account snippet. */
+export const DisclosuresTab = (props: DisclosuresTabProps) => {
+  const { role } = useUserRole();
+  return role === 'client' && props.accountId ? (
+    <ClientDisclosuresView settings={props.settings} onChange={props.onChange} accountId={props.accountId} accountName={props.accountName} />
+  ) : (
+    <InternalDisclosuresTab {...props} />
+  );
+};
 
 function buildDefaultSnippetName(accountName: string): string {
   const now = new Date();
@@ -139,8 +114,9 @@ function buildSnippetVersion(
 /** True when the block's template was generated from its current raw text (not stale or still pending). */
 const hasCurrentTemplate = (d: DisclosureBlock) => !!d.template && d.text.trim() !== '' && d.template.sourceText === d.text.trim();
 
-export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }: DisclosuresTabProps) => {
+const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, accountBrand }: DisclosuresTabProps) => {
   const { showSnackbar } = useSnackbar();
+  const { notify, dismiss } = useNotifications();
   const snippet = settings.disclosureSnippet;
 
   // Async template generations patch whatever the disclosures are when they finish, not what they were
@@ -269,12 +245,49 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
     });
   }, [settings.disclosures, snippet]);
 
+  /**
+   * Client-submitted disclosures the snippet now includes become "Applied to offers" for the client; the
+   * internal "snippet generation pending" notification is resolved, and the client is told.
+   */
+  const applyClientSubmissions = (): DisclosureBlock[] => {
+    const appliedIds = new Set(included.filter((d) => d.clientStatus === 'submitted').map((d) => d.id));
+    if (appliedIds.size === 0) return settings.disclosures;
+    if (accountId) {
+      dismiss(disclosureSubmissionNotificationId(accountId));
+      notify({
+        id: `disclosures-applied:${accountId}`,
+        audience: 'client',
+        source: 'Disclosure Builder',
+        title: 'Your submitted disclosures were applied to offers.',
+        tags: ['Disclosures', accountName],
+        href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+      });
+    }
+    return settings.disclosures.map((d) => (appliedIds.has(d.id) ? { ...d, clientStatus: 'applied' } : d));
+  };
+
+  const handleRequestClientUpdate = (d: DisclosureBlock) => {
+    patchDisclosure(d.id, { clientStatus: 'updates_requested' });
+    if (accountId) {
+      notify({
+        id: `disclosure-update-request:${accountId}:${d.id}`,
+        audience: 'client',
+        source: 'Disclosure Builder',
+        title: `Constellation requested updates to your ${d.label} disclosure.`,
+        tags: ['Disclosures', accountName],
+        href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+      });
+    }
+    showSnackbar({ message: 'Client update requested.' });
+  };
+
   const handleGenerateSnippet = () => {
     const meta = buildSnippetMeta(
       buildDefaultSnippetName(accountName), accountName, accountBrand, consolidated.sourceText, consolidated.replacements,
     );
-    const version = buildSnippetVersion(meta.name, consolidated.text, meta.sourceText, meta.replacements, settings.disclosures);
-    onChange({ disclosureSnippet: { meta, text: consolidated.text, disclosures: settings.disclosures, versions: [version] } });
+    const disclosures = applyClientSubmissions();
+    const version = buildSnippetVersion(meta.name, consolidated.text, meta.sourceText, meta.replacements, disclosures);
+    onChange({ disclosures, disclosureSnippet: { meta, text: consolidated.text, disclosures, versions: [version] } });
     setExpandedId(null);
     setSnippetDialog({ closeMessage: 'Snippet generated.' });
   };
@@ -282,7 +295,9 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
   /** Confirmed from the Update Snippet dialog — `text` is the rebuilt snippet, possibly edited there. */
   const handleConfirmUpdate = (text: string) => {
     if (!snippet) return;
+    const disclosures = applyClientSubmissions();
     onChange({
+      disclosures,
       disclosureSnippet: {
         meta: {
           ...snippet.meta,
@@ -291,10 +306,10 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
           updatedAt: new Date().toISOString(),
         },
         text,
-        disclosures: settings.disclosures,
+        disclosures,
         versions: [
           ...snippet.versions,
-          buildSnippetVersion(snippet.meta.name, text, consolidated.sourceText, consolidated.replacements, settings.disclosures),
+          buildSnippetVersion(snippet.meta.name, text, consolidated.sourceText, consolidated.replacements, disclosures),
         ],
       },
     });
@@ -482,6 +497,7 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
             onTemplateChange={(text) => patchTemplate(d.id, { text })}
             onReplacementAdded={(replacement) => addTemplateReplacement(d.id, replacement)}
             onIncludeChange={(includeInSnippet) => patchDisclosure(d.id, { includeInSnippet })}
+            onRequestClientUpdate={() => handleRequestClientUpdate(d)}
             onDismissError={() => setErrors((e) => ({ ...e, [d.id]: undefined }))}
           />
         ))}
@@ -539,35 +555,11 @@ export const DisclosuresTab = ({ settings, onChange, accountName, accountBrand }
  */
 type DisclosureSnippetStatus = 'edited' | 'applied' | 'not_applied';
 
-const TAG_TONES = {
-  purple: { background: 'rgba(99,86,225,0.08)', color: '#473bab' },
-  blue: { background: '#EBF5FB', color: '#01579b' },
-  green: { background: 'rgba(46,125,50,0.08)', color: '#1b5e20' },
-  orange: { background: 'rgba(239,108,0,0.1)', color: '#9a4400' },
-} as const;
-
-const STATUS_TAGS: Record<DisclosureSnippetStatus, { label: string; tone: keyof typeof TAG_TONES }> = {
+const STATUS_TAGS: Record<DisclosureSnippetStatus, { label: string; tone: TagTone }> = {
   edited: { label: 'Edited', tone: 'blue' },
   applied: { label: 'Applied in snippet', tone: 'green' },
   not_applied: { label: 'Not applied in snippet', tone: 'orange' },
 };
-
-/** Small tag in a disclosure card's header (MUI Chip size="small", Figma's 8px-radius tag look). */
-const HeaderTag = ({ label, tone, onClick }: { label: string; tone: keyof typeof TAG_TONES; onClick?: () => void }) => (
-  <Chip
-    label={label}
-    size="small"
-    onClick={onClick && ((e: MouseEvent) => { e.stopPropagation(); onClick(); })}
-    // Keeps Enter/Space on the tag from also toggling the card it sits in.
-    onKeyDown={onClick && ((e: KeyboardEvent) => e.stopPropagation())}
-    sx={{
-      height: 24, borderRadius: '8px', ...TAG_TONES[tone],
-      fontSize: 11, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.16px', lineHeight: '18px',
-      '& .MuiChip-label': { padding: '0 8px', textDecoration: onClick ? 'underline' : 'none' },
-      '&.MuiChip-clickable:hover': { background: TAG_TONES[tone].background, filter: 'brightness(0.96)' },
-    }}
-  />
-);
 
 interface DisclosureAccordionProps {
   block: DisclosureBlock;
@@ -581,12 +573,13 @@ interface DisclosureAccordionProps {
   onTemplateChange: (text: string) => void;
   onReplacementAdded: (replacement: DisclosureReplacement) => void;
   onIncludeChange: (include: boolean) => void;
+  onRequestClientUpdate: () => void;
   onDismissError: () => void;
 }
 
 /** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
 const DisclosureAccordion = ({
-  block, expanded, status, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onDismissError,
+  block, expanded, status, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onDismissError,
 }: DisclosureAccordionProps) => {
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const template = block.template;
@@ -624,6 +617,7 @@ const DisclosureAccordion = ({
           <HeaderTag label={block.addedBy === 'client' ? 'Added by client' : 'Added by internal user'} tone="purple" />
         )}
         {status && <HeaderTag {...STATUS_TAGS[status]} />}
+        {block.clientStatus === 'updates_requested' && <HeaderTag label="Client update requested" tone="orange" />}
         {issues.length > 0 && (
           <HeaderTag label={`Warnings (${issues.length})`} tone="orange" onClick={() => setWarningsOpen(true)} />
         )}
@@ -692,6 +686,7 @@ const DisclosureAccordion = ({
             </Alert>
           )}
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <FormControlLabel
             control={(
               <Checkbox
@@ -703,10 +698,25 @@ const DisclosureAccordion = ({
             )}
             label="Apply to automated offers"
             sx={{
-              margin: 0, alignSelf: 'flex-start',
+              margin: 0, marginRight: 'auto',
               '& .MuiFormControlLabel-label': { fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43 },
             }}
           />
+          {block.text.trim() !== '' && (
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={block.clientStatus === 'updates_requested'}
+              onClick={onRequestClientUpdate}
+              sx={{
+                ...OUTLINED_MEDIUM_BUTTON_SX, fontSize: 13, lineHeight: '22px', padding: '3px 10px',
+                '&.Mui-disabled': { borderColor: 'rgba(17,16,20,0.12)', color: 'rgba(17,16,20,0.38)' },
+              }}
+            >
+              {block.clientStatus === 'updates_requested' ? 'Client Update Requested' : 'Request Client Update'}
+            </Button>
+          )}
+          </div>
         </>
       )}
 

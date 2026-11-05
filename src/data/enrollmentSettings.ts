@@ -92,10 +92,21 @@ export interface DisclosureBlock {
   text: string;
   /** Who entered the raw text — a client (submitted for review) or a Constellation internal user. */
   addedBy: 'client' | 'internal';
+  /**
+   * Where this disclosure stands in the client review loop: `none` until a client submits it, then
+   * `submitted` (awaiting Constellation review), `updates_requested` (sent back to the client), or
+   * `applied` (built into the account snippet).
+   */
+  clientStatus: 'none' | 'submitted' | 'updates_requested' | 'applied';
+  /** The status before the pending client submission — what "Cancel Submission" puts back. */
+  clientStatusBeforeSubmit?: 'none' | 'updates_requested' | 'applied';
   template: DisclosureTemplate | null;
   /** "Apply to automated offers" — whether this type's template is combined into the account snippet. */
   includeInSnippet: boolean;
 }
+
+/** Id of the internal-user notification raised when a client submits disclosures — one per account, so a resubmission replaces it. */
+export const disclosureSubmissionNotificationId = (accountId: string) => `disclosure-submission:${accountId}`;
 
 /** One saved state of the account snippet — a new one is recorded on generate, update, Save and restore. */
 export interface DisclosureSnippetVersion {
@@ -192,10 +203,10 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal' },
-      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true, addedBy: 'internal' },
-      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true, addedBy: 'internal' },
-      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal' },
+      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
     ],
     disclosureSnippet: null,
     docFee: 85,

@@ -262,6 +262,7 @@ export const AccountSettingsPage = () => {
         <EnrollmentSettingsTabContent
           tabId={activeTab.id}
           tabLabel={activeTab.label}
+          accountId={account.id}
           accountName={account.name}
           accountBrand={account.brand}
           settings={draftEnrollment}

@@ -4,6 +4,8 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { MainLayout } from './components/layout/MainLayout';
 import { SnackbarProvider } from './context/SnackbarContext';
+import { UserRoleProvider } from './context/UserRoleContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 import { ProgressIndicatorProvider } from './context/ProgressIndicatorContext';
 import { ProgressIndicator } from './components/ui/ProgressIndicator';
 import { TestWidgetProvider } from './context/TestWidgetContext';
@@ -60,6 +62,8 @@ function App() {
             <ProjectProvider>
             <BrowserRouter>
             <SnackbarProvider>
+            <UserRoleProvider>
+            <NotificationsProvider>
             <ProgressIndicatorProvider>
             <GlobalSearchProvider>
               <SearchMarks />
@@ -88,6 +92,8 @@ function App() {
               <ProgressIndicator />
             </GlobalSearchProvider>
             </ProgressIndicatorProvider>
+            </NotificationsProvider>
+            </UserRoleProvider>
             </SnackbarProvider>
             </BrowserRouter>
             </ProjectProvider>
