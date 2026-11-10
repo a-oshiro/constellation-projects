@@ -72,7 +72,7 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
       id: disclosureSubmissionNotificationId(accountId),
       audience: 'internal',
       source: 'Disclosure Builder',
-      title: 'New Client-Submitted Disclosure. Snippet generation pending.',
+      title: 'New Client Disclosure Edits. Snippet generation pending.',
       tags: ['Client Settings', accountName],
       href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
     });
@@ -109,7 +109,18 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
     footer = (
       <>
         <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
-          {everSubmitted ? 'Add or edit disclosures and submit for Constellation review.' : 'Add disclosures and submit for Constellation review.'}
+          {changed.length > 0 ? (
+            <>
+              Changes made to{' '}
+              {changed.map((d, i) => (
+                <span key={d.id}>
+                  {i > 0 && (i === changed.length - 1 ? ' and ' : ', ')}
+                  <strong style={{ fontWeight: 700 }}>{d.label}</strong>
+                </span>
+              ))}{' '}
+              {changed.length === 1 ? 'disclosure' : 'disclosures'}. Submit for Constellation review.
+            </>
+          ) : everSubmitted ? 'Add or edit disclosures and submit for Constellation review.' : 'Add disclosures and submit for Constellation review.'}
         </p>
         {everSubmitted && (
           <Button
@@ -140,7 +151,8 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {disclosures.map((d) => {
           const expanded = expandedId === d.id;
-          const tag = CLIENT_STATUS_TAGS[d.clientStatus];
+          // An unsubmitted edit shows "Edited" until it's submitted or discarded; otherwise the review status.
+          const tag = changed.includes(d) && !pending ? { label: 'Edited', tone: 'blue' as TagTone } : CLIENT_STATUS_TAGS[d.clientStatus];
           const toggle = () => setExpandedId((prev) => (prev === d.id ? null : d.id));
           return (
             <div key={d.id} style={{ ...SECTION_CARD_STYLE, gap: 12 }}>

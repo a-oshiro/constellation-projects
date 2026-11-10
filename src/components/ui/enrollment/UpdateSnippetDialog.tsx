@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { diffText } from '../../../utils/disclosureDiff';
+import { collectTaggedItems, useDiffMarkers } from '../../../utils/diffMarkers';
+import { ADDED_HIGHLIGHT_NAME, clearAddedHighlight, markAddedInEditor } from '../../../utils/diffEditorMarkup';
+import { DIFF_GUTTER_WIDTH, DiffGutter } from './DiffGutter';
 import { Button, IconButton } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
@@ -30,27 +34,50 @@ const SNIPPET_TEXT_STYLE: CSSProperties = {
   fontFamily: FONT, fontSize: 14, lineHeight: 1.7, color: '#1f1d25', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 };
 
+/** A column's scroll area; the left padding leaves room for the diff gutter icons. */
+const SCROLL_COLUMN_STYLE: CSSProperties = {
+  position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', padding: `8px 16px 16px ${DIFF_GUTTER_WIDTH}px`,
+};
+
+/** Green for text and variable chips the update adds (the editor's text is painted through a CSS custom highlight). */
+const ADDED_STYLES = `::highlight(${ADDED_HIGHLIGHT_NAME}){background-color:rgba(46,125,50,0.12);color:#1b5e20}[data-diff="added"]{box-shadow:0 0 0 2px rgba(46,125,50,0.35)}`;
+
 const VARIABLE_SPLIT_RE = /(\{[a-zA-Z0-9_]+\})/;
 
-/** Read-only snippet text with each {variable} drawn as the editor's default gray chip (minus its remove icon). */
-const ReadOnlySnippet = ({ text }: { text: string }) => (
-  <div style={SNIPPET_TEXT_STYLE}>
-    {text.split(VARIABLE_SPLIT_RE).map((part, i) => (
-      i % 2 === 1 ? (
-        <span
-          key={i}
-          style={{
-            display: 'inline-flex', alignItems: 'center', boxSizing: 'border-box', height: 24, borderRadius: 4, padding: '0 8px',
-            margin: '0 1px', fontSize: 11, lineHeight: '18px', letterSpacing: '0.16px', background: '#f0f2f4',
-            verticalAlign: 'middle', whiteSpace: 'nowrap',
-          }}
-        >
-          {part}
-        </span>
-      ) : <span key={i}>{part}</span>
-    ))}
-  </div>
-);
+/**
+ * Read-only snippet text with each {variable} drawn as the editor's default gray chip (minus its remove
+ * icon). Against `compareTo` (the new content), wording that won't survive the update is marked in red
+ * with a strikethrough, so the reviewer sees what is being replaced.
+ */
+const ReadOnlySnippet = ({ text, compareTo }: { text: string; compareTo: string }) => {
+  const parts = useMemo(() => diffText(text, compareTo).filter((p) => p.type !== 'added'), [text, compareTo]);
+  return (
+    <div style={SNIPPET_TEXT_STYLE}>
+      {parts.map((part, p) => {
+        const removed = part.type === 'removed';
+        return part.text.split(VARIABLE_SPLIT_RE).map((piece, i) => {
+          const style: CSSProperties | undefined = removed
+            ? { background: 'rgba(211,47,47,0.12)', color: '#b71c1c', textDecoration: 'line-through' }
+            : undefined;
+          return i % 2 === 1 ? (
+            <span
+              key={`${p}-${i}`}
+              data-diff={removed ? 'removed' : undefined}
+              style={{
+                display: 'inline-flex', alignItems: 'center', boxSizing: 'border-box', height: 24, borderRadius: 4, padding: '0 8px',
+                margin: '0 1px', fontSize: 11, lineHeight: '18px', letterSpacing: '0.16px', background: removed ? 'rgba(211,47,47,0.12)' : '#f0f2f4',
+                color: removed ? '#b71c1c' : undefined, textDecoration: removed ? 'line-through' : undefined,
+                verticalAlign: 'middle', whiteSpace: 'nowrap',
+              }}
+            >
+              {piece}
+            </span>
+          ) : <span key={`${p}-${i}`} data-diff={removed ? 'removed' : undefined} style={style}>{piece}</span>;
+        });
+      })}
+    </div>
+  );
+};
 
 export function UpdateSnippetDialog({ open, currentText, newText, onCancel, onConfirm }: UpdateSnippetDialogProps) {
   if (!open) return null;
@@ -60,6 +87,14 @@ export function UpdateSnippetDialog({ open, currentText, newText, onCancel, onCo
 
 const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm }: Omit<UpdateSnippetDialogProps, 'open'>) => {
   const [text, setText] = useState(newText);
+
+  // Diff icons sit in a gutter on the left of each wrapped line that holds a change — removed lines on the
+  // current snippet, added lines on the editable new content (re-measured as the user edits it).
+  const currentRef = useRef<HTMLDivElement>(null);
+  const newRef = useRef<HTMLDivElement>(null);
+  const removedMarkers = useDiffMarkers(currentRef, collectTaggedItems, [currentText, newText]);
+  const addedMarkers = useDiffMarkers(newRef, (container) => markAddedInEditor(container, currentText), [text, currentText]);
+  useEffect(() => clearAddedHighlight, []);
 
   return (
     <div
@@ -99,8 +134,9 @@ const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm 
               <div style={{ padding: '12px 16px 8px', minHeight: 60, boxSizing: 'border-box' }}>
                 <p style={COLUMN_TITLE_STYLE}>Current Snippet Content</p>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 16px 16px' }}>
-                <ReadOnlySnippet text={currentText} />
+              <div ref={currentRef} style={SCROLL_COLUMN_STYLE}>
+                <DiffGutter markers={removedMarkers} />
+                <ReadOnlySnippet text={currentText} compareTo={newText} />
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -110,7 +146,9 @@ const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm 
                   You may make changes to the template before saving as a new snippet version.
                 </p>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 16px 16px' }}>
+              <div ref={newRef} style={SCROLL_COLUMN_STYLE}>
+                <DiffGutter markers={addedMarkers} />
+                <style>{ADDED_STYLES}</style>
                 <DisclosureSnippetEditor initialValue={newText} onChange={setText} contentStyle={{ minHeight: 0 }} />
               </div>
             </div>

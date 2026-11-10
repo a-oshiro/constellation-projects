@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Alert, Button, Checkbox, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
-import { AutoAwesome } from '@mui/icons-material';
+import { AutoAwesome, InfoOutlined } from '@mui/icons-material';
 import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
 import type {
   DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion, DisclosureTemplate, EnrollmentSettings,
@@ -17,6 +17,7 @@ import { DisclosureSnippetDialog } from './DisclosureSnippetDialog';
 import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
 import type { DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
 import { DisclosureRawInput } from './DisclosureRawInput';
+import { DisclosureDiffView } from './DisclosureDiffView';
 import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
 import { HeaderTag, MaskedIcon } from './DisclosureUi';
 import { ClientDisclosuresView } from './ClientDisclosuresView';
@@ -245,6 +246,18 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
     });
   }, [settings.disclosures, snippet]);
 
+  // Client submissions the snippet doesn't include yet — flagged by the banner and marked up in the raw text.
+  const pendingClientBlocks = useMemo(
+    () => changedBlocks.filter((d) => d.clientStatus === 'submitted'),
+    [changedBlocks],
+  );
+  /** The text the snippet was last built from, when a pending client edit changed it — what the raw diff compares against. */
+  const diffBaseline = (d: DisclosureBlock): string | undefined => {
+    if (!snippet || !pendingClientBlocks.some((c) => c.id === d.id)) return undefined;
+    const saved = snippet.disclosures.find((s) => s.id === d.id)?.text ?? '';
+    return saved.trim() !== '' && saved !== d.text ? saved : undefined;
+  };
+
   /**
    * Client-submitted disclosures the snippet now includes become "Applied to offers" for the client; the
    * internal "snippet generation pending" notification is resolved, and the client is told.
@@ -444,6 +457,27 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100%', boxSizing: 'border-box' }}>
       <div style={{ ...SECTION_CARD_STYLE, gap: 8 }}>
         <p style={SUBTITLE2_STYLE}>Automated Offers Snippet</p>
+        {snippet && pendingClientBlocks.length > 0 && (
+          <Alert
+            severity="info"
+            icon={<InfoOutlined style={{ fontSize: 20 }} />}
+            sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', alignItems: 'center', background: '#e5f2fa', color: '#01579b', '& .MuiAlert-icon': { color: '#0288d1' } }}
+          >
+            Client has updated the {labelList(pendingClientBlocks)} {pendingClientBlocks.length === 1 ? 'disclosure' : 'disclosures'}.{' '}
+            <button
+              type="button"
+              disabled={anyGenerating || included.length === 0}
+              onClick={() => setUpdateOpen(true)}
+              style={{
+                all: 'unset', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline',
+                opacity: anyGenerating || included.length === 0 ? 0.5 : 1,
+              }}
+            >
+              Update snippet
+            </button>
+            {' '}to apply changes to offers.
+          </Alert>
+        )}
         {snippet ? (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8,
@@ -489,6 +523,7 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
             block={d}
             expanded={expandedId === d.id}
             status={blockStatus(d)}
+            diffBaseline={diffBaseline(d)}
             generating={generatingIds.has(d.id)}
             error={errors[d.id]}
             onToggle={() => toggleExpanded(d.id)}
@@ -565,6 +600,8 @@ interface DisclosureAccordionProps {
   block: DisclosureBlock;
   expanded: boolean;
   status: DisclosureSnippetStatus | null;
+  /** Set while a client edit awaits review: the snippet's text for this type, shown against the new text as a read-only diff. */
+  diffBaseline: string | undefined;
   generating: boolean;
   error: string | undefined;
   onToggle: () => void;
@@ -579,7 +616,7 @@ interface DisclosureAccordionProps {
 
 /** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
 const DisclosureAccordion = ({
-  block, expanded, status, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onDismissError,
+  block, expanded, status, diffBaseline, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onDismissError,
 }: DisclosureAccordionProps) => {
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const template = block.template;
@@ -642,16 +679,27 @@ const DisclosureAccordion = ({
           <div style={{ display: 'flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px', borderRight: '1px solid rgba(0,0,0,0.12)' }}>
               <p style={paneHeaderStyle}>Raw Disclosure</p>
-              <DisclosureRawInput
-                ariaLabel={`${block.label} raw disclosure`}
-                value={block.text}
-                onChange={onRawTextChange}
-                onBlur={onRawTextBlur}
-                replacements={showTemplate ? template.replacements : []}
-                colors={colors}
-                placeholder={`Paste the client's ${block.label} disclosure here.`}
-                height={SPLIT_PANE_HEIGHT}
-              />
+              {diffBaseline !== undefined ? (
+                <DisclosureDiffView
+                  ariaLabel={`${block.label} raw disclosure changes`}
+                  oldText={diffBaseline}
+                  newText={block.text}
+                  replacements={showTemplate ? template.replacements : []}
+                  colors={colors}
+                  height={SPLIT_PANE_HEIGHT}
+                />
+              ) : (
+                <DisclosureRawInput
+                  ariaLabel={`${block.label} raw disclosure`}
+                  value={block.text}
+                  onChange={onRawTextChange}
+                  onBlur={onRawTextBlur}
+                  replacements={showTemplate ? template.replacements : []}
+                  colors={colors}
+                  placeholder={`Paste the client's ${block.label} disclosure here.`}
+                  height={SPLIT_PANE_HEIGHT}
+                />
+              )}
             </div>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
               <p style={paneHeaderStyle}>Resulting Template</p>
