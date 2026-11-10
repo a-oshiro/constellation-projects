@@ -83,26 +83,59 @@ const isDisclosureIssue = (i: unknown): i is DisclosureIssue => {
     && typeof issue.title === 'string' && typeof issue.message === 'string';
 };
 
-// Lenient JSON parse: the prompt asks for a single {"snippet","replacements"} object, but if the model
-// ever wraps that in stray prose the snippet is still usable — it just loses its comparison-view
-// highlighting and warnings (replacements: [], issues: []) rather than failing the whole generation.
-function parseGenerationResponse(content: string): DisclosureSnippetGeneration {
+// Pulls the JSON object out of a response that may carry stray prose or code fences around it.
+function extractJsonObject(content: string): unknown {
   const cleaned = stripCodeFences(content);
   try {
-    const parsed = JSON.parse(cleaned) as { snippet?: unknown; replacements?: unknown; issues?: unknown };
-    if (typeof parsed.snippet === 'string') {
-      const replacements = Array.isArray(parsed.replacements)
-        ? parsed.replacements.filter(
-            (r): r is DisclosureReplacement => !!r && typeof r === 'object' && typeof (r as DisclosureReplacement).key === 'string' && typeof (r as DisclosureReplacement).original === 'string',
-          )
-        : [];
-      const issues = Array.isArray(parsed.issues) ? parsed.issues.filter(isDisclosureIssue) : [];
-      return { snippet: parsed.snippet, replacements, issues };
-    }
+    return JSON.parse(cleaned);
   } catch {
-    // fall through to the raw-text fallback below
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      return null;
+    }
   }
-  return { snippet: cleaned, replacements: [], issues: [] };
+}
+
+/**
+ * Cleans the model's replacements so the comparison-view colors can match them: keys lose any braces,
+ * and an `original` that isn't found verbatim in the source (stray "$", different spacing) is retried
+ * without the "$" / with flexible whitespace and replaced by the actual source substring.
+ */
+function normalizeReplacements(raw: unknown[], sourceText: string): DisclosureReplacement[] {
+  const result: DisclosureReplacement[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+    const { key: rawKey, original: rawOriginal } = r as Partial<DisclosureReplacement>;
+    if (typeof rawKey !== 'string' || typeof rawOriginal !== 'string') continue;
+    const key = rawKey.trim().replace(/^\{+|\}+$/g, '');
+    let original = rawOriginal;
+    if (!key || !original) continue;
+    if (!sourceText.includes(original)) {
+      const trimmed = original.trim().replace(/^\$\s*/, '');
+      const pattern = trimmed.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+      const found = pattern ? sourceText.match(new RegExp(pattern))?.[0] : undefined;
+      if (!found) continue;
+      original = found;
+    }
+    result.push({ key, original });
+  }
+  return result;
+}
+
+// Lenient parse: if the model wraps the JSON in stray prose the object is still extracted; if nothing
+// parses, the snippet is still usable — it just loses its comparison-view highlighting and warnings.
+function parseGenerationResponse(content: string, sourceText: string): DisclosureSnippetGeneration {
+  const parsed = extractJsonObject(content) as { snippet?: unknown; replacements?: unknown; issues?: unknown } | null;
+  if (parsed && typeof parsed.snippet === 'string') {
+    const replacements = Array.isArray(parsed.replacements) ? normalizeReplacements(parsed.replacements, sourceText) : [];
+    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter(isDisclosureIssue) : [];
+    return { snippet: parsed.snippet, replacements, issues };
+  }
+  return { snippet: stripCodeFences(content), replacements: [], issues: [] };
 }
 
 /** Joins every disclosure type's raw text into one labeled source, so a single account snippet covers all of them. */
@@ -199,5 +232,5 @@ export async function generateDisclosureSnippet(rawDisclosureText: string): Prom
     throw new Error('OpenAI response did not include any content.');
   }
 
-  return parseGenerationResponse(content);
+  return parseGenerationResponse(content, rawDisclosureText);
 }
