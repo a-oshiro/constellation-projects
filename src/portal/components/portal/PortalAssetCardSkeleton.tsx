@@ -4,10 +4,8 @@
 // the two-line name, the measurements line, a row of chips, the 100px footer —
 // so when the real cards land they take the same places and nothing jumps.
 //
-// The shimmer is one wave across the whole grid rather than one per block: the
-// gradient is pinned to the viewport (`background-attachment: fixed`, see
-// .portal-skeleton in portal.css), so every block shows its own slice of the
-// same sweep.
+// Every block shimmers on its own (.portal-skeleton in portal.css): the
+// highlight sweeps across each item from its left edge to its right.
 
 import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
 

@@ -73,25 +73,24 @@
   .animate-bulk-in { animation: none; }
 }
 
-/* Skeleton cards while the library loads (PortalAssetCardSkeleton).
- * The gradient is pinned to the viewport, so every block shows a slice of
- * ONE wave sweeping left to right across the whole grid, instead of each
- * block shimmering on its own clock. */
+/* Skeletons while the library loads (PortalAssetCardSkeleton, the folder
+ * tree's skeleton rows). Each block shimmers on its own: the gradient is
+ * three times the block's width and slides across it, so the highlight
+ * enters at the left edge and leaves at the right of every item. */
 @keyframes portal-skeleton-wave {
-  0%   { background-position: -100vw 0; }
-  100% { background-position: 100vw 0; }
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 .portal-skeleton {
   background-color: #eceef1;
   background-image: linear-gradient(
     100deg,
-    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0) 40%,
     rgba(255, 255, 255, 0.75) 50%,
-    rgba(255, 255, 255, 0) 70%
+    rgba(255, 255, 255, 0) 60%
   );
-  background-size: 100vw 100%;
+  background-size: 300% 100%;
   background-repeat: no-repeat;
-  background-attachment: fixed;
   animation: portal-skeleton-wave 1.6s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {

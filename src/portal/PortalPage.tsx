@@ -13,6 +13,7 @@ import { WindowedCardGrid } from "@portal/components/ui/WindowedCardGrid";
 import { AssetDetailsDialog } from "@portal/components/portal/AssetDetailsDialog";
 import { PortalAssetCard, isVideo, type AssetChip } from "@portal/components/portal/PortalAssetCard";
 import { PortalAssetGridSkeleton } from "@portal/components/portal/PortalAssetCardSkeleton";
+import { AiEnhanceDialog, type EnhancedPick } from "@portal/components/portal/AiEnhanceDialog";
 import {
   PortalAssetRow, PortalFolderRows, PortalTableHeader, sortFolders,
 } from "@portal/components/portal/PortalAssetTable";
@@ -399,6 +400,7 @@ export default function PortalPage() {
   const [toast, setToast] = useToast(3200);
   const { startProgress } = useProgressIndicator();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [enhanceOpen, setEnhanceOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [moveQuery, setMoveQuery] = useState("");
   const pickedAssets = useMemo(
@@ -408,6 +410,38 @@ export default function PortalPage() {
   const shownIds = new Set(filteredAssets.map((a) => a.id));
   const hiddenPicked = pickedAssets.filter((a) => !shownIds.has(a.id)).length;
   const plural = (n: number) => `${n.toLocaleString()} ${n === 1 ? "asset" : "assets"}`;
+  /** What AI Enhance can work on: stills with a file behind them. */
+  const enhanceable = useMemo(
+    () => pickedAssets.filter((a) => a.url && !isVideo(a)),
+    [pickedAssets],
+  );
+
+  function openEnhance() {
+    if (enhanceable.length === 0) {
+      setToast("AI Enhance works on images — the selection has none");
+      return;
+    }
+    const skipped = pickedAssets.length - enhanceable.length;
+    if (skipped > 0) setToast(`${plural(skipped)} skipped — AI Enhance works on images only`);
+    setEnhanceOpen(true);
+  }
+
+  /** Enhanced variants saved as new assets, beside their originals — local to
+   *  this session, like Duplicate. */
+  function saveEnhancedAsNew(picks: EnhancedPick[]) {
+    const stamp = Date.now();
+    const made = picks.map(({ asset, url, variant }, i) => ({
+      ...asset,
+      id: `${asset.id}-ai-${stamp}-${i}`,
+      name: `${asset.name} (AI Variant ${variant})`,
+      url,
+      fileType: "JPEG",
+      updatedDaysAgo: 0,
+    }));
+    setCopies((prev) => [...prev, ...made]);
+    setEnhanceOpen(false);
+    setToast(`Saved ${plural(made.length)}`);
+  }
 
   async function downloadPicked() {
     const files = pickedAssets.filter((a) => a.url);
@@ -540,7 +574,7 @@ export default function PortalPage() {
         );
       },
     },
-    { id: "enhance", label: "AI Enhance", icon: WandSparkles, iconOnly: true, onClick: notYet("AI Enhance") },
+    { id: "enhance", label: "AI Enhance", icon: WandSparkles, iconOnly: true, onClick: openEnhance },
     { id: "edit", label: "Edit Variables", icon: Pencil, iconOnly: true, onClick: notYet("Edit Variables") },
     { id: "copy", label: "Duplicate", icon: Copy, iconOnly: true, onClick: duplicatePicked },
     { id: "delete", label: "Delete", icon: Trash2, iconOnly: true, onClick: () => setConfirmDelete(true) },
@@ -1439,6 +1473,14 @@ export default function PortalPage() {
             </div>
           </div>
         </main>
+
+      <AiEnhanceDialog
+        open={enhanceOpen}
+        assets={enhanceable}
+        onClose={() => setEnhanceOpen(false)}
+        onSaveAsNew={saveEnhancedAsNew}
+        onSaveAsVersions={() => setToast("Save as new versions isn't wired up yet")}
+      />
 
       <AssetDetailsDialog
         asset={detailAsset}

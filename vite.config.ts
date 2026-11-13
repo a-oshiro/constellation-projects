@@ -25,6 +25,41 @@ function portalAssetsDevApi(): Plugin {
           res.end(JSON.stringify({ assets: [], folders: [], source: 'error', error: String(e).slice(0, 200) }))
         }
       })
+
+      // The AI Enhance dialog's endpoint takes a POST body and streams its answer,
+      // so it is adapted to a web Request/Response. Hanging up (Stop Request)
+      // aborts the request's signal, which cancels the OpenAI call.
+      server.middlewares.use('/api/enhance-asset', async (req, res) => {
+        const abort = new AbortController()
+        res.on('close', () => { if (!res.writableFinished) abort.abort() })
+        try {
+          const chunks: Buffer[] = []
+          for await (const chunk of req) chunks.push(chunk as Buffer)
+          const request = new Request('http://localhost/api/enhance-asset', {
+            method: req.method,
+            headers: { 'Content-Type': 'application/json' },
+            body: req.method === 'POST' ? Buffer.concat(chunks) : undefined,
+            signal: abort.signal,
+          })
+          const mod = await server.ssrLoadModule('/api/enhance-asset.ts')
+          const upstream: Response = await mod.default(request)
+          res.statusCode = upstream.status
+          upstream.headers.forEach((v, k) => res.setHeader(k, v))
+          if (!upstream.body) return res.end()
+          const reader = upstream.body.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(value)
+          }
+          res.end()
+        } catch (e) {
+          if (res.headersSent) return res.end()
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: String(e).slice(0, 200) }))
+        }
+      })
     },
   }
 }
