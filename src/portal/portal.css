@@ -73,6 +73,31 @@
   .animate-bulk-in { animation: none; }
 }
 
+/* Skeleton cards while the library loads (PortalAssetCardSkeleton).
+ * The gradient is pinned to the viewport, so every block shows a slice of
+ * ONE wave sweeping left to right across the whole grid, instead of each
+ * block shimmering on its own clock. */
+@keyframes portal-skeleton-wave {
+  0%   { background-position: -100vw 0; }
+  100% { background-position: 100vw 0; }
+}
+.portal-skeleton {
+  background-color: #eceef1;
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  background-size: 100vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: portal-skeleton-wave 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-skeleton { animation: none; background-image: none; }
+}
+
 /* ─── Dual-handle range slider (FilterRange) ───────────────────────────
  * Two range inputs stacked on one drawn track. The inputs carry
  * `pointer-events: none` so the upper one does not swallow the lower one's

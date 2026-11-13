@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Plus, Clock, ChevronRight, ChevronDown,
@@ -25,6 +25,9 @@ export interface PortalFolderTreeProps {
   liveFolders?: { name: string; count: number }[];
   activeLiveFolder?: string | null;
   onSelectLiveFolder?: (name: string | null) => void;
+  /** The platform's folders are still being read: skeleton rows stand in for
+   *  the tree under Recents. */
+  loading?: boolean;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -174,7 +177,7 @@ function FolderItem({
   caretSlot = false,
   onClick,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   count?: number;
   active?: boolean;
@@ -389,6 +392,84 @@ function FolderTreeNode({
   );
 }
 
+// ─── Skeleton ─────────────────────────────────────────────────────────────
+
+/** A made-up tree for the loading state: depth and label width (px) per row.
+ *  Branches open and close, names run long and short, so the placeholder
+ *  reads as a folder tree rather than a list of equal bars. */
+const SKELETON_ROWS: { depth: number; width: number }[] = [
+  { depth: 0, width: 118 },
+  { depth: 1, width: 72 },
+  { depth: 1, width: 104 },
+  { depth: 1, width: 48 },
+  { depth: 0, width: 66 },
+  { depth: 0, width: 140 },
+  { depth: 1, width: 86 },
+  { depth: 2, width: 54 },
+  { depth: 2, width: 78 },
+  { depth: 1, width: 40 },
+  { depth: 0, width: 96 },
+  { depth: 0, width: 128 },
+  { depth: 0, width: 58 },
+  { depth: 1, width: 92 },
+  { depth: 1, width: 62 },
+  { depth: 0, width: 110 },
+  { depth: 0, width: 74 },
+  { depth: 0, width: 134 },
+];
+
+/** One placeholder row, on a real row's geometry — the same padding, the
+ *  caret and icon boxes on the 18px line, the label, the count. */
+function SkeletonRow({ depth, width }: { depth: number; width: number }) {
+  return (
+    <div
+      className="relative flex items-center gap-2 px-2 py-1.5"
+      style={depth > 0 ? { paddingLeft: INDENT_BASE + depth * INDENT_STEP } : undefined}
+    >
+      <span className={`shrink-0 ${LINE} w-4 flex items-center`}>
+        <span className="portal-skeleton block w-2 h-2 rounded-sm" />
+      </span>
+      <span className={`shrink-0 ${LINE} flex items-center`}>
+        <span className="portal-skeleton block w-[13px] h-[11px] rounded-[3px]" />
+      </span>
+      <span className="portal-skeleton block h-[9px] rounded min-w-0 shrink" style={{ width }} />
+      <span className="portal-skeleton block h-[8px] w-4 rounded shrink-0" />
+    </div>
+  );
+}
+
+/** The skeleton tree, with the same branch guides the real one draws. Each
+ *  run of deeper rows is grouped under its parent so the guide spans it. */
+function FolderTreeSkeleton() {
+  const render = (from: number, depth: number): [ReactNode[], number] => {
+    const out: ReactNode[] = [];
+    let i = from;
+    while (i < SKELETON_ROWS.length && SKELETON_ROWS[i].depth >= depth) {
+      const row = SKELETON_ROWS[i];
+      if (row.depth > depth) {
+        const [kids, next] = render(i, depth + 1);
+        out.push(
+          <div key={`g${i}`} className="relative mt-0.5 space-y-0.5">
+            <BranchGuide depth={depth} />
+            {kids}
+          </div>,
+        );
+        i = next;
+        continue;
+      }
+      out.push(<SkeletonRow key={i} depth={row.depth} width={row.width} />);
+      i += 1;
+    }
+    return [out, i];
+  };
+  return (
+    <div role="status" aria-busy="true" className="space-y-0.5">
+      <span className="sr-only">Loading folders…</span>
+      {render(0, 0)[0]}
+    </div>
+  );
+}
+
 // ─── PortalFolderTree ─────────────────────────────────────────────────────
 
 export function PortalFolderTree({
@@ -397,6 +478,7 @@ export function PortalFolderTree({
   activeLiveFolder = null,
   onSelectLiveFolder,
   disabledReason,
+  loading = false,
 }: PortalFolderTreeProps) {
 
   /** The platform's folders as a tree, read out of the paths their names
@@ -456,7 +538,8 @@ export function PortalFolderTree({
         />
 
         {/* ── The platform's folders, nested by the paths their names carry ── */}
-        {folderTree.map((node) => (
+        {loading && <FolderTreeSkeleton />}
+        {!loading && folderTree.map((node) => (
           <FolderTreeNode
             key={node.path}
             node={node}

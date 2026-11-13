@@ -12,6 +12,7 @@ import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
 import { WindowedCardGrid } from "@portal/components/ui/WindowedCardGrid";
 import { AssetDetailsDialog } from "@portal/components/portal/AssetDetailsDialog";
 import { PortalAssetCard, isVideo, type AssetChip } from "@portal/components/portal/PortalAssetCard";
+import { PortalAssetGridSkeleton } from "@portal/components/portal/PortalAssetCardSkeleton";
 import {
   PortalAssetRow, PortalFolderRows, PortalTableHeader, sortFolders,
 } from "@portal/components/portal/PortalAssetTable";
@@ -1079,6 +1080,7 @@ export default function PortalPage() {
                 activeLiveFolder={activeLiveFolder}
                 onSelectLiveFolder={setActiveLiveFolder}
                 disabledReason={frozenReason}
+                loading={librarySource === "loading"}
               />
             )}
           </div>
@@ -1288,42 +1290,40 @@ export default function PortalPage() {
             </ScrollAwayHeader>
 
             <div className="p-5">
-              {showingLibrary && librarySource !== "live" && librarySource !== "local" ? (
-                /* ── Nothing loaded yet, or the platform could not be read ──
+              {showingLibrary && librarySource === "loading" ? (
+                /* ── Still reading the platform ──
+                 * Skeleton cards in the grid's own columns and measurements,
+                 * so the real cards land where the placeholders stood. */
+                <PortalAssetGridSkeleton count={18} />
+              ) : showingLibrary && librarySource !== "live" && librarySource !== "local" ? (
+                /* ── The platform could not be read ──
                  * The fallback is a decision, not a default: the generated set
                  * looks exactly like the real one, so switching to it silently
                  * would leave no way to tell which is on screen. */
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-                  {librarySource === "loading" ? (
-                    <>
-                      <div className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-indigo-500 animate-spin" />
-                      <p className="text-[13px] text-gray-500">Reading the platform library…</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-1">
-                        <ImageIcon size={26} className="text-amber-400" />
-                      </div>
-                      <p className="text-[14px] font-semibold text-gray-700">
-                        Couldn&apos;t read the platform library
-                      </p>
-                      <p className="text-[12px] text-gray-400 max-w-[320px] leading-relaxed">
-                        {liveMeta.reason === "unconfigured"
-                          ? "No platform credentials are configured for this environment."
-                          : `The API answered: ${liveMeta.reason}`}
-                      </p>
-                      <button
-                        onClick={() => setLibrarySource("local")}
-                        className="flex items-center gap-1.5 mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium rounded-lg transition"
-                      >
-                        Use the local sample library
-                      </button>
-                      <p className="text-[11px] text-gray-400 max-w-[320px] leading-relaxed">
-                        {PORTAL_ASSETS.length.toLocaleString()} generated assets with invented
-                        metadata — for exercising the filters, not for reading as real.
-                      </p>
-                    </>
-                  )}
+                  <>
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-1">
+                      <ImageIcon size={26} className="text-amber-400" />
+                    </div>
+                    <p className="text-[14px] font-semibold text-gray-700">
+                      Couldn&apos;t read the platform library
+                    </p>
+                    <p className="text-[12px] text-gray-400 max-w-[320px] leading-relaxed">
+                      {liveMeta.reason === "unconfigured"
+                        ? "No platform credentials are configured for this environment."
+                        : `The API answered: ${liveMeta.reason}`}
+                    </p>
+                    <button
+                      onClick={() => setLibrarySource("local")}
+                      className="flex items-center gap-1.5 mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium rounded-lg transition"
+                    >
+                      Use the local sample library
+                    </button>
+                    <p className="text-[11px] text-gray-400 max-w-[320px] leading-relaxed">
+                      {PORTAL_ASSETS.length.toLocaleString()} generated assets with invented
+                      metadata — for exercising the filters, not for reading as real.
+                    </p>
+                  </>
                 </div>
               ) : showingLibrary ? (
                 /* ── Filtered library ──
