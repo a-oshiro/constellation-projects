@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Skeleton } from '@mui/material';
 import { BODY2_SECONDARY_STYLE } from './disclosureStyles';
 
 const LOADING_MESSAGES = [
@@ -90,7 +89,7 @@ export const TemplateLoadingSkeleton = () => {
       {/* Lines sized to the template editor's 28px rows, so the result drops in without a jump. */}
       <div aria-hidden style={{ paddingTop: 8 }}>
         {LINE_WIDTHS.map((width, i) => (
-          <Skeleton key={i} variant="rounded" animation="wave" width={width} height={12} sx={{ marginBottom: '16px', borderRadius: '4px' }} />
+          <div key={i} className="shimmer-line" style={{ width, height: 12, marginBottom: 16 }} />
         ))}
       </div>
     </div>

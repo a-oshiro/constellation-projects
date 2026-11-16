@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { IconButton, InputAdornment, TextField, Tooltip } from '@mui/material';
 import { Add, ExpandLess, ExpandMore, Search } from '@mui/icons-material';
 import type { DisclosureSnippetVersion } from '../../../data/enrollmentSettings';
+import { Expandable } from '../Expandable';
 
 /**
  * The snippet dialog's "History" side tab (Figma: "Version History"): every saved version, newest first,
@@ -155,7 +156,7 @@ export function SnippetVersionHistory({
       {groups.map(({ label, items }) => {
         const open = !collapsed.has(label);
         return (
-          <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div key={label} style={{ display: 'flex', flexDirection: 'column' }}>
             <button
               type="button"
               onClick={() => toggleGroup(label)}
@@ -168,7 +169,9 @@ export function SnippetVersionHistory({
               {label}
               {open ? <ExpandLess style={{ fontSize: 18 }} /> : <ExpandMore style={{ fontSize: 18 }} />}
             </button>
-            {open && items.map((version) => {
+            <Expandable open={open}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+            {items.map((version) => {
               const isCurrent = version.id === currentVersionId;
               const isViewing = version.id === viewingVersionId;
               return (
@@ -207,6 +210,8 @@ export function SnippetVersionHistory({
                 </button>
               );
             })}
+            </div>
+            </Expandable>
           </div>
         );
       })}

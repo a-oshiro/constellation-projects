@@ -64,8 +64,13 @@ function findMockDisclosureIssues(rawDisclosureText: string): DisclosureIssue[] 
   return issues;
 }
 
-export async function generateMockDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
-  await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
+export async function generateMockDisclosureSnippet(rawDisclosureText: string, signal?: AbortSignal): Promise<DisclosureSnippetGeneration> {
+  // The fake latency is cancellable like the real request (rejects with the signal's AbortError).
+  await new Promise<void>((resolve, reject) => {
+    signal?.throwIfAborted();
+    const timer = setTimeout(resolve, MOCK_LATENCY_MS);
+    signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+  });
 
   const issues = findMockDisclosureIssues(rawDisclosureText);
   const replacements: DisclosureReplacement[] = [];

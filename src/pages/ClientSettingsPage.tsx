@@ -3,8 +3,8 @@ import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { OfferReplacementWorkflowTab } from '../components/settings/OfferReplacementWorkflowTab';
 import { AccountsTab } from '../components/settings/AccountsTab';
 import { FieldsTab } from '../components/settings/FieldsTab';
-import { SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
-import { setSettingsNavPanelOpen, useSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
+import { SettingsNavPanelFrame, SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
+import { setSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
 
 const CLIENT_SETTINGS_TABS = [
   { id: 'accounts', label: 'Accounts' },
@@ -30,14 +30,14 @@ const CloseIcon = () => (
 export const ClientSettingsPage = () => {
   const { tabId } = useParams<{ tabId: string }>();
   const navigate = useNavigate();
-  const panelOpen = useSettingsNavPanelOpen();
 
   const activeTab = CLIENT_SETTINGS_TABS.find((t) => t.id === tabId) ?? CLIENT_SETTINGS_TABS[0];
 
   return (
-    <div className="flex h-full" style={{ background: '#f0f2f4', gap: 16, padding: 8 }}>
+    <div className="flex h-full" style={{ background: '#f0f2f4', padding: 8 }}>
       {/* ── Left panel — Client Settings tab navigation (closable; each pane title then shows a reopen button) ── */}
-      {panelOpen && <div
+      <SettingsNavPanelFrame>
+      <div
         style={{
           width: 280,
           flexShrink: 0,
@@ -88,7 +88,8 @@ export const ClientSettingsPage = () => {
             );
           })}
         </nav>
-      </div>}
+      </div>
+      </SettingsNavPanelFrame>
 
       {/* ── Main panel — active tab content ─────────────────────── */}
       {activeTab.id === 'offer-replacement-workflow' ? (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { Alert, Button, Checkbox, FormControlLabel, IconButton } from '@mui/material';
-import { AutoAwesome, InfoOutlined } from '@mui/icons-material';
+import { Alert, Button, Checkbox, FormControlLabel, IconButton, Tooltip } from '@mui/material';
+import { AutoAwesome, InfoOutlined, StopCircleOutlined } from '@mui/icons-material';
 import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
 import type {
   DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion, DisclosureTemplate, EnrollmentSettings,
@@ -21,6 +21,7 @@ import { DisclosureDiffView } from './DisclosureDiffView';
 import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
 import { HeaderTag, MaskedIcon } from './DisclosureUi';
 import { TemplateLoadingSkeleton } from './TemplateLoadingSkeleton';
+import { Expandable } from '../Expandable';
 import { ClientDisclosuresView } from './ClientDisclosuresView';
 import { useUserRole } from '../../../context/userRole';
 import { useNotifications } from '../../../context/notifications';
@@ -129,6 +130,9 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
   onChangeRef.current = onChange;
 
   const [generatingIds, setGeneratingIds] = useState<Set<DisclosureBlock['id']>>(new Set());
+  // In-flight generations, so "Stop" can cancel the request; and the types whose generation the user stopped.
+  const controllersRef = useRef(new Map<DisclosureBlock['id'], AbortController>());
+  const [cancelledIds, setCancelledIds] = useState<Set<DisclosureBlock['id']>>(new Set());
   const [errors, setErrors] = useState<Partial<Record<DisclosureBlock['id'], string>>>({});
   // Only one disclosure type card is open at a time — expanding another closes it.
   const [expandedId, setExpandedId] = useState<DisclosureBlock['id'] | null>('lease');
@@ -167,31 +171,57 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
     });
   };
 
+  const setCancelled = (id: DisclosureBlock['id'], cancelled: boolean) => {
+    setCancelledIds((prev) => {
+      if (prev.has(id) === cancelled) return prev;
+      const next = new Set(prev);
+      if (cancelled) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
   const generateTemplate = async (id: DisclosureBlock['id'], sourceText: string) => {
+    const controller = new AbortController();
+    controllersRef.current.set(id, controller);
     setGenerating(id, true);
+    setCancelled(id, false);
     setErrors((e) => ({ ...e, [id]: undefined }));
     try {
-      const { snippet: text, replacements, issues } = await generateDisclosureSnippet(sourceText);
+      const { snippet: text, replacements, issues } = await generateDisclosureSnippet(sourceText, controller.signal);
       // Dropped if the raw text changed while this was in flight — a newer generation is already queued.
       const current = settingsRef.current.disclosures.find((d) => d.id === id);
       if (current?.text.trim() !== sourceText) return;
       patchDisclosure(id, { template: { text, replacements, sourceText, issues, generatedAt: new Date().toISOString() } });
     } catch (err) {
+      if (controller.signal.aborted) return; // Stopped by the user — handled by stopGeneration.
       if (settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() !== sourceText) return;
       setErrors((e) => ({ ...e, [id]: err instanceof Error ? err.message : 'Something went wrong while generating this template.' }));
     } finally {
-      if (settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() === sourceText) setGenerating(id, false);
+      if (controllersRef.current.get(id) === controller) controllersRef.current.delete(id);
+      if (!controller.signal.aborted && settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() === sourceText) setGenerating(id, false);
     }
   };
 
-  // Raw text that arrived without a matching template (pre-filled disclosures) gets one generated on first view.
-  const initialGenerationRef = useRef(false);
+  /** "Stop": cancels the in-flight OpenAI request; the template pane then says the generation was cancelled. */
+  const stopGeneration = (id: DisclosureBlock['id']) => {
+    controllersRef.current.get(id)?.abort();
+    controllersRef.current.delete(id);
+    setGenerating(id, false);
+    setCancelled(id, true);
+  };
+
+
+  // Raw text that arrived without a matching template (pre-filled disclosures) gets one generated on first
+  // view. Leaving the page cancels anything still generating, so no request (or OpenAI call) outlives it.
+  // Start and cancel live in one effect so React's dev double-mount (mount, unmount, mount) restarts the
+  // generations it cancelled instead of leaving them stuck.
   useEffect(() => {
-    if (initialGenerationRef.current) return;
-    initialGenerationRef.current = true;
+    const controllers = controllersRef.current;
     settingsRef.current.disclosures
       .filter((d) => d.text.trim() !== '' && !hasCurrentTemplate(d))
       .forEach((d) => generateTemplate(d.id, d.text.trim()));
+    return () => controllers.forEach((c) => c.abort());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -199,6 +229,7 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
     if (value.trim() === '') {
       patchDisclosure(d.id, { text: value, template: null });
       setGenerating(d.id, false);
+      setCancelled(d.id, false);
       setErrors((e) => ({ ...e, [d.id]: undefined }));
       return;
     }
@@ -523,6 +554,7 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
             status={blockStatus(d)}
             diffBaseline={diffBaseline(d)}
             generating={generatingIds.has(d.id)}
+            cancelled={cancelledIds.has(d.id)}
             error={errors[d.id]}
             onToggle={() => toggleExpanded(d.id)}
             onRawTextChange={(value) => handleRawTextChange(d, value)}
@@ -531,6 +563,7 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
             onReplacementAdded={(replacement) => addTemplateReplacement(d.id, replacement)}
             onIncludeChange={(includeInSnippet) => patchDisclosure(d.id, { includeInSnippet })}
             onRequestClientUpdate={() => handleRequestClientUpdate(d)}
+            onStopGeneration={() => stopGeneration(d.id)}
             onDismissError={() => setErrors((e) => ({ ...e, [d.id]: undefined }))}
           />
         ))}
@@ -601,6 +634,8 @@ interface DisclosureAccordionProps {
   /** Set while a client edit awaits review: the snippet's text for this type, shown against the new text as a read-only diff. */
   diffBaseline: string | undefined;
   generating: boolean;
+  /** The user stopped this type's last generation (until a new one starts). */
+  cancelled: boolean;
   error: string | undefined;
   onToggle: () => void;
   onRawTextChange: (value: string) => void;
@@ -609,16 +644,18 @@ interface DisclosureAccordionProps {
   onReplacementAdded: (replacement: DisclosureReplacement) => void;
   onIncludeChange: (include: boolean) => void;
   onRequestClientUpdate: () => void;
+  onStopGeneration: () => void;
   onDismissError: () => void;
 }
 
 /** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
 const DisclosureAccordion = ({
-  block, expanded, status, diffBaseline, generating, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onDismissError,
+  block, expanded, status, diffBaseline, generating, cancelled, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onStopGeneration, onDismissError,
 }: DisclosureAccordionProps) => {
   const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
   const template = block.template;
-  const showTemplate = !!template && !generating;
+  // A cancelled generation leaves no template for the current text — an older one would be out of date.
+  const showTemplate = !!template && !generating && !cancelled;
   const issues = showTemplate ? template.issues : [];
   const [warningsOpen, setWarningsOpen] = useState(false);
 
@@ -636,7 +673,7 @@ const DisclosureAccordion = ({
   const paneHeaderStyle: CSSProperties = { ...BODY2_SECONDARY_STYLE, whiteSpace: 'nowrap' };
 
   return (
-    <div style={{ ...SECTION_CARD_STYLE, gap: 12 }}>
+    <div style={{ ...SECTION_CARD_STYLE, gap: 0 }}>
       <div
         role="button"
         tabIndex={0}
@@ -675,8 +712,9 @@ const DisclosureAccordion = ({
         </IconButton>
       </div>
 
-      {expanded && (
-        <>
+      {/* The header-to-body gap lives inside the expanding region, so a collapsed card has no extra space. */}
+      <Expandable open={expanded}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
           <div style={{ display: 'flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px', borderRight: '1px solid rgba(0,0,0,0.12)' }}>
               <p style={paneHeaderStyle}>Raw Disclosure</p>
@@ -702,11 +740,13 @@ const DisclosureAccordion = ({
                 />
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
               <p style={paneHeaderStyle}>Resulting Template</p>
               <div style={{ height: SPLIT_PANE_HEIGHT, overflowY: 'auto' }}>
                 {generating ? (
                   <TemplateLoadingSkeleton />
+                ) : cancelled ? (
+                  <p role="status" style={{ ...BODY2_SECONDARY_STYLE, lineHeight: '24px' }}>Template generation cancelled.</p>
                 ) : template ? (
                   <DisclosureSnippetEditor
                     key={template.generatedAt}
@@ -723,6 +763,23 @@ const DisclosureAccordion = ({
                   </p>
                 )}
               </div>
+              {generating && (
+                <Tooltip
+                  title="Cancel template generation"
+                  placement="top"
+                  // MUI leaves 14px between tooltip and button; pulled in to 4px so it reads as the button's label.
+                  slotProps={{ popper: { modifiers: [{ name: 'offset', options: { offset: [0, -10] } }] } }}
+                >
+                  <IconButton
+                    aria-label={`Cancel ${block.label} template generation`}
+                    onClick={onStopGeneration}
+                    size="medium"
+                    sx={{ position: 'absolute', left: 6, bottom: 6, background: '#ffffff', '&:hover': { background: 'rgba(99,86,225,0.08)' } }}
+                  >
+                    <StopCircleOutlined style={{ fontSize: 24, color: '#473bab' }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </div>
           </div>
 
@@ -763,8 +820,8 @@ const DisclosureAccordion = ({
             </Button>
           )}
           </div>
-        </>
-      )}
+        </div>
+      </Expandable>
 
       <DisclosureWarningsDialog
         open={warningsOpen && issues.length > 0}

@@ -7,6 +7,7 @@ import type { DisclosureBlock, EnrollmentSettings } from '../../../data/enrollme
 import { useNotifications } from '../../../context/notifications';
 import { useSnackbar } from '../../../context/SnackbarContext';
 import { HeaderTag, MaskedIcon } from './DisclosureUi';
+import { Expandable } from '../Expandable';
 import {
   BODY2_SECONDARY_STYLE, CONTAINED_MEDIUM_BUTTON_SX, SECTION_CARD_STYLE, TEXT_MEDIUM_BUTTON_SX,
 } from './disclosureStyles';
@@ -148,7 +149,7 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
           const tag = changed.includes(d) && !pending ? { label: 'Edited', tone: 'blue' as TagTone } : CLIENT_STATUS_TAGS[d.clientStatus];
           const toggle = () => setExpandedId((prev) => (prev === d.id ? null : d.id));
           return (
-            <div key={d.id} style={{ ...SECTION_CARD_STYLE, gap: 12 }}>
+            <div key={d.id} style={{ ...SECTION_CARD_STYLE, gap: 0 }}>
               <div
                 role="button"
                 tabIndex={0}
@@ -172,16 +173,18 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
                   />
                 </IconButton>
               </div>
-              {expanded && (
-                <textarea
-                  aria-label={`${d.label} disclosure`}
-                  value={draftOf(d)}
-                  readOnly={pending}
-                  onChange={(e) => setDrafts((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                  placeholder={`Paste your ${d.label} disclosure here.`}
-                  style={{ ...TEXTAREA_STYLE, background: pending ? '#f9fafa' : '#ffffff' }}
-                />
-              )}
+              <Expandable open={expanded}>
+                <div style={{ paddingTop: 12 }}>
+                  <textarea
+                    aria-label={`${d.label} disclosure`}
+                    value={draftOf(d)}
+                    readOnly={pending}
+                    onChange={(e) => setDrafts((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                    placeholder={`Paste your ${d.label} disclosure here.`}
+                    style={{ ...TEXTAREA_STYLE, background: pending ? '#f9fafa' : '#ffffff' }}
+                  />
+                </div>
+              </Expandable>
             </div>
           );
         })}

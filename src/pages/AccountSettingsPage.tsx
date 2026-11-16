@@ -11,8 +11,9 @@ import { AccountVariablesTab } from '../components/settings/AccountVariablesTab'
 import { EnrollmentSettingsTabContent, isEnrollmentLeafTabId } from '../components/settings/EnrollmentSettingsTabContent';
 import type { EnrollmentSettings } from '../data/enrollmentSettings';
 import { getSavedEnrollmentSettings, saveEnrollmentSettings } from '../data/enrollmentSettingsStore';
-import { SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
-import { setSettingsNavPanelOpen, useSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
+import { SettingsNavPanelFrame, SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
+import { Expandable } from '../components/ui/Expandable';
+import { setSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
 
 const ACCOUNT_TABS = [
   { id: 'general', label: 'General' },
@@ -53,7 +54,6 @@ export const AccountSettingsPage = () => {
   const [switcherAnchor, setSwitcherAnchor] = useState<HTMLElement | null>(null);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const [enrollmentExpanded, setEnrollmentExpanded] = useState(true);
-  const panelOpen = useSettingsNavPanelOpen();
 
   const account = (accountId && getAccountById(accountId)) ?? ACCOUNTS[0];
   const activeTab = ALL_ACCOUNT_TABS.find((t) => t.id === tabId) ?? ACCOUNT_TABS.find((t) => t.id === 'destination-urls')!;
@@ -111,9 +111,10 @@ export const AccountSettingsPage = () => {
   };
 
   return (
-    <div className="flex h-full" style={{ background: '#f0f2f4', gap: 16, padding: 8 }}>
+    <div className="flex h-full" style={{ background: '#f0f2f4', padding: 8 }}>
       {/* ── Left panel — back / account switcher / tab navigation (closable; each pane title then shows a reopen button) ── */}
-      {panelOpen && <div
+      <SettingsNavPanelFrame>
+      <div
         style={{
           width: 280, flexShrink: 0, background: '#ffffff', borderRadius: 16,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -232,27 +233,32 @@ export const AccountSettingsPage = () => {
               ? <ExpandLess style={{ fontSize: 20, color: '#686576', flexShrink: 0 }} />
               : <ExpandMore style={{ fontSize: 20, color: '#686576', flexShrink: 0 }} />}
           </button>
-          {enrollmentExpanded && ENROLLMENT_SETTINGS_TABS.map((tab) => {
-            const isActive = tab.id === activeTab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate(`/settings/accounts/${account.id}/${tab.id}`)}
-                className={isActive ? '' : 'hover:bg-[rgba(17,16,20,0.04)]'}
-                style={{
-                  display: 'flex', alignItems: 'center', width: '100%', padding: '8px 8px 8px 32px',
-                  border: 'none', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
-                  background: isActive ? 'rgba(99,86,225,0.08)' : 'transparent',
-                  fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
-                  color: '#1f1d25', letterSpacing: '0.17px', lineHeight: '24px',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          <Expandable open={enrollmentExpanded}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {ENROLLMENT_SETTINGS_TABS.map((tab) => {
+                const isActive = tab.id === activeTab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => navigate(`/settings/accounts/${account.id}/${tab.id}`)}
+                    className={isActive ? '' : 'hover:bg-[rgba(17,16,20,0.04)]'}
+                    style={{
+                      display: 'flex', alignItems: 'center', width: '100%', padding: '8px 8px 8px 32px',
+                      border: 'none', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
+                      background: isActive ? 'rgba(99,86,225,0.08)' : 'transparent',
+                      fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
+                      color: '#1f1d25', letterSpacing: '0.17px', lineHeight: '24px',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Expandable>
         </nav>
-      </div>}
+      </div>
+      </SettingsNavPanelFrame>
 
       {/* ── Main panel — active tab content ─────────────────────────── */}
       {activeTab.id === 'destination-urls' ? (

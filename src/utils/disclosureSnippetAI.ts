@@ -233,14 +233,19 @@ export function mergeDisclosureReplacements(lists: DisclosureReplacement[][]): D
   });
 }
 
-/** Sends a raw client-provided disclosure through the OpenAI-backed templatizer and returns the resulting snippet text plus its source-value mapping. */
-export async function generateDisclosureSnippet(rawDisclosureText: string): Promise<DisclosureSnippetGeneration> {
-  if (AI_MODE === 'mock') return generateMockDisclosureSnippet(rawDisclosureText);
+/**
+ * Sends a raw client-provided disclosure through the OpenAI-backed templatizer and returns the resulting
+ * snippet text plus its source-value mapping. Aborting `signal` cancels the in-flight request; the
+ * promise then rejects with an AbortError (check `signal.aborted`).
+ */
+export async function generateDisclosureSnippet(rawDisclosureText: string, signal?: AbortSignal): Promise<DisclosureSnippetGeneration> {
+  if (AI_MODE === 'mock') return generateMockDisclosureSnippet(rawDisclosureText, signal);
 
   // Routed through the existing /api/fetch-urls serverless function — it's a generic Responses API
   // proxy with nothing URL-specific in its own logic, so it's reused here rather than duplicating it.
   const response = await fetch('/api/fetch-urls', {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: OPENAI_MODEL,
