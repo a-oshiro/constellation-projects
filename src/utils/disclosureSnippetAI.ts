@@ -3,12 +3,10 @@ import type { DisclosureIssue } from '../data/enrollmentSettings';
 import type { DisclosureReplacement } from './disclosureSnippetColors';
 import { DISCLOSURE_BOILERPLATE, generateMockDisclosureSnippet } from './disclosureSnippetMock';
 
-// 'live' sends disclosures to OpenAI through /api/fetch-urls; 'mock' templatizes them locally so local
-// development doesn't spend credits (or fail when the serverless API isn't running). Defaults to mock
-// under `vite dev` and live in production builds — set VITE_DISCLOSURE_AI_MODE to override either way.
-const AI_MODE: 'live' | 'mock' = import.meta.env.VITE_DISCLOSURE_AI_MODE === 'live' || import.meta.env.VITE_DISCLOSURE_AI_MODE === 'mock'
-  ? import.meta.env.VITE_DISCLOSURE_AI_MODE
-  : import.meta.env.DEV ? 'mock' : 'live';
+// 'live' (the default, dev included) sends disclosures to OpenAI through /api/fetch-urls — `npm run dev`
+// serves that function itself (see vite.config.ts). Set VITE_DISCLOSURE_AI_MODE=mock to templatize
+// locally instead, without spending OpenAI credits.
+const AI_MODE: 'live' | 'mock' = import.meta.env.VITE_DISCLOSURE_AI_MODE === 'mock' ? 'mock' : 'live';
 
 // Cheapest model in the same family as the already-proven `gpt-4o` Responses API call used by
 // fetchUrlsWithAI.ts — keeps this a low-cost call while reusing the exact same integration path.
@@ -125,16 +123,46 @@ function normalizeReplacements(raw: unknown[], sourceText: string): DisclosureRe
   return result;
 }
 
-// Lenient parse: if the model wraps the JSON in stray prose the object is still extracted; if nothing
-// parses, the snippet is still usable — it just loses its comparison-view highlighting and warnings.
-function parseGenerationResponse(content: string, sourceText: string): DisclosureSnippetGeneration {
+/** JSON schema the model's reply must match (Responses API structured output, strict mode). */
+const GENERATION_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['snippet', 'replacements', 'issues'],
+  properties: {
+    snippet: { type: 'string' },
+    replacements: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['key', 'original'],
+        properties: { key: { type: 'string' }, original: { type: 'string' } },
+      },
+    },
+    issues: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['severity', 'title', 'message'],
+        properties: {
+          severity: { type: 'string', enum: ['failure', 'warning', 'change'] },
+          title: { type: 'string' },
+          message: { type: 'string' },
+        },
+      },
+    },
+  },
+} as const;
+
+// Lenient parse: if the model wraps the JSON in stray prose the object is still extracted. Returns null
+// when no {snippet} object can be read — raw model output is never shown as a template.
+function parseGenerationResponse(content: string, sourceText: string): DisclosureSnippetGeneration | null {
   const parsed = extractJsonObject(content) as { snippet?: unknown; replacements?: unknown; issues?: unknown } | null;
-  if (parsed && typeof parsed.snippet === 'string') {
-    const replacements = Array.isArray(parsed.replacements) ? normalizeReplacements(parsed.replacements, sourceText) : [];
-    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter(isDisclosureIssue) : [];
-    return { snippet: parsed.snippet, replacements, issues };
-  }
-  return { snippet: stripCodeFences(content), replacements: [], issues: [] };
+  if (!parsed || typeof parsed.snippet !== 'string') return null;
+  const replacements = Array.isArray(parsed.replacements) ? normalizeReplacements(parsed.replacements, sourceText) : [];
+  const issues = Array.isArray(parsed.issues) ? parsed.issues.filter(isDisclosureIssue) : [];
+  return { snippet: parsed.snippet, replacements, issues };
 }
 
 /** Joins every disclosure type's raw text into one labeled source, so a single account snippet covers all of them. */
@@ -221,6 +249,8 @@ export async function generateDisclosureSnippet(rawDisclosureText: string): Prom
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildUserPrompt(rawDisclosureText) },
       ],
+      // Structured output: OpenAI guarantees the reply is valid JSON of exactly this shape, so it always parses.
+      text: { format: { type: 'json_schema', name: 'disclosure_template', strict: true, schema: GENERATION_SCHEMA } },
     }),
   });
 
@@ -235,5 +265,12 @@ export async function generateDisclosureSnippet(rawDisclosureText: string): Prom
     throw new Error('OpenAI response did not include any content.');
   }
 
-  return parseGenerationResponse(content, rawDisclosureText);
+  const generation = parseGenerationResponse(content, rawDisclosureText);
+  if (!generation) {
+    console.warn('[Disclosure template] Unreadable OpenAI response:', data);
+    throw new Error('OpenAI returned a response the template builder couldn\'t read. Edit the disclosure to try again.');
+  }
+  // Logged only once the template parsed successfully — the full Responses API payload, for debugging.
+  console.log('[Disclosure template] OpenAI response:', data);
+  return generation;
 }

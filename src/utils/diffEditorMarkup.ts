@@ -1,5 +1,4 @@
 import { addedTokenIndexes, tokenize } from './disclosureDiff';
-import type { MarkerItem } from './diffMarkers';
 
 /** Name of the CSS Custom Highlight that paints added text — style it with `::highlight(snippet-diff-added)`. */
 export const ADDED_HIGHLIGHT_NAME = 'snippet-diff-added';
@@ -38,37 +37,32 @@ function collectEditorTokens(editor: HTMLElement): EditorToken[] {
 /**
  * Marks what the editor's current content adds on top of `baseline` (the snippet's text before the update):
  * added text gets the `snippet-diff-added` highlight and added variable chips `data-diff="added"`, without
- * changing the editor's DOM structure. Returns the added content's on-screen boxes for the gutter icons.
+ * changing the editor's DOM structure.
  */
-export function markAddedInEditor(root: HTMLElement, baseline: string): MarkerItem[] {
+export function markAddedInEditor(root: HTMLElement, baseline: string): void {
   root.querySelectorAll('[data-diff]').forEach((el) => el.removeAttribute('data-diff'));
   const editor = root.querySelector<HTMLElement>('[contenteditable]');
-  if (!editor) return [];
+  if (!editor) return;
 
   const tokens = collectEditorTokens(editor);
   const added = addedTokenIndexes(baseline, tokens.map((t) => t.text));
 
   const ranges: Range[] = [];
-  const items: MarkerItem[] = [];
   tokens.forEach((token, i) => {
     if (!added.has(i)) return;
     if (token.chip) {
       token.chip.dataset.diff = 'added';
-      items.push({ type: 'added', rects: Array.from(token.chip.getClientRects()) });
     } else if (token.node && token.start !== undefined && token.end !== undefined) {
       const range = document.createRange();
       range.setStart(token.node, token.start);
       range.setEnd(token.node, token.end);
       ranges.push(range);
-      // Whitespace is painted, but only real words decide which lines get an icon (a space at a wrap would add a stray one).
-      if (token.text.trim() !== '') items.push({ type: 'added', rects: Array.from(range.getClientRects()) });
     }
   });
 
   if ('highlights' in CSS && typeof Highlight !== 'undefined') {
     CSS.highlights.set(ADDED_HIGHLIGHT_NAME, new Highlight(...ranges));
   }
-  return items;
 }
 
 /** Removes the added-text highlight — call when the dialog that set it goes away. */

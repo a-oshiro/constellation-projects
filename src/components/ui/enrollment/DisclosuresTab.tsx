@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { Alert, Button, Checkbox, CircularProgress, FormControlLabel, IconButton } from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, IconButton } from '@mui/material';
 import { AutoAwesome, InfoOutlined } from '@mui/icons-material';
 import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
 import type {
@@ -20,6 +20,7 @@ import { DisclosureRawInput } from './DisclosureRawInput';
 import { DisclosureDiffView } from './DisclosureDiffView';
 import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
 import { HeaderTag, MaskedIcon } from './DisclosureUi';
+import { TemplateLoadingSkeleton } from './TemplateLoadingSkeleton';
 import { ClientDisclosuresView } from './ClientDisclosuresView';
 import { useUserRole } from '../../../context/userRole';
 import { useNotifications } from '../../../context/notifications';
@@ -501,10 +502,7 @@ const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, ac
             </div>
           </div>
         ) : (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8,
-            border: '1px dashed #c9c7d1', background: '#f9fafa',
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <MaskedIcon src={pageTextLinkIcon} size={20} color="#9c99a9" />
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <p style={{ ...BODY2_SECONDARY_STYLE, color: '#1f1d25', fontWeight: 500 }}>No snippet attached to this account yet.</p>
@@ -708,10 +706,7 @@ const DisclosureAccordion = ({
               <p style={paneHeaderStyle}>Resulting Template</p>
               <div style={{ height: SPLIT_PANE_HEIGHT, overflowY: 'auto' }}>
                 {generating ? (
-                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, ...BODY2_SECONDARY_STYLE }}>
-                    <CircularProgress size={20} sx={{ color: '#473bab' }} />
-                    Building template...
-                  </div>
+                  <TemplateLoadingSkeleton />
                 ) : template ? (
                   <DisclosureSnippetEditor
                     key={template.generatedAt}

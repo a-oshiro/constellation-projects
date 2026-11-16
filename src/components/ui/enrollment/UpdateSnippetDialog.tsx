@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { diffText } from '../../../utils/disclosureDiff';
-import { collectTaggedItems, useDiffMarkers } from '../../../utils/diffMarkers';
 import { ADDED_HIGHLIGHT_NAME, clearAddedHighlight, markAddedInEditor } from '../../../utils/diffEditorMarkup';
-import { DIFF_GUTTER_WIDTH, DiffGutter } from './DiffGutter';
 import { Button, IconButton } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
@@ -34,9 +32,9 @@ const SNIPPET_TEXT_STYLE: CSSProperties = {
   fontFamily: FONT, fontSize: 14, lineHeight: 1.7, color: '#1f1d25', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
 };
 
-/** A column's scroll area; the left padding leaves room for the diff gutter icons. */
+/** A column's scroll area. */
 const SCROLL_COLUMN_STYLE: CSSProperties = {
-  position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', padding: `8px 16px 16px ${DIFF_GUTTER_WIDTH}px`,
+  position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 16px 16px',
 };
 
 /** Green for text and variable chips the update adds (the editor's text is painted through a CSS custom highlight). */
@@ -88,13 +86,24 @@ export function UpdateSnippetDialog({ open, currentText, newText, onCancel, onCo
 const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm }: Omit<UpdateSnippetDialogProps, 'open'>) => {
   const [text, setText] = useState(newText);
 
-  // Diff icons sit in a gutter on the left of each wrapped line that holds a change — removed lines on the
-  // current snippet, added lines on the editable new content (re-measured as the user edits it).
-  const currentRef = useRef<HTMLDivElement>(null);
+  // Paints what the editable new content adds on top of the current snippet green. Re-marked whenever the
+  // editor's DOM changes — including its first fill, which happens in the editor's own effect after this
+  // component's effects have run — batched to one pass per frame.
   const newRef = useRef<HTMLDivElement>(null);
-  const removedMarkers = useDiffMarkers(currentRef, collectTaggedItems, [currentText, newText]);
-  const addedMarkers = useDiffMarkers(newRef, (container) => markAddedInEditor(container, currentText), [text, currentText]);
-  useEffect(() => clearAddedHighlight, []);
+  useEffect(() => {
+    const root = newRef.current;
+    if (!root) return undefined;
+    let frame = 0;
+    const mark = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => markAddedInEditor(root, currentText));
+    };
+    mark();
+    // Attributes aren't watched: marking sets data-diff on chips, which would otherwise re-trigger itself.
+    const observer = new MutationObserver(mark);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); clearAddedHighlight(); };
+  }, [currentText]);
 
   return (
     <div
@@ -134,8 +143,7 @@ const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm 
               <div style={{ padding: '12px 16px 8px', minHeight: 60, boxSizing: 'border-box' }}>
                 <p style={COLUMN_TITLE_STYLE}>Current Snippet Content</p>
               </div>
-              <div ref={currentRef} style={SCROLL_COLUMN_STYLE}>
-                <DiffGutter markers={removedMarkers} />
+              <div style={SCROLL_COLUMN_STYLE}>
                 <ReadOnlySnippet text={currentText} compareTo={newText} />
               </div>
             </div>
@@ -147,7 +155,6 @@ const UpdateSnippetDialogContent = ({ currentText, newText, onCancel, onConfirm 
                 </p>
               </div>
               <div ref={newRef} style={SCROLL_COLUMN_STYLE}>
-                <DiffGutter markers={addedMarkers} />
                 <style>{ADDED_STYLES}</style>
                 <DisclosureSnippetEditor initialValue={newText} onChange={setText} contentStyle={{ minHeight: 0 }} />
               </div>
