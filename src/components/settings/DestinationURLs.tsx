@@ -6,7 +6,7 @@ import {
   Checkbox, Chip, Menu, MenuItem, ListItemIcon, CircularProgress, Alert, Snackbar,
 } from '@mui/material';
 import {
-  Add, ArrowDropDown, Search, ViewSidebarOutlined,
+  Add, ArrowDropDown, Search,
   AutoAwesomeOutlined, UploadOutlined, DescriptionOutlined,
   AutoAwesome, Check, Close,
 } from '@mui/icons-material';
@@ -20,6 +20,7 @@ import {
   parseDestinationUrlsCsv, downloadCsvTemplate,
 } from '../../utils/fetchUrlsWithAI';
 import emptyFolderSrc from '../../assets/empty-folder.png';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 const DEFAULT_ACCOUNT_WEBSITE = 'https://www.bmwnyc.com/';
 
@@ -452,9 +453,7 @@ export const DestinationURLs = ({ accountName }: DestinationURLsProps) => {
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 12px', flexShrink: 0 }}>
-          <IconButton size="small" sx={{ padding: '4px' }}>
-            <ViewSidebarOutlined style={{ fontSize: 20, color: '#686576' }} />
-          </IconButton>
+          <SettingsNavPanelToggle />
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, whiteSpace: 'nowrap' }}>
             Destination URLs
           </h1>

@@ -2,9 +2,15 @@ import React, { useCallback, useState } from 'react';
 import { NotificationsContext } from './notifications';
 import type { AppNotification } from './notifications';
 import type { UserRole } from './userRole';
+import { ACCOUNTS } from '../data/accounts';
+import { buildDisclosureSubmissionNotification } from '../data/enrollmentSettings';
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // Every account's default disclosures start as a pending client submission, so their notifications start raised too.
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    const createdAt = new Date().toISOString();
+    return ACCOUNTS.map((a) => ({ ...buildDisclosureSubmissionNotification(a.id, a.name), createdAt, read: false }));
+  });
 
   const notify = useCallback((notification: Omit<AppNotification, 'createdAt' | 'read'>) => {
     setNotifications((prev) => [

@@ -42,14 +42,14 @@ export const DISCLOSURE_VARIABLES: DisclosureVariable[] = [
   { key: 'offerExpirationDate', label: 'Offer Expiration Date', category: 'Offer', sampleValue: '11/30/2026' },
   { key: 'dealerName', label: 'Dealer Name', category: 'Offer', sampleValue: 'Honda Downtown LA' },
 
-  // Rebates (1–6, matching the fixed boilerplate paragraph appended to every generated snippet)
+  // Rebates (1–6, matching the fixed boilerplate paragraph appended once to the account snippet)
   ...[1, 2, 3, 4, 5, 6].flatMap((n) => [
     { key: `leaseRebate${n}Amount`, label: `Lease Rebate ${n} Amount`, category: 'Rebates', sampleValue: n === 1 ? '1,000' : '0' },
     { key: `leaseRebate${n}Name`, label: `Lease Rebate ${n} Name`, category: 'Rebates', sampleValue: n === 1 ? 'Loyalty Credit' : '' },
     { key: `leaseRebate${n}Disclosure`, label: `Lease Rebate ${n} Disclosure`, category: 'Rebates', sampleValue: n === 1 ? 'Must qualify for BMW Loyalty pricing.' : '' },
   ]),
 
-  // Dealer Fees (1–6, matching the fixed boilerplate paragraph appended to every generated snippet)
+  // Dealer Fees (1–6, matching the fixed boilerplate paragraph appended once to the account snippet)
   ...[1, 2, 3, 4, 5, 6].flatMap((n) => [
     { key: `leaseDealerFee${n}Name`, label: `Lease Dealer Fee ${n} Name`, category: 'Dealer Fees', sampleValue: n === 1 ? 'Doc Fee' : '' },
     { key: `leaseDealerFee${n}Value`, label: `Lease Dealer Fee ${n} Value`, category: 'Dealer Fees', sampleValue: n === 1 ? '85' : '0' },

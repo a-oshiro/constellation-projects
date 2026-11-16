@@ -7,7 +7,7 @@ import type { DisclosureIssue } from '../data/enrollmentSettings';
 import type { DisclosureReplacement } from './disclosureSnippetColors';
 import type { DisclosureSnippetGeneration } from './disclosureSnippetAI';
 
-/** Rebate + dealer-fee legal text appended to every generated snippet — shared with the real prompt. */
+/** Rebate + dealer-fee legal text appended once to the account snippet (never to the per-type templates). */
 export const DISCLOSURE_BOILERPLATE = [
   'Price includes the following rebates: $ {leaseRebate1Amount} {leaseRebate1Name}. {leaseRebate1Disclosure} $ {leaseRebate2Amount} {leaseRebate2Name}. {leaseRebate2Disclosure} $ {leaseRebate3Amount} {leaseRebate3Name}. {leaseRebate3Disclosure} $ {leaseRebate4Amount} {leaseRebate4Name}. {leaseRebate4Disclosure} $ {leaseRebate5Amount} {leaseRebate5Name}. {leaseRebate5Disclosure} $ {leaseRebate6Amount} {leaseRebate6Name}. {leaseRebate6Disclosure}',
   '{leaseDealerFee1Name}: ${leaseDealerFee1Value}, {leaseDealerFee2Name}: ${leaseDealerFee2Value}, {leaseDealerFee3Name}: ${leaseDealerFee3Value}, {leaseDealerFee4Name}: ${leaseDealerFee4Value}, {leaseDealerFee5Name}: ${leaseDealerFee5Value}, {leaseDealerFee6Name}: ${leaseDealerFee6Value}. {dynamicVinList} VIN: {VIN}',
@@ -98,5 +98,5 @@ export async function generateMockDisclosureSnippet(rawDisclosureText: string): 
   });
   text = text.replace(/\b(?:19|20)\d{2}\b(?=\s+[A-Z])/g, (m) => placeholder('modelYear', m));
 
-  return { snippet: `${text.trim()}\n\n${DISCLOSURE_BOILERPLATE}`, replacements, issues };
+  return { snippet: text.trim(), replacements, issues };
 }

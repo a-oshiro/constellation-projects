@@ -651,7 +651,10 @@ const DisclosureAccordion = ({
           {block.label}
         </span>
         {block.text.trim() !== '' && (
-          <HeaderTag label={block.addedBy === 'client' ? 'Added by client' : 'Added by internal user'} tone="purple" />
+          <HeaderTag
+            label={block.addedBy === 'client' ? 'Added by client' : 'Added by internal user'}
+            tone={block.addedBy === 'client' ? 'purple' : 'gray'}
+          />
         )}
         {status && <HeaderTag {...STATUS_TAGS[status]} />}
         {block.clientStatus === 'updates_requested' && <HeaderTag label="Client update requested" tone="orange" />}

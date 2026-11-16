@@ -3,6 +3,8 @@ import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { OfferReplacementWorkflowTab } from '../components/settings/OfferReplacementWorkflowTab';
 import { AccountsTab } from '../components/settings/AccountsTab';
 import { FieldsTab } from '../components/settings/FieldsTab';
+import { SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
+import { setSettingsNavPanelOpen, useSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
 
 const CLIENT_SETTINGS_TABS = [
   { id: 'accounts', label: 'Accounts' },
@@ -28,13 +30,14 @@ const CloseIcon = () => (
 export const ClientSettingsPage = () => {
   const { tabId } = useParams<{ tabId: string }>();
   const navigate = useNavigate();
+  const panelOpen = useSettingsNavPanelOpen();
 
   const activeTab = CLIENT_SETTINGS_TABS.find((t) => t.id === tabId) ?? CLIENT_SETTINGS_TABS[0];
 
   return (
     <div className="flex h-full" style={{ background: '#f0f2f4', gap: 16, padding: 8 }}>
-      {/* ── Left panel — Client Settings tab navigation ─────────── */}
-      <div
+      {/* ── Left panel — Client Settings tab navigation (closable; each pane title then shows a reopen button) ── */}
+      {panelOpen && <div
         style={{
           width: 280,
           flexShrink: 0,
@@ -51,8 +54,9 @@ export const ClientSettingsPage = () => {
             Client Settings
           </h2>
           <button
-            title="Close"
-            onClick={() => navigate('/projects')}
+            title="Close panel"
+            aria-label="Close panel"
+            onClick={() => setSettingsNavPanelOpen(false)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 30, height: 30, border: 'none', borderRadius: '100px',
@@ -84,7 +88,7 @@ export const ClientSettingsPage = () => {
             );
           })}
         </nav>
-      </div>
+      </div>}
 
       {/* ── Main panel — active tab content ─────────────────────── */}
       {activeTab.id === 'offer-replacement-workflow' ? (
@@ -110,9 +114,12 @@ export const ClientSettingsPage = () => {
             <div style={{ marginBottom: 6 }}>
               <Breadcrumbs items={['Settings', activeTab.label]} />
             </div>
-            <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
-              {activeTab.label}
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SettingsNavPanelToggle />
+              <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
+                {activeTab.label}
+              </h1>
+            </div>
           </div>
           <div style={{ flex: 1 }} />
         </div>

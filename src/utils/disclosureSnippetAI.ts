@@ -27,12 +27,11 @@ Always:
 - Reuse an exact key from the provided variable list whenever a value in the disclosure matches that variable's description. Only invent a new {camelCaseName} key when nothing in the list fits.
 - Preserve the "$" sign and any punctuation that sits immediately next to a value in the source text (e.g. write $ {msrp} when the source disclosure has a dollar sign directly before that value).
 - Keep the language formal and compliant with CARS Act requirements.
-- Append, exactly once, at the end of the disclosure (after the source text, on a new line) these two paragraphs of legal text regarding Rebate and Dealer Fee offers, using their placeholders verbatim exactly as given below — do not omit them even if the source disclosure has no rebate or dealer fee language of its own. These placeholders have no original substring in the source, so never list them in "replacements":
-${DISCLOSURE_BOILERPLATE}
-- Report anything in the source disclosure that stops it from working as a reusable automated-offer template, as "issues". Use severity "failure" for language the client must change (e.g. eligibility conditions such as "who have leased or financed" that limit the offer to a group the platform cannot identify the viewer as part of), "warning" for things a human should double-check (e.g. mentions of a loyalty, conquest, military or other named program), and "change" for something you deliberately left as-is that may read oddly in the result (e.g. a fee already stated inside a sentence, which the appended dealer-fee sentence may repeat). Quote the exact source wording in each message. Return an empty list when there is nothing to report.
+- The result must be a 1:1 adaptation of the source disclosure: do not add any sentence, paragraph, or legal text that is not in the source (rebate, dealer-fee and VIN language is added separately, later).
+- Report anything in the source disclosure that stops it from working as a reusable automated-offer template, as "issues". Use severity "failure" for language the client must change (e.g. eligibility conditions such as "who have leased or financed" that limit the offer to a group the platform cannot identify the viewer as part of), "warning" for things a human should double-check (e.g. mentions of a loyalty, conquest, military or other named program), and "change" for something you deliberately left as-is that may read oddly in the result (e.g. a fee already stated inside a sentence, which the dealer-fee sentence later added to the final snippet may repeat). Quote the exact source wording in each message. Return an empty list when there is nothing to report.
 - Return ONLY a single JSON object, no markdown code fences, no commentary, of this exact shape:
 {"snippet": "<the resulting disclosure snippet text, exactly as described above>", "replacements": [{"key": "<variableKey, no braces>", "original": "<the exact original substring from the source disclosure that this variable replaced, verbatim, no leading $ if the $ stayed in the snippet as literal text>"}], "issues": [{"severity": "failure" | "warning" | "change", "title": "<short title>", "message": "<one or two sentences explaining the problem and what to do>"}]}
-- Include exactly one "replacements" entry per distinct placeholder you introduced FROM THE SOURCE TEXT (skip the fixed rebate/dealer-fee/VIN boilerplate placeholders above, since they were not present in the source).`;
+- Include exactly one "replacements" entry per distinct placeholder you introduced.`;
 
 function buildUserPrompt(rawDisclosureText: string): string {
   const variableList = DISCLOSURE_VARIABLES
@@ -152,11 +151,13 @@ function splitSentences(paragraph: string): string[] {
 
 /**
  * Combines each disclosure type's resulting template into one account snippet. A sentence that appears
- * in more than one template (the rebate/dealer-fee boilerplate every template ends with, or shared legal
- * lines like "Subject to prior sale.") is written once, after the type-specific text, keeping the
- * paragraph it first appeared in; sentences unique to one template stay in place, in template order.
+ * in more than one template (shared legal lines like "Subject to prior sale.") is written once, after the
+ * type-specific text, keeping the paragraph it first appeared in; sentences unique to one template stay
+ * in place, in template order. The rebate/dealer-fee/VIN boilerplate exists only here, appended once at
+ * the end — templates are 1:1 adaptations of the client's disclosures and never carry it.
  */
 export function consolidateDisclosureTemplates(templates: string[]): string {
+  if (templates.length === 0) return '';
   const parsed = templates.map((t) => t.split(/\n+/).map(splitSentences).filter((p) => p.length > 0));
 
   const templateCount = new Map<string, number>();
@@ -168,7 +169,9 @@ export function consolidateDisclosureTemplates(templates: string[]): string {
 
   const own: string[] = [];
   const shared = new Map<string, string[]>();
-  const seen = new Set<string>();
+  // Pre-seeded with the boilerplate, so a template that still carries it (one generated before this
+  // rule) doesn't write it twice.
+  const seen = new Set(DISCLOSURE_BOILERPLATE.split('\n').flatMap(splitSentences).map(normalizeSentence));
   parsed.forEach((paragraphs, ti) => {
     paragraphs.forEach((sentences, pi) => {
       const ownSentences: string[] = [];
@@ -188,7 +191,7 @@ export function consolidateDisclosureTemplates(templates: string[]): string {
     });
   });
 
-  return [...own, ...Array.from(shared.values(), (s) => s.join(' '))].join('\n\n');
+  return [...own, ...Array.from(shared.values(), (s) => s.join(' ')), DISCLOSURE_BOILERPLATE].join('\n\n');
 }
 
 /** Every distinct {key, original} pair across the templates' replacements, in order — powers the snippet's comparison-view colors. */

@@ -6,6 +6,7 @@ import { VinPrioritiesTab } from '../ui/enrollment/VinPrioritiesTab';
 import { AgedDiscountsTab } from '../ui/enrollment/AgedDiscountsTab';
 import { CreativeDistributionTab } from '../ui/enrollment/CreativeDistributionTab';
 import { DisclosuresTab } from '../ui/enrollment/DisclosuresTab';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 /** The Account Settings page's own left-nav already lists these one-per-row (unlike
  * `EnrollmentSettingsPanel`, which has its own internal sub-nav) — so this just wraps the bare tab
@@ -46,6 +47,7 @@ export const EnrollmentSettingsTabContent = ({
       <Breadcrumbs items={['Settings', 'Accounts', accountName, tabLabel]} />
     </div>
     <div style={{ padding: '10px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16 }}>
+      <SettingsNavPanelToggle />
       <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
         {tabLabel}
       </h1>

@@ -11,6 +11,8 @@ import { AccountVariablesTab } from '../components/settings/AccountVariablesTab'
 import { EnrollmentSettingsTabContent, isEnrollmentLeafTabId } from '../components/settings/EnrollmentSettingsTabContent';
 import type { EnrollmentSettings } from '../data/enrollmentSettings';
 import { getSavedEnrollmentSettings, saveEnrollmentSettings } from '../data/enrollmentSettingsStore';
+import { SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
+import { setSettingsNavPanelOpen, useSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
 
 const ACCOUNT_TABS = [
   { id: 'general', label: 'General' },
@@ -51,6 +53,7 @@ export const AccountSettingsPage = () => {
   const [switcherAnchor, setSwitcherAnchor] = useState<HTMLElement | null>(null);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const [enrollmentExpanded, setEnrollmentExpanded] = useState(true);
+  const panelOpen = useSettingsNavPanelOpen();
 
   const account = (accountId && getAccountById(accountId)) ?? ACCOUNTS[0];
   const activeTab = ALL_ACCOUNT_TABS.find((t) => t.id === tabId) ?? ACCOUNT_TABS.find((t) => t.id === 'destination-urls')!;
@@ -109,8 +112,8 @@ export const AccountSettingsPage = () => {
 
   return (
     <div className="flex h-full" style={{ background: '#f0f2f4', gap: 16, padding: 8 }}>
-      {/* ── Left panel — back / account switcher / tab navigation ────── */}
-      <div
+      {/* ── Left panel — back / account switcher / tab navigation (closable; each pane title then shows a reopen button) ── */}
+      {panelOpen && <div
         style={{
           width: 280, flexShrink: 0, background: '#ffffff', borderRadius: 16,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -124,7 +127,7 @@ export const AccountSettingsPage = () => {
           <h2 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, flex: 1 }}>
             Accounts
           </h2>
-          <IconButton title="Close" onClick={() => navigate('/projects')} sx={{ padding: '5px', flexShrink: 0 }}>
+          <IconButton title="Close panel" aria-label="Close panel" onClick={() => setSettingsNavPanelOpen(false)} sx={{ padding: '5px', flexShrink: 0 }}>
             <CloseIcon />
           </IconButton>
         </div>
@@ -249,7 +252,7 @@ export const AccountSettingsPage = () => {
             );
           })}
         </nav>
-      </div>
+      </div>}
 
       {/* ── Main panel — active tab content ─────────────────────────── */}
       {activeTab.id === 'destination-urls' ? (
@@ -281,6 +284,12 @@ export const AccountSettingsPage = () => {
         >
           <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
             <Breadcrumbs items={['Settings', 'Accounts', account.name, activeTab.label]} />
+          </div>
+          <div style={{ padding: '10px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SettingsNavPanelToggle />
+            <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
+              {activeTab.label}
+            </h1>
           </div>
           <div style={{ flex: 1 }} />
         </div>

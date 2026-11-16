@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Button, IconButton } from '@mui/material';
 import { InfoOutlined } from '@mui/icons-material';
-import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
+import { buildDisclosureSubmissionNotification, disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
 import type { DisclosureBlock, EnrollmentSettings } from '../../../data/enrollmentSettings';
 import { useNotifications } from '../../../context/notifications';
 import { useSnackbar } from '../../../context/SnackbarContext';
@@ -68,14 +68,7 @@ export const ClientDisclosuresView = ({ settings, onChange, accountId, accountNa
       };
     });
     onChange({ disclosures: next });
-    notify({
-      id: disclosureSubmissionNotificationId(accountId),
-      audience: 'internal',
-      source: 'Disclosure Builder',
-      title: 'New Client Disclosure Edits. Snippet generation pending.',
-      tags: ['Client Settings', accountName],
-      href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
-    });
+    notify(buildDisclosureSubmissionNotification(accountId, accountName));
     setExpandedId(null);
   };
 

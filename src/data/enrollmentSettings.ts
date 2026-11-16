@@ -3,6 +3,7 @@
 // live in an in-memory store (see enrollmentSettingsStore.ts) that persists only for the
 // current browser session.
 
+import type { AppNotification } from '../context/notifications';
 import type { DisclosureReplacement } from '../utils/disclosureSnippetColors';
 
 export interface VehicleModelYear {
@@ -108,6 +109,16 @@ export interface DisclosureBlock {
 /** Id of the internal-user notification raised when a client submits disclosures — one per account, so a resubmission replaces it. */
 export const disclosureSubmissionNotificationId = (accountId: string) => `disclosure-submission:${accountId}`;
 
+/** The internal-user notification raised when a client submits disclosures — also seeded at startup, since every account's default disclosures start as client-submitted. */
+export const buildDisclosureSubmissionNotification = (accountId: string, accountName: string): Omit<AppNotification, 'createdAt' | 'read'> => ({
+  id: disclosureSubmissionNotificationId(accountId),
+  audience: 'internal',
+  source: 'Disclosure Builder',
+  title: 'New Client Disclosure Edits. Snippet generation pending.',
+  tags: ['Client Settings', accountName],
+  href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+});
+
 /** One saved state of the account snippet — a new one is recorded on generate, update, Save and restore. */
 export interface DisclosureSnippetVersion {
   id: string;
@@ -203,10 +214,10 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'client', clientStatus: 'submitted', clientStatusBeforeSubmit: 'none' },
       { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
       { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
-      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'client', clientStatus: 'submitted', clientStatusBeforeSubmit: 'none' },
     ],
     disclosureSnippet: null,
     docFee: 85,

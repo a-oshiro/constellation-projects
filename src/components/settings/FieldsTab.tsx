@@ -4,7 +4,7 @@ import {
   Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Chip, Menu, MenuItem, ListItemIcon,
 } from '@mui/material';
-import { Add, Search, ViewSidebarOutlined, MoreVert, EditOutlined, DeleteOutlined } from '@mui/icons-material';
+import { Add, Search, MoreVert, EditOutlined, DeleteOutlined } from '@mui/icons-material';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { useSnackbar } from '../../context/SnackbarContext';
@@ -13,6 +13,7 @@ import type { Field, FieldSource } from '../../data/fields';
 import { FieldPanel } from './FieldPanel';
 import { DeleteFieldDialog } from './DeleteFieldDialog';
 import emptyFolderSrc from '../../assets/empty-folder.png';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 const TABS: { id: 'all' | 'client' | 'global'; label: string; source?: FieldSource }[] = [
   { id: 'all', label: 'All' },
@@ -169,9 +170,7 @@ export const FieldsTab = () => {
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 12px', flexShrink: 0 }}>
-          <IconButton size="small" sx={{ padding: '4px' }}>
-            <ViewSidebarOutlined style={{ fontSize: 20, color: '#686576' }} />
-          </IconButton>
+          <SettingsNavPanelToggle />
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: '0 4px 0 0', whiteSpace: 'nowrap' }}>
             Fields
           </h1>
