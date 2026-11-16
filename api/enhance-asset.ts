@@ -2,10 +2,12 @@
 // the asset's image plus any reference images go to OpenAI's image edit API
 // with the user's prompt, and `n` edited variants come back.
 //
-// Kept cheap on purpose, since every image in and out is billed as tokens:
-//  · ONE request returns all the variants (`n`), not one request per variant.
-//  · The prompt is the user's words plus one short line of instructions.
-//  · Output is low quality, compressed JPEG at the closest supported size.
+// Cost-aware, with fidelity where it matters most:
+//  · gpt-image-2, which reads every input image at high fidelity, rendered at
+//    low quality (high quality costs several times more per variant).
+//  · Fixed instructions protect the text, logos and car (BASE_INSTRUCTIONS).
+//  · Lightly compressed JPEG (95): near-lossless, a fraction of PNG's size.
+//  · ONE request still returns all the variants (`n`).
 //  · The client shrinks reference images before sending them (AiEnhanceDialog).
 //
 // Keeps OPENAI_API_KEY out of the client bundle.
@@ -19,9 +21,17 @@ const json = (body: unknown, status = 200) =>
 /** The edit endpoint accepts up to 16 images; the dialog allows 7 references + the source. */
 const MAX_REFERENCES = 7;
 const MAX_VARIANTS = 4;
-/** The cheapest image-edit model on the account; OPENAI_IMAGE_MODEL overrides it
- *  (e.g. gpt-image-2 for higher fidelity at a higher price). */
-const DEFAULT_MODEL = 'gpt-image-1-mini';
+/** OPENAI_IMAGE_MODEL overrides it (it is shared with api/generate-image.ts). */
+const DEFAULT_MODEL = 'gpt-image-2';
+/** Render tier: low | medium | high. OPENAI_ENHANCE_QUALITY overrides it. */
+const DEFAULT_QUALITY = 'medium';
+
+/** Sent with every prompt so an edit never distorts the car, its text or logos. */
+const BASE_INSTRUCTIONS = [
+  'Do not change any of the text or logos present in the image.',
+  'Verify that the text is legible and has good contrast; if not, adjust the background only until a sufficient level of contrast is obtained.',
+  'Do not modify the car details in the image. Avoid changing the shape and color of the car.',
+].join(' ');
 
 /** Platform asset URLs are signed CloudFront links on these hosts. Anything
  *  else must arrive as a data URL, so this function never fetches an
@@ -58,8 +68,6 @@ interface Body {
   references?: string[];
   /** How many variants to make — fewer than 4 when the user kept some. */
   count?: number;
-  /** When false, text, prices and logos on the composite must not change. */
-  includeComposite?: boolean;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -91,7 +99,8 @@ export default async function handler(req: Request): Promise<Response> {
   if (!source) return json({ error: 'sourceUrl or sourceImage is required' }, 400);
 
   const form = new FormData();
-  form.append('model', process.env.OPENAI_IMAGE_MODEL || DEFAULT_MODEL);
+  const model = process.env.OPENAI_IMAGE_MODEL || DEFAULT_MODEL;
+  form.append('model', model);
   form.append('image[]', source, `source.${extFor(source.type)}`);
   references.forEach((ref, i) => {
     const blob = dataUrlToBlob(ref);
@@ -99,15 +108,18 @@ export default async function handler(req: Request): Promise<Response> {
   });
   form.append('n', String(count));
   form.append('size', sizeFor(body.width ?? 0, body.height ?? 0));
-  form.append('quality', 'low');
+  form.append('quality', process.env.OPENAI_ENHANCE_QUALITY || DEFAULT_QUALITY);
   form.append('output_format', 'jpeg');
-  form.append('output_compression', '80');
+  form.append('output_compression', '95');
+  // gpt-image-2 always reads inputs at high fidelity and rejects this field;
+  // gpt-image-1.5 needs it to keep faces, logos and text close to the source.
+  if (model.startsWith('gpt-image-1.5')) form.append('input_fidelity', 'high');
   // The user's words, then the fewest instructions that still frame the job.
   form.append('prompt', [
     `Edit image 1: ${prompt}.`,
     references.length ? `Use image${references.length > 1 ? 's' : ''} 2${references.length > 1 ? `-${references.length + 1}` : ''} as reference (e.g. logo, background) as asked.` : '',
-    body.includeComposite ? '' : 'Keep all text, prices and logos unchanged.',
     'Keep the layout.',
+    BASE_INSTRUCTIONS,
   ].filter(Boolean).join(' '));
 
   // Edge functions must start responding within ~25s and an edit of several

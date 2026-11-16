@@ -73,6 +73,23 @@
   .animate-bulk-in { animation: none; }
 }
 
+/* The scroll-away header (ScrollAwayHeader) arriving pinned, and leaving.
+ * Animations rather than a transition on a class, so there is no transform on
+ * the header at all between slides. */
+@keyframes header-in {
+  from { transform: translateY(-100%); }
+  to   { transform: none; }
+}
+@keyframes header-out {
+  from { transform: none; }
+  to   { transform: translateY(-100%); }
+}
+.animate-header-in  { animation: header-in 0.2s ease-out; }
+.animate-header-out { animation: header-out 0.2s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-header-in, .animate-header-out { animation: none; }
+}
+
 /* Skeletons while the library loads (PortalAssetCardSkeleton, the folder
  * tree's skeleton rows). Each block shimmers on its own: the gradient is
  * three times the block's width and slides across it, so the highlight

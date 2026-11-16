@@ -92,7 +92,12 @@ export function AssetChips<T extends Chip>({
       i -= 1;
     }
 
-    setRows(packed);
+    // The same packing as last time is not a change: a fresh array would
+    // re-render the card for nothing, and cards mount by the dozen while the
+    // windowed grid scrolls.
+    const key = (r: (T & { max?: number })[][]) =>
+      r.map((row) => row.map((c) => `${c.text}|${c.max ?? ""}`).join("\u0001")).join("\u0002");
+    setRows((prev) => (key(prev) === key(packed) ? prev : packed));
     setHidden(chips.length - i);
   }, [chips]);
 

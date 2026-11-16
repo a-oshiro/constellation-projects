@@ -27,10 +27,10 @@ const MAX_REFERENCES = 7;
 /** Requests in flight at once. Every asset is its own OpenAI call, and a large
  *  selection fired all together would run into the API's rate limits. */
 const CONCURRENCY = 3;
-/** Longest edge, in pixels, an image is shrunk to before it is sent. Image
- *  input is billed by size, and the model works at about this resolution
- *  anyway. */
-const MAX_UPLOAD_EDGE = 1024;
+/** Longest edge, in pixels, an image is shrunk to before it is sent. Matches
+ *  the largest standard output size, so detail in logos and text survives;
+ *  image input is billed by size, so it is not sent larger. */
+const MAX_UPLOAD_EDGE = 1536;
 
 /** The loading line above the prompt. A new phrase every 2400ms, typed in one
  *  letter every 30ms — so a phrase can be at most 80 characters long to finish
@@ -62,7 +62,6 @@ interface AssetState {
   selected: boolean[];
   error?: string;
   open: boolean;
-  includeComposite: boolean;
 }
 
 export interface EnhancedPick { asset: PortalAsset; url: string; variant: number }
@@ -72,7 +71,6 @@ const freshState = (): AssetState => ({
   pending: Array(VARIANTS).fill(false),
   selected: Array(VARIANTS).fill(false),
   open: true,
-  includeComposite: false,
 });
 
 // ─── Image helpers ────────────────────────────────────────────────────────
@@ -89,7 +87,7 @@ async function toUploadDataUrl(blob: Blob): Promise<string> {
   bitmap.close();
   return blob.type === "image/png"
     ? canvas.toDataURL("image/png")
-    : canvas.toDataURL("image/jpeg", 0.85);
+    : canvas.toDataURL("image/jpeg", 0.95);
 }
 
 /** Platform assets are sent by URL and fetched server-side; anything served
@@ -114,6 +112,35 @@ async function readAnswer(res: Response): Promise<{ images?: string[]; error?: s
 }
 
 // ─── Small pieces ─────────────────────────────────────────────────────────
+
+/** 42s · 3min 5s · 1h 2min 5s */
+function formatElapsed(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h) return `${h}h ${m}min ${s}s`;
+  if (m) return `${m}min ${s}s`;
+  return `${s}s`;
+}
+
+/** Time since the request started. It mounts with the request, so mounting
+ *  is the start. */
+function ElapsedTimer() {
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span
+      className="shrink-0 text-[12px] leading-[1.43] tracking-[0.17px] tabular-nums text-semantic-text-secondary"
+      aria-label="Time elapsed"
+    >
+      {formatElapsed(Math.floor((now - start) / 1000))}
+    </span>
+  );
+}
 
 /** The loading line: a spinner and a phrase typed in letter by letter. */
 function ThinkingLine({ phrases }: { phrases: string[] }) {
@@ -310,7 +337,7 @@ export function AiEnhanceDialog({
       .map((asset) => {
         const s = states[asset.id] ?? freshState();
         const slots = s.selected.map((sel, i) => (sel && s.slots[i] ? -1 : i)).filter((i) => i >= 0);
-        return { asset, slots, includeComposite: s.includeComposite };
+        return { asset, slots };
       })
       .filter((j) => j.slots.length > 0);
 
@@ -339,7 +366,6 @@ export function AiEnhanceDialog({
             height: job.asset.height,
             references: refs,
             count: job.slots.length,
-            includeComposite: job.includeComposite,
           }),
           signal: controller.signal,
         });
@@ -543,7 +569,12 @@ export function AiEnhanceDialog({
 
               {/* Prompt */}
               <div className="flex flex-col gap-2 min-h-0">
-                {busy && <ThinkingLine phrases={phrases} />}
+                {busy && (
+                  <div className="flex items-center justify-between gap-2">
+                    <ThinkingLine phrases={phrases} />
+                    <ElapsedTimer />
+                  </div>
+                )}
                 <div className={`flex flex-col gap-4 p-4 min-h-0 rounded-2xl border border-black/[0.12] drop-shadow-[0px_2px_1px_rgba(0,0,0,0.08)] ${busy ? "bg-[#f7f7f8]" : "bg-white"}`}>
                   <textarea
                     ref={promptRef}
@@ -681,20 +712,6 @@ export function AiEnhanceDialog({
                       {s.error && !nothingYet && (
                         <p className="text-[12px] leading-[1.43] text-semantic-error-main">{s.error}</p>
                       )}
-                      <label className={`flex items-center gap-3 pl-3 py-2 w-fit ${busy ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
-                        <Checkbox
-                          checked={s.includeComposite}
-                          disabled={busy}
-                          onCheckedChange={(v) => patch(asset.id, (x) => ({ ...x, includeComposite: v }))}
-                          className="size-[18px]"
-                        />
-                        <span
-                          className="text-[14px] leading-[1.5] tracking-[0.15px] text-semantic-text-primary"
-                          title="Off: text, prices and logos are kept exactly as they are. On: the AI may change the whole composite."
-                        >
-                          Include full composite
-                        </span>
-                      </label>
                     </>
                   )}
                 </section>

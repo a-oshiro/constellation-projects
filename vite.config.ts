@@ -12,17 +12,32 @@ function portalAssetsDevApi(): Plugin {
     apply: 'serve',
     configureServer(server) {
       Object.assign(process.env, loadEnv('development', process.cwd(), ''))
+      // The library arrives as a stream (NDJSON, see the API file), so it is
+      // passed on chunk by chunk rather than collected; hanging up stops the
+      // remaining upstream reads.
       server.middlewares.use('/api/portal-assets', async (_req, res) => {
+        const abort = new AbortController()
+        res.on('close', () => { if (!res.writableFinished) abort.abort() })
         try {
           const mod = await server.ssrLoadModule('/api/portal-assets.ts')
-          const upstream: Response = await mod.default()
+          const upstream: Response = await mod.default(
+            new Request('http://localhost/api/portal-assets', { signal: abort.signal }),
+          )
           res.statusCode = upstream.status
           upstream.headers.forEach((v, k) => res.setHeader(k, v))
-          res.end(await upstream.text())
+          if (!upstream.body) return res.end()
+          const reader = upstream.body.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(value)
+          }
+          res.end()
         } catch (e) {
+          if (res.headersSent) return res.end()
           res.statusCode = 500
-          res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ assets: [], folders: [], source: 'error', error: String(e).slice(0, 200) }))
+          res.setHeader('Content-Type', 'application/x-ndjson')
+          res.end(JSON.stringify({ type: 'error', reason: String(e).slice(0, 200) }) + '\n')
         }
       })
 
