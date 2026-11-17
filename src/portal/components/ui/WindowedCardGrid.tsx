@@ -17,9 +17,16 @@ import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
  * every card were there — nothing jumps as you scroll, and a jump to a group
  * below still lands where it should.
  *
- * This is only sound because **every card is the same height**. The asset name
- * reserves its three lines whether or not it uses them, which is what makes a
- * row's height a constant rather than a thing to measure per row.
+ * It assumes rows of one height, and they nearly are: the asset name reserves
+ * its three lines whether or not it uses them. Nearly is not exactly, though —
+ * on the live library most cards stand 430px and some 471px. Measuring the row
+ * off whichever card happened to be drawn first made that difference fatal:
+ * scrolling past a tall card changed the row height, which resized the
+ * spacers, which moved the scroll position, which drew a short card first
+ * again, and round — until React stopped the loop and the page went white.
+ * So the row height is the tallest card seen so far and only ever grows: it
+ * settles after a step or two and cannot flip back. Rows shorter than it just
+ * leave the spacers a little generous, which nothing can see.
  */
 
 /** Rows to draw beyond the viewport on each side, so a fast scroll does not
@@ -48,6 +55,9 @@ export function WindowedCardGrid<T>({
   const [cols, setCols] = useState(1);
   const [rowH, setRowH] = useState(variant === "rows" ? 64 : ROW_FALLBACK);
   const [range, setRange] = useState({ start: 0, end: FIRST_DRAW });
+  /** The first real measurement replaces the fallback outright, up or down;
+   *  only after that is the row height grow-only. */
+  const measuredRef = useRef(false);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -66,11 +76,16 @@ export function WindowedCardGrid<T>({
       const tracks = variant === "rows"
         ? 1
         : getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length;
-      const firstCard = grid.firstElementChild as HTMLElement | null;
       const gap = variant === "rows" ? 0 : 20;
-      const height = firstCard ? firstCard.getBoundingClientRect().height + gap : 0;
+      let tallest = 0;
+      for (const child of grid.children) {
+        tallest = Math.max(tallest, (child as HTMLElement).getBoundingClientRect().height);
+      }
       const nextCols = Math.max(1, tracks);
-      const nextRowH = height > 1 ? height : rowH;
+      // Grow only (see the note at the top): a shorter row never lowers it.
+      const measuredH = Math.ceil(tallest + gap);
+      const nextRowH = tallest <= 1 ? rowH : measuredRef.current ? Math.max(rowH, measuredH) : measuredH;
+      if (tallest > 1) measuredRef.current = true;
       if (nextCols !== cols) setCols(nextCols);
       if (Math.abs(nextRowH - rowH) > 1) setRowH(nextRowH);
 

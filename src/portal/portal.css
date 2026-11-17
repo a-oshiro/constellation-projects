@@ -73,6 +73,47 @@
   .animate-bulk-in { animation: none; }
 }
 
+/* The scroll-away header (ScrollAwayHeader) arriving pinned, and leaving.
+ * Animations rather than a transition on a class, so there is no transform on
+ * the header at all between slides. */
+@keyframes header-in {
+  from { transform: translateY(-100%); }
+  to   { transform: none; }
+}
+@keyframes header-out {
+  from { transform: none; }
+  to   { transform: translateY(-100%); }
+}
+.animate-header-in  { animation: header-in 0.2s ease-out; }
+.animate-header-out { animation: header-out 0.2s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-header-in, .animate-header-out { animation: none; }
+}
+
+/* Skeletons while the library loads (PortalAssetCardSkeleton, the folder
+ * tree's skeleton rows). Each block shimmers on its own: the gradient is
+ * three times the block's width and slides across it, so the highlight
+ * enters at the left edge and leaves at the right of every item. */
+@keyframes portal-skeleton-wave {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+.portal-skeleton {
+  background-color: #eceef1;
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  animation: portal-skeleton-wave 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-skeleton { animation: none; background-image: none; }
+}
+
 /* ─── Dual-handle range slider (FilterRange) ───────────────────────────
  * Two range inputs stacked on one drawn track. The inputs carry
  * `pointer-events: none` so the upper one does not swallow the lower one's

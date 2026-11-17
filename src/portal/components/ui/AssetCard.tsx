@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Eye } from "lucide-react";
 import { EntityChatButton } from "@portal/components/chat/EntityChat";
 import type { EntityRef } from "@portal/lib/chat-store";
@@ -103,17 +103,30 @@ export function AssetCard({
   raised = false,
 }: AssetCardProps) {
   /** The height the card stands at when it is down, kept so the shell can hold
-   *  it open while the content floats above. State rather than a ref: it is
-   *  read while rendering, which a ref may not be. */
-  const [restHeight, setRestHeight] = useState<number>();
-  const measure = useCallback(
-    (el: HTMLDivElement | null) => {
-      if (!el || raised) return;
-      const h = el.offsetHeight;
-      setRestHeight((prev) => (prev === h ? prev : h));
-    },
-    [raised],
-  );
+   *  it open while the content floats above.
+   *
+   *  Deliberately NOT state. It used to be state set from a ref callback, and a
+   *  ref callback runs inside React's commit, so every card mounting asked for
+   *  another synchronous render. The windowed grid mounts and unmounts cards
+   *  constantly while you scroll, and enough of those in a row hit React's
+   *  nested-update limit ("Maximum update depth exceeded") and blanked the
+   *  page. Now it is measured and applied straight to the DOM, before paint,
+   *  and never causes a render. */
+  const shellRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const restHeight = useRef(0);
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const content = contentRef.current;
+    if (!shell || !content) return;
+    if (!raised) {
+      // Down, the content is in the flow: its height is the card's.
+      restHeight.current = content.offsetHeight;
+      shell.style.height = "";
+    } else if (restHeight.current) {
+      shell.style.height = `${restHeight.current}px`;
+    }
+  });
 
   return (
     <div
@@ -126,11 +139,11 @@ export function AssetCard({
        * The height is read off the card itself while it is down, rather than
        * declared: it is the thumbnail's square plus whatever the caller put in
        * the footer, and only the card knows that. */
-      style={raised ? { height: restHeight } : undefined}
+      ref={shellRef}
       className={`group/entity cursor-pointer relative w-full min-w-[240px] max-w-[300px] ${className}`}
     >
       <div
-        ref={measure}
+        ref={contentRef}
         className={raised ? "absolute inset-x-0 top-0 z-[15]" : ""}
       >
         {/* The white sits BEHIND the card, reaching 8px past it on every side.

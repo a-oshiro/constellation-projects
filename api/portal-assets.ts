@@ -16,19 +16,58 @@
 // for this key, but every asset carries `folder_name`, which is the same tree
 // seen from the leaves.
 //
-// Unconfigured (no OFFERS_* env), it answers `source: "unconfigured"` and the
-// Portal falls back to the generated local library.
+// The answer is a stream, one JSON object per line (NDJSON), so the Portal can
+// show assets while the rest are still being read — 200 project reads take
+// 3–6s upstream, and most of that is the platform, not us:
+//
+//   {"type":"start","projects":200}
+//   {"type":"assets","index":7,"assets":[…]}
+//   …                                  one line per project, in the order the
+//                                      reads finish (empty if it had none or
+//                                      could not be read). `index` is the
+//                                      project's place in the list, so the
+//                                      Portal can put the library back in one
+//                                      fixed order whatever order it arrived in
+//   {"type":"done","projectsRead":200}
+//
+// Anything that stops it before any assets is a single
+// {"type":"error","reason":"…"} line. Unconfigured (no OFFERS_* env) the
+// reason is "unconfigured", and the Portal offers the generated local library.
+// Folders are no longer sent: the Portal counts them from the assets as they
+// arrive, the same derivation this file used to do at the end.
+//
+// Cached twice, because every read costs the platform 201 requests and 5–7s:
+//  · At the CDN (CACHE_CONTROL): Vercel answers from its cache for
+//    FRESH_SECONDS, and for STALE_SECONDS after that it still answers at once
+//    while it refreshes in the background. The library is the same for every
+//    user (one API key), and the signed image URLs last a year, so sharing it
+//    is safe. Errors are never cached.
+//  · In this module's memory (memo): the dev server has no CDN in front of it,
+//    and a warm edge instance can skip the platform too. A complete answer
+//    younger than FRESH_SECONDS is replayed in one go.
+// So a change on the platform can take up to FRESH_SECONDS to show up.
 export const config = { runtime: 'edge' };
 
 // Edge Runtime exposes env vars via process.env but isn't Node.js — declare just the
 // shape this file uses (same approach as api/fetch-urls.ts).
 declare const process: { env: Record<string, string | undefined> };
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+const FRESH_SECONDS = 300;
+const STALE_SECONDS = 3600;
+/** `max-age=0`: browsers do not keep it (the Portal keeps its own copy, in
+ *  IndexedDB); `s-maxage` and `stale-while-revalidate` are for the CDN. */
+const CACHE_CONTROL = `public, max-age=0, s-maxage=${FRESH_SECONDS}, stale-while-revalidate=${STALE_SECONDS}`;
+const NDJSON_HEADERS = { 'Content-Type': 'application/x-ndjson', 'Cache-Control': CACHE_CONTROL };
+
+/** The whole answer when there is nothing to stream. Never cached, so a
+ *  platform outage is not served back for minutes after it ends. */
+const errorLine = (reason: string) =>
+  new Response(JSON.stringify({ type: 'error', reason }) + '\n', {
+    headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' },
   });
+
+/** The last complete answer, line for line, and when it finished. */
+let memo: { body: string; at: number } | null = null;
 
 const API_URL = process.env.OFFERS_API_URL;
 const API_KEY = process.env.OFFERS_API_KEY;
@@ -161,59 +200,79 @@ function toPortalAsset(a: ApiAsset): LivePortalAsset {
   };
 }
 
-export default async function handler(): Promise<Response> {
-  if (!API_URL || !API_KEY || !CLIENT_ID) {
-    return json({ assets: [], folders: [], source: "unconfigured" });
+/** `req` is optional so a caller with no request (a script) can still read
+ *  it; when present, its signal stops the remaining project reads if the
+ *  Portal hangs up — leaving the page mid-load, say. */
+export default async function handler(req?: Request): Promise<Response> {
+  if (!API_URL || !API_KEY || !CLIENT_ID) return errorLine('unconfigured');
+
+  if (memo && Date.now() - memo.at < FRESH_SECONDS * 1000) {
+    return new Response(memo.body, { headers: { ...NDJSON_HEADERS, 'X-Library-Cache': 'memory' } });
   }
 
   const headers = { "X-API-Key": API_KEY, "X-Client-Id": CLIENT_ID };
+  const abort = new AbortController();
+  req?.signal.addEventListener('abort', () => abort.abort());
 
+  // The project list is read before the stream starts, so a platform that is
+  // down is reported plainly rather than as a stream that ends early.
+  let projects: { id: string }[];
   try {
     const projectsRes = await fetch(`${API_URL}/projects?limit=${PROJECT_LIMIT}`, {
-      headers, cache: "no-store",
+      headers, cache: "no-store", signal: abort.signal,
     });
-    if (!projectsRes.ok) {
-      return json(
-        { assets: [], folders: [], source: "error", error: `Upstream ${projectsRes.status}` },
-        { status: 200 },
-      );
-    }
-    const projects = ((await projectsRes.json()) as { data?: { id: string }[] }).data ?? [];
-
-    // Read the projects' assets together rather than one after another — 25
-    // sequential round trips is the difference between 2 seconds and 20.
-    const pages = await Promise.all(
-      projects.map(async (p) => {
-        try {
-          const res = await fetch(`${API_URL}/projects/${p.id}/assets?limit=${ASSET_PAGE}`, {
-            headers, cache: "no-store",
-          });
-          if (!res.ok) return [];
-          return ((await res.json()) as { data?: ApiAsset[] }).data ?? [];
-        } catch {
-          return [];
-        }
-      }),
-    );
-
-    const assets = pages.flat().map(toPortalAsset);
-
-    // The tree, from the leaves — one entry per folder with its count.
-    const counts = new Map<string, number>();
-    for (const a of assets) counts.set(a.folder, (counts.get(a.folder) ?? 0) + 1);
-    const folders = [...counts.entries()]
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    return json({
-      assets,
-      folders,
-      source: "live",
-      projectsRead: projects.length,
-    });
+    if (!projectsRes.ok) return errorLine(`Upstream ${projectsRes.status}`);
+    projects = ((await projectsRes.json()) as { data?: { id: string }[] }).data ?? [];
   } catch (e) {
-    return json({
-      assets: [], folders: [], source: "error", error: String(e).slice(0, 200),
-    });
+    return errorLine(String(e).slice(0, 200));
   }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      /** Everything sent, kept to replay from memory next time. */
+      const sent: string[] = [];
+      let failed = 0;
+      const send = (line: unknown) => {
+        if (abort.signal.aborted) return;
+        const text = JSON.stringify(line) + '\n';
+        sent.push(text);
+        try { controller.enqueue(encoder.encode(text)); } catch { /* closed */ }
+      };
+      send({ type: 'start', projects: projects.length });
+
+      // Read the projects' assets together rather than one after another — 25
+      // sequential round trips is the difference between 2 seconds and 20 —
+      // and pass each one on the moment it lands.
+      await Promise.all(
+        projects.map(async (p, index) => {
+          let assets: LivePortalAsset[] = [];
+          try {
+            const res = await fetch(`${API_URL}/projects/${p.id}/assets?limit=${ASSET_PAGE}`, {
+              headers, cache: "no-store", signal: abort.signal,
+            });
+            if (res.ok) {
+              assets = (((await res.json()) as { data?: ApiAsset[] }).data ?? []).map(toPortalAsset);
+            } else {
+              failed += 1;
+            }
+          } catch {
+            /* One unreadable project is skipped, as before. */
+            failed += 1;
+          }
+          send({ type: 'assets', index, assets });
+        }),
+      );
+
+      send({ type: 'done', projectsRead: projects.length });
+      // Only a whole answer is remembered: one with holes in it would be
+      // replayed as if it were the library.
+      if (!abort.signal.aborted && failed === 0) memo = { body: sent.join(''), at: Date.now() };
+      try { controller.close(); } catch { /* the client already left */ }
+    },
+    cancel() {
+      abort.abort();
+    },
+  });
+  return new Response(stream, { headers: NDJSON_HEADERS });
 }

@@ -7,7 +7,11 @@ declare const process: { env: Record<string, string | undefined> };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-/** The closest size gpt-image-1 can produce; the client crops the result to the exact dimensions. */
+/** Same default and override as api/enhance-asset.ts: the cheapest image-edit model on the
+ *  account, or OPENAI_IMAGE_MODEL when set. */
+const DEFAULT_MODEL = 'gpt-image-1-mini';
+
+/** The closest size the image model can produce; the client crops the result to the exact dimensions. */
 const sizeFor = (width: number, height: number) => {
   const ratio = width / height;
   if (ratio > 1.2) return '1536x1024';
@@ -29,7 +33,7 @@ export default async function handler(req: Request): Promise<Response> {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
   const form = new FormData();
-  form.append('model', 'gpt-image-1');
+  form.append('model', process.env.OPENAI_IMAGE_MODEL || DEFAULT_MODEL);
   form.append('image', new Blob([bytes], { type: mime }), 'source.png');
   form.append('size', sizeFor(width, height));
   // Low quality is much faster than the default, and plenty for a background.

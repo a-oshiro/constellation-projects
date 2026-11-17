@@ -66,12 +66,14 @@ export function Tooltip({
     >
       {children}
       {/* Portalled to <body>: inside a pane it shared the pane's stacking
-        * context, so the top bar's search box drew over it. */}
+        * context, so the top bar's search box drew over it. Above the
+        * full-screen dialogs too (z-index 100000), or a tooltip inside one —
+        * AI Enhance's Stop button — would open behind it. */}
       {at && label && createPortal(
         <span
           role="tooltip"
           style={{ top: at.top, left: at.left, transform: "translate(-50%, -100%)" }}
-          className="fixed z-[9999] pointer-events-none flex flex-col items-center"
+          className="fixed z-[100001] pointer-events-none flex flex-col items-center"
         >
           <span className="bg-[#616161] text-white text-[10px] leading-[14px] px-2 py-1 rounded-[4px] whitespace-nowrap">
             {label}

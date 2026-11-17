@@ -12,6 +12,8 @@ import { CardViewVertical } from "@portal/components/ui/CardViewVertical";
 import { WindowedCardGrid } from "@portal/components/ui/WindowedCardGrid";
 import { AssetDetailsDialog } from "@portal/components/portal/AssetDetailsDialog";
 import { PortalAssetCard, isVideo, type AssetChip } from "@portal/components/portal/PortalAssetCard";
+import { PortalAssetGridSkeleton } from "@portal/components/portal/PortalAssetCardSkeleton";
+import { AiEnhanceDialog, type EnhancedPick } from "@portal/components/portal/AiEnhanceDialog";
 import {
   PortalAssetRow, PortalFolderRows, PortalTableHeader, sortFolders,
 } from "@portal/components/portal/PortalAssetTable";
@@ -21,6 +23,7 @@ import {
   comparePortalBy, portalValueOf, isPortalField, type PortalFilters,
 } from "@portal/components/portal/PortalFilterPanel";
 import { PORTAL_ASSETS, type PortalAsset } from "@portal/lib/portal-assets";
+import { loadStoredLibrary, saveStoredLibrary } from "@portal/lib/library-store";
 import {
   usePinnedFilters, FilterSelectAll, FilterSectionHeader, groupByValue,
 } from "@portal/components/ui/FilterBar";
@@ -140,6 +143,23 @@ function NextGroupBar({
  *  a control of its own — see the next-group bar in the grouped grid. */
 const LONG_SECTION = 12;
 
+/** The stream broke before the end: what is shown is all there will be, and
+ *  counts, folders and search results only cover that part of the library. */
+function PartialLibraryNotice({ read, total, assets }: { read: number; total: number; assets: number }) {
+  return (
+    <div role="status" className="mx-5 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg border bg-amber-50 border-amber-100 text-amber-800 text-[12px]">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
+      <span>
+        <strong className="font-semibold">Partly loaded</strong>
+        {` — ${assets.toLocaleString()} ${assets === 1 ? "asset" : "assets"} from ${read} of ${total} projects. Reload the page to try again.`}
+      </span>
+    </div>
+  );
+}
+
+/** How often, at most, the library streaming in is handed to React. */
+const FLUSH_MS = 250;
+
 /** The last good answer from /api/portal-assets, held in module memory so it
  *  outlives the page component. Deliberately not localStorage: it clears on a
  *  full reload (which is how a user gets fresh data) and cannot hit a quota. */
@@ -252,10 +272,18 @@ export default function PortalPage() {
    *  pinned over it — see ScrollAwayHeader. */
   const gridScrollerRef = useRef<HTMLDivElement>(null);
 
+  /** While the library is still streaming in: how many of the projects have
+   *  been read. Not shown — only `stopped` is, when the stream broke before
+   *  the end and what arrived is not the whole library. Null once complete. */
+  const [liveProgress, setLiveProgress] = useState<
+    { read: number; total: number; stopped?: boolean } | null
+  >(null);
+
   useEffect(() => {
     // Leaving Portal unmounts this page, so state alone would be thrown away
-    // and the next visit would hit the API again. A successful answer is kept
+    // and the next visit would hit the API again. A complete answer is kept
     // in module memory instead (see liveLibraryCache) and reused until reload.
+    // Across reloads, the IndexedDB copy below does the same job.
     const cached = liveLibraryCache;
     if (cached) {
       setLiveAssets(cached.assets);
@@ -264,42 +292,156 @@ export default function PortalPage() {
       setLibrarySource("live");
       return;
     }
-    let cancelled = false;
+
+    // The API streams the library a project at a time (NDJSON — see
+    // api/portal-assets.ts), so the grid fills in as reads land instead of
+    // waiting 5–7s for the slowest of 200. Lines are gathered and handed to
+    // React on a short timer: one render per project would re-run every
+    // filter facet 200 times.
+    //
+    // With a copy from the last visit in IndexedDB, that copy goes on screen
+    // at once and the stream becomes a quiet refresh: nothing is shown while
+    // it runs (a grid reshuffling under the reader is worse than one that is
+    // minutes old), and the fresh library replaces the copy in one swap when
+    // it is complete. If the refresh fails, the copy simply stays.
+    const abort = new AbortController();
+    /** Each project's assets at its place in the project list. The reads land
+     *  in a different order every time; the library is always assembled in
+     *  this one, the order the platform lists the projects in. */
+    const byProject: PortalAsset[][] = [];
+    let assets: PortalAsset[] = [];
+    let total = 0;
+    let read = 0;
+    /** Showing the stored copy; the stream only refreshes it. */
+    let background = false;
+    /** The stream completed, so a late stored copy must not replace it. */
+    let finished = false;
+    /** A done or error line arrived — anything else is the stream breaking. */
+    let ended = false;
+    let flushTimer: number | undefined;
+
+    const foldersOf = (list: PortalAsset[]) => {
+      const counts = new Map<string, number>();
+      for (const a of list) counts.set(a.folder, (counts.get(a.folder) ?? 0) + 1);
+      return [...counts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    };
+
+    const flush = (final = false) => {
+      window.clearTimeout(flushTimer);
+      flushTimer = undefined;
+      if (abort.signal.aborted || (background && !final)) return;
+      const folders = foldersOf(assets);
+      // A copy, so React sees a new library and the memo above recomputes.
+      setLiveAssets([...assets]);
+      setLiveFolders(folders);
+      setLiveMeta({ projects: read, folders: folders.length, reason: "" });
+      if (assets.length) setLibrarySource("live");
+      setLiveProgress(final ? null : { read, total });
+    };
+    const scheduleFlush = () => {
+      if (flushTimer === undefined) flushTimer = window.setTimeout(flush, FLUSH_MS);
+    };
+
+    const fail = (reason: string) => {
+      window.clearTimeout(flushTimer);
+      // The stored copy is already on screen, and is better than an error.
+      // (A failure does not set `finished`: a stored copy that lands after it
+      // still replaces the error or the partial library.)
+      if (abort.signal.aborted || background) return;
+      if (assets.length) {
+        // Part of the library made it: keep it on screen, say it is partial,
+        // and do not cache it — the next visit tries again.
+        flush();
+        setLiveProgress({ read, total, stopped: true });
+      } else {
+        setLiveMeta({ projects: 0, folders: 0, reason });
+        setLibrarySource("unavailable");
+      }
+    };
+
+    const handle = (line: string) => {
+      if (!line.trim()) return;
+      const msg = JSON.parse(line) as
+        | { type: "start"; projects: number }
+        | { type: "assets"; index: number; assets: Partial<PortalAsset>[] }
+        | { type: "done"; projectsRead: number }
+        | { type: "error"; reason: string };
+      if (msg.type === "start") {
+        total = msg.projects;
+        if (!background) setLiveProgress({ read: 0, total });
+      } else if (msg.type === "assets") {
+        read += 1;
+        // The platform carries fewer fields than the generated set; the ones
+        // it does not have simply produce no options, and their filters are
+        // left out of the bar.
+        byProject[msg.index] = msg.assets.map((a) => ({
+          sizeKb: 0, componentCount: 0, assetType: "", brand: "",
+          fluencyReady: "", holidays: [], offerCount: 0, offerType: "",
+          offerTypes: [], textColor: "", usageYears: [],
+          ...a,
+        }) as PortalAsset);
+        assets = byProject.flat();
+        scheduleFlush();
+      } else if (msg.type === "done") {
+        ended = true;
+        if (!assets.length) return fail("no data");
+        finished = true;
+        flush(true);
+        // Only a complete answer is cached; a failure is retried on next visit.
+        const folders = foldersOf(assets);
+        liveLibraryCache = { assets: [...assets], folders, projects: read };
+        void saveStoredLibrary({ assets, folders, projects: read });
+      } else {
+        ended = true;
+        fail(msg.reason);
+      }
+    };
+
+    // The stored copy, if there is one. It nearly always lands long before the
+    // stream's first assets (tens of milliseconds against seconds); if the
+    // stream somehow finished first, the copy is older and is dropped.
+    void loadStoredLibrary().then((stored) => {
+      if (!stored || finished || abort.signal.aborted) return;
+      background = true;
+      window.clearTimeout(flushTimer);
+      flushTimer = undefined;
+      setLiveAssets(stored.assets);
+      setLiveFolders(stored.folders);
+      setLiveMeta({ projects: stored.projects, folders: stored.folders.length, reason: "" });
+      setLiveProgress(null);
+      setLibrarySource("live");
+    });
+
     (async () => {
       try {
-        const res = await fetch("/api/portal-assets", { cache: "no-store" });
-        const json = await res.json();
-        if (cancelled) return;
-        if (json.source === "live" && json.assets?.length) {
-          // The platform carries fewer fields than the generated set; the ones
-          // it does not have simply produce no options, and their filters are
-          // left out of the bar.
-          const assets = (json.assets as Partial<PortalAsset>[]).map((a) => ({
-            sizeKb: 0, componentCount: 0, assetType: "", brand: "",
-            fluencyReady: "", holidays: [], offerCount: 0, offerType: "",
-            offerTypes: [], textColor: "", usageYears: [],
-            ...a,
-          }) as PortalAsset);
-          const folders: { name: string; count: number }[] = json.folders ?? [];
-          const projects: number = json.projectsRead ?? 0;
-          // Only a good answer is cached; a failure is retried on next visit.
-          liveLibraryCache = { assets, folders, projects };
-          setLiveAssets(assets);
-          setLiveMeta({ projects, folders: folders.length, reason: "" });
-          setLiveFolders(folders);
-          setLibrarySource("live");
-        } else {
-          setLiveMeta({ projects: 0, folders: 0, reason: json.error ?? json.source ?? "no data" });
-          setLibrarySource("unavailable");
+        // No `cache: "no-store"`: that adds no-cache request headers, which
+        // would ask the CDN to skip the copy it holds (api/portal-assets.ts).
+        // The response says max-age=0, so the browser itself never reuses it.
+        const res = await fetch("/api/portal-assets", { signal: abort.signal });
+        if (!res.body) return fail(`Upstream ${res.status}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) handle(line);
         }
+        handle(buffer);
+        if (!ended) fail("The connection closed before the library finished loading");
       } catch (e) {
-        if (!cancelled) {
-          setLiveMeta({ projects: 0, folders: 0, reason: String(e).slice(0, 120) });
-          setLibrarySource("unavailable");
-        }
+        if (!abort.signal.aborted) fail(String(e).slice(0, 120));
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      abort.abort();
+      window.clearTimeout(flushTimer);
+    };
   }, []);
 
   // Memoised because deriving the filter vocabularies walks every asset, and
@@ -398,6 +540,7 @@ export default function PortalPage() {
   const [toast, setToast] = useToast(3200);
   const { startProgress } = useProgressIndicator();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [enhanceOpen, setEnhanceOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [moveQuery, setMoveQuery] = useState("");
   const pickedAssets = useMemo(
@@ -407,6 +550,38 @@ export default function PortalPage() {
   const shownIds = new Set(filteredAssets.map((a) => a.id));
   const hiddenPicked = pickedAssets.filter((a) => !shownIds.has(a.id)).length;
   const plural = (n: number) => `${n.toLocaleString()} ${n === 1 ? "asset" : "assets"}`;
+  /** What AI Enhance can work on: stills with a file behind them. */
+  const enhanceable = useMemo(
+    () => pickedAssets.filter((a) => a.url && !isVideo(a)),
+    [pickedAssets],
+  );
+
+  function openEnhance() {
+    if (enhanceable.length === 0) {
+      setToast("AI Enhance works on images — the selection has none");
+      return;
+    }
+    const skipped = pickedAssets.length - enhanceable.length;
+    if (skipped > 0) setToast(`${plural(skipped)} skipped — AI Enhance works on images only`);
+    setEnhanceOpen(true);
+  }
+
+  /** Enhanced variants saved as new assets, beside their originals — local to
+   *  this session, like Duplicate. */
+  function saveEnhancedAsNew(picks: EnhancedPick[]) {
+    const stamp = Date.now();
+    const made = picks.map(({ asset, url, variant }, i) => ({
+      ...asset,
+      id: `${asset.id}-ai-${stamp}-${i}`,
+      name: `${asset.name} (AI Variant ${variant})`,
+      url,
+      fileType: "JPEG",
+      updatedDaysAgo: 0,
+    }));
+    setCopies((prev) => [...prev, ...made]);
+    setEnhanceOpen(false);
+    setToast(`Saved ${plural(made.length)}`);
+  }
 
   async function downloadPicked() {
     const files = pickedAssets.filter((a) => a.url);
@@ -539,7 +714,7 @@ export default function PortalPage() {
         );
       },
     },
-    { id: "enhance", label: "AI Enhance", icon: WandSparkles, iconOnly: true, onClick: notYet("AI Enhance") },
+    { id: "enhance", label: "AI Enhance", icon: WandSparkles, iconOnly: true, onClick: openEnhance },
     { id: "edit", label: "Edit Variables", icon: Pencil, iconOnly: true, onClick: notYet("Edit Variables") },
     { id: "copy", label: "Duplicate", icon: Copy, iconOnly: true, onClick: duplicatePicked },
     { id: "delete", label: "Delete", icon: Trash2, iconOnly: true, onClick: () => setConfirmDelete(true) },
@@ -1079,6 +1254,7 @@ export default function PortalPage() {
                 activeLiveFolder={activeLiveFolder}
                 onSelectLiveFolder={setActiveLiveFolder}
                 disabledReason={frozenReason}
+                loading={librarySource === "loading"}
               />
             )}
           </div>
@@ -1096,8 +1272,13 @@ export default function PortalPage() {
             * over it — see ScrollAwayHeader. It lives inside the scroller for
             * exactly that reason: kept outside, showing it again changed the
             * scroller's height and shunted the row you were reading. */}
-          <div ref={gridScrollerRef} className="flex-1 overflow-y-auto">
-            <ScrollAwayHeader scrollerRef={gridScrollerRef}>
+          {/* No scroll anchoring: the windowed grid swaps rows for spacers as
+            * you scroll, and the browser "correcting" the position for those
+            * swaps fed straight back into what the grid draws. */}
+          <div ref={gridScrollerRef} className="flex-1 overflow-y-auto [overflow-anchor:none]">
+            {/* Held in view while anything is picked: the bulk actions live in
+              * this header, and they must stay in reach however far you scroll. */}
+            <ScrollAwayHeader scrollerRef={gridScrollerRef} hold={selectedAssets.size > 0}>
             {/* Toolbar. It wraps for the same reason the filter row does: when
               * the pane is too narrow to hold the right-hand trio beside New,
               * they drop to a second line rather than running off the edge. */}
@@ -1283,47 +1464,48 @@ export default function PortalPage() {
                   </div>
                 )}
                 <div className="shrink-0">{filterRow}</div>
+                {librarySource === "live" && liveProgress?.stopped && (
+                  <PartialLibraryNotice {...liveProgress} assets={liveAssets.length} />
+                )}
               </>
             )}
             </ScrollAwayHeader>
 
             <div className="p-5">
-              {showingLibrary && librarySource !== "live" && librarySource !== "local" ? (
-                /* ── Nothing loaded yet, or the platform could not be read ──
+              {showingLibrary && librarySource === "loading" ? (
+                /* ── Still reading the platform ──
+                 * Skeleton cards in the grid's own columns and measurements,
+                 * so the real cards land where the placeholders stood. */
+                <PortalAssetGridSkeleton count={18} />
+              ) : showingLibrary && librarySource !== "live" && librarySource !== "local" ? (
+                /* ── The platform could not be read ──
                  * The fallback is a decision, not a default: the generated set
                  * looks exactly like the real one, so switching to it silently
                  * would leave no way to tell which is on screen. */
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-                  {librarySource === "loading" ? (
-                    <>
-                      <div className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-indigo-500 animate-spin" />
-                      <p className="text-[13px] text-gray-500">Reading the platform library…</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-1">
-                        <ImageIcon size={26} className="text-amber-400" />
-                      </div>
-                      <p className="text-[14px] font-semibold text-gray-700">
-                        Couldn&apos;t read the platform library
-                      </p>
-                      <p className="text-[12px] text-gray-400 max-w-[320px] leading-relaxed">
-                        {liveMeta.reason === "unconfigured"
-                          ? "No platform credentials are configured for this environment."
-                          : `The API answered: ${liveMeta.reason}`}
-                      </p>
-                      <button
-                        onClick={() => setLibrarySource("local")}
-                        className="flex items-center gap-1.5 mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium rounded-lg transition"
-                      >
-                        Use the local sample library
-                      </button>
-                      <p className="text-[11px] text-gray-400 max-w-[320px] leading-relaxed">
-                        {PORTAL_ASSETS.length.toLocaleString()} generated assets with invented
-                        metadata — for exercising the filters, not for reading as real.
-                      </p>
-                    </>
-                  )}
+                  <>
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-1">
+                      <ImageIcon size={26} className="text-amber-400" />
+                    </div>
+                    <p className="text-[14px] font-semibold text-gray-700">
+                      Couldn&apos;t read the platform library
+                    </p>
+                    <p className="text-[12px] text-gray-400 max-w-[320px] leading-relaxed">
+                      {liveMeta.reason === "unconfigured"
+                        ? "No platform credentials are configured for this environment."
+                        : `The API answered: ${liveMeta.reason}`}
+                    </p>
+                    <button
+                      onClick={() => setLibrarySource("local")}
+                      className="flex items-center gap-1.5 mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium rounded-lg transition"
+                    >
+                      Use the local sample library
+                    </button>
+                    <p className="text-[11px] text-gray-400 max-w-[320px] leading-relaxed">
+                      {PORTAL_ASSETS.length.toLocaleString()} generated assets with invented
+                      metadata — for exercising the filters, not for reading as real.
+                    </p>
+                  </>
                 </div>
               ) : showingLibrary ? (
                 /* ── Filtered library ──
@@ -1439,6 +1621,14 @@ export default function PortalPage() {
             </div>
           </div>
         </main>
+
+      <AiEnhanceDialog
+        open={enhanceOpen}
+        assets={enhanceable}
+        onClose={() => setEnhanceOpen(false)}
+        onSaveAsNew={saveEnhancedAsNew}
+        onSaveAsVersions={() => setToast("Save as new versions isn't wired up yet")}
+      />
 
       <AssetDetailsDialog
         asset={detailAsset}

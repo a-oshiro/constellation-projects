@@ -52,13 +52,23 @@ function vercelFunctionsDevApi(): Plugin {
           const response = await handler(request)
           res.statusCode = response.status
           response.headers.forEach((v, k) => res.setHeader(k, v))
-          res.end(Buffer.from(await response.arrayBuffer()))
+          // Passed on chunk by chunk, not collected, so streamed answers (the Portal library's NDJSON,
+          // AI Enhance) reach the browser as they arrive; hanging up aborts the signal above.
+          if (!response.body) return res.end()
+          const reader = response.body.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(value)
+          }
+          res.end()
         } catch (e) {
           if (controller.signal.aborted) {
             // The handler stopped because the browser cancelled — nobody is left to send an error to.
             server.config.logger.info(`[api] ${req.method} /api/${name} cancelled by the client`, { timestamp: true })
             return
           }
+          if (res.headersSent) return res.end()
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ source: 'error', error: String(e).slice(0, 200) }))
