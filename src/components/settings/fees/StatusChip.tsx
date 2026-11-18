@@ -8,12 +8,13 @@ const PADDING = '3px 8px 3px 6px';
 const GAP = 4;
 const RADIUS = 8;
 
-export type StatusChipTone = 'success' | 'warning' | 'info';
+export type StatusChipTone = 'success' | 'warning' | 'info' | 'neutral';
 
 const TONES: Record<StatusChipTone, { background: string; color: string; textOpacity?: number; icon?: string }> = {
   success: { background: '#e8f5e9', color: '#1b5e20', icon: circleCheckIcon },
   warning: { background: 'rgba(225,118,19,0.08)', color: '#c45500', textOpacity: 0.75, icon: warningIcon },
   info: { background: 'rgba(2,136,209,0.08)', color: '#01579b' },
+  neutral: { background: 'rgba(17,16,20,0.06)', color: '#3b3947' },
 };
 
 export const StatusChip = ({ tone, label }: { tone: StatusChipTone; label: string }) => {

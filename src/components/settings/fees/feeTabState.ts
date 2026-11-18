@@ -1,7 +1,8 @@
 import {
   FEE_SYNC_FEES, FEE_SYNC_FEES_EXTENDED, FEE_SYNC_UPDATED_FEES,
 } from '../../../data/feeSync';
-import type { FeeSyncDealership, FeeSyncFee, FeeSyncPull } from '../../../data/feeSync';
+import { buildRejectedUpdate } from '../../../data/feeSync';
+import type { FeeSyncDealership, FeeSyncFee, FeeSyncPull, FeeSyncRejectedUpdate } from '../../../data/feeSync';
 
 // State for the Account Settings › Fees tab: which fee source is active, the manual fees, and where the
 // (mocked) FeeSync flow is. A plain reducer so the flow can be unit-tested without rendering anything.
@@ -38,6 +39,8 @@ export interface FeeTabState {
   simulateConfirmError: boolean;
   /** Simulation menu: a connected FeeSync loses its connection. */
   simulateConnectionLost: boolean;
+  /** A FeeSync update that wasn't applied (simulation menu, or the "fees updated" notification); null when none. */
+  rejectedUpdate: FeeSyncRejectedUpdate | null;
   savedManual: ManualFees;
   draftManual: ManualFees;
 }
@@ -67,6 +70,7 @@ export const initialFeeTabState = (dealership: FeeSyncDealership): FeeTabState =
     refreshedAt: null,
     simulateConfirmError: false,
     simulateConnectionLost: false,
+    rejectedUpdate: null,
     savedManual: manual,
     draftManual: manual,
   };
@@ -86,6 +90,7 @@ export type FeeTabAction =
   | { type: 'openFromNotification'; refreshedAt: string }
   | { type: 'setSimulateConfirmError'; value: boolean }
   | { type: 'setSimulateConnectionLost'; value: boolean }
+  | { type: 'setSimulateRejectedUpdate'; value: boolean; receivedAt: string }
   | { type: 'addManualFee'; list: ManualList; fee: ManualFee }
   | { type: 'updateManualFee'; list: ManualList; id: string; patch: Partial<Omit<ManualFee, 'id'>> }
   | { type: 'removeManualFee'; list: ManualList; id: string }
@@ -119,6 +124,7 @@ export function feeTabReducer(state: FeeTabState, action: FeeTabAction): FeeTabS
       return {
         ...state, source: 'feesync', phase: 'connected', fees: FEE_SYNC_UPDATED_FEES,
         refreshedAt: action.refreshedAt, simulateConfirmError: false, simulateConnectionLost: false,
+        rejectedUpdate: buildRejectedUpdate(action.refreshedAt),
       };
 
     case 'setSimulateConfirmError': {
@@ -131,6 +137,8 @@ export function feeTabReducer(state: FeeTabState, action: FeeTabAction): FeeTabS
     }
     case 'setSimulateConnectionLost':
       return { ...state, simulateConnectionLost: action.value };
+    case 'setSimulateRejectedUpdate':
+      return { ...state, rejectedUpdate: action.value ? buildRejectedUpdate(action.receivedAt) : null };
 
     case 'addManualFee':
       return withDraft(state, action.list, (fees) => [...fees, action.fee]);

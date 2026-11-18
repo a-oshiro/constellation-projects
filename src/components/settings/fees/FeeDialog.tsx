@@ -21,14 +21,18 @@ interface FeeDialogProps {
   actions: ReactNode;
   /** Wraps content + actions in a form so Enter submits. */
   onSubmit?: () => void;
+  /** Paper width; defaults to the Figma 360px confirm dialog. */
+  width?: number;
+  /** Lays the actions out across the full width, so a spacer can split them left and right. */
+  spreadActions?: boolean;
 }
 
-export const FeeDialog = ({ open, title, onClose, children, actions, onSubmit }: FeeDialogProps) => {
+export const FeeDialog = ({ open, title, onClose, children, actions, onSubmit, width = WIDTH, spreadActions = false }: FeeDialogProps) => {
   const titleId = `fee-dialog-title-${title.replace(/\s+/g, '-').toLowerCase()}`;
   const body = (
     <>
       <div style={{ padding: CONTENT_PADDING }}>{children}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: ACTIONS_GAP, padding: ACTIONS_PADDING }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: spreadActions ? 'space-between' : 'flex-end', gap: ACTIONS_GAP, padding: ACTIONS_PADDING }}>
         {actions}
       </div>
     </>
@@ -41,7 +45,7 @@ export const FeeDialog = ({ open, title, onClose, children, actions, onSubmit }:
       slotProps={{
         paper: {
           sx: {
-            width: WIDTH, maxWidth: 'calc(100% - 32px)', margin: '16px', borderRadius: `${RADIUS}px`,
+            width, maxWidth: 'calc(100% - 32px)', margin: '16px', borderRadius: `${RADIUS}px`,
             boxShadow: '0px 6px 30px 5px rgba(0,0,0,0.12), 0px 16px 24px 2px rgba(0,0,0,0.14), 0px 8px 10px -5px rgba(0,0,0,0.2)',
           },
         },

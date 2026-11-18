@@ -13,11 +13,15 @@ const HELPER_FONT_SIZE = 11;
 interface FeeSimulationMenuProps {
   confirmError: boolean;
   connectionLost: boolean;
+  rejectedUpdate: boolean;
   onConfirmErrorChange: (value: boolean) => void;
   onConnectionLostChange: (value: boolean) => void;
+  onRejectedUpdateChange: (value: boolean) => void;
 }
 
-export const FeeSimulationMenu = ({ confirmError, connectionLost, onConfirmErrorChange, onConnectionLostChange }: FeeSimulationMenuProps) => {
+export const FeeSimulationMenu = ({
+  confirmError, connectionLost, rejectedUpdate, onConfirmErrorChange, onConnectionLostChange, onRejectedUpdateChange,
+}: FeeSimulationMenuProps) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const items = [
     {
@@ -27,6 +31,10 @@ export const FeeSimulationMenu = ({ confirmError, connectionLost, onConfirmError
     {
       id: 'sim-connection-lost', label: 'Connection lost', helper: 'A connected FeeSync loses its connection.',
       checked: connectionLost, onChange: onConnectionLostChange,
+    },
+    {
+      id: 'sim-rejected-update', label: 'Update not applied', helper: 'A FeeSync update was rejected and the previous setup kept.',
+      checked: rejectedUpdate, onChange: onRejectedUpdateChange,
     },
   ];
 

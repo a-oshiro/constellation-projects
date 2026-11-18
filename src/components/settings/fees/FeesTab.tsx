@@ -5,7 +5,7 @@ import { SettingsNavPanelToggle } from '../SettingsNavPanel';
 import { useSnackbar } from '../../../context/SnackbarContext';
 import type { Account } from '../../../data/accounts';
 import {
-  FEE_SYNC_NOTIFICATION_PARAM, FEE_SYNC_NOTIFICATION_VALUE, getFeeSyncDealership,
+  FEE_SYNC_LIMITATIONS, FEE_SYNC_NOTIFICATION_PARAM, FEE_SYNC_NOTIFICATION_VALUE, getFeeSyncDealership,
   mockConfirmDealership, mockConnectWithCode, mockRefreshFees,
 } from '../../../data/feeSync';
 import { ConfirmDealershipCard } from './ConfirmDealershipCard';
@@ -130,8 +130,10 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
         <FeeSimulationMenu
           confirmError={state.simulateConfirmError}
           connectionLost={state.simulateConnectionLost}
+          rejectedUpdate={state.rejectedUpdate !== null}
           onConfirmErrorChange={(value) => dispatch({ type: 'setSimulateConfirmError', value })}
           onConnectionLostChange={(value) => dispatch({ type: 'setSimulateConnectionLost', value })}
+          onRejectedUpdateChange={(value) => dispatch({ type: 'setSimulateRejectedUpdate', value, receivedAt: new Date().toISOString() })}
         />
       </div>
 
@@ -157,6 +159,8 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
               refreshedAt={state.refreshedAt}
               refreshing={state.phase === 'refreshing'}
               connectionLost={connectionLost}
+              limitations={FEE_SYNC_LIMITATIONS}
+              rejectedUpdate={state.rejectedUpdate}
               onRefresh={refresh}
             />
           ) : (

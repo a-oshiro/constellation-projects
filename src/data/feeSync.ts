@@ -46,6 +46,59 @@ export const FEE_SYNC_UPDATED_FEES: FeeSyncFee[] = [
   { ...CPO_INSPECTION_FEE, treatment: 'Excluded' },
 ];
 
+// ── What Constellation doesn't use from FeeSync (Option 2b "See details" dialog) ─────────────────
+// Known limitations, applied automatically on every sync: Used vehicles aren't supported, "Include in
+// Total Sale Price" isn't bundled into the selling price, and lease capitalization is disabled.
+
+export interface FeeSyncUsedVehicleFee {
+  name: string;
+  amount: number;
+  /** `excluded`: the fee applies to Used vehicles only. `brand-only`: it also covers a brand, so it applies to that brand only. */
+  handling: 'excluded' | 'brand-only';
+}
+
+export interface FeeSyncUnsupportedSetting {
+  /** The FeeSync setting, as FeeSync names it. */
+  setting: string;
+  /** What Constellation does instead. */
+  instead: string;
+  affectedFees: string[];
+}
+
+export interface FeeSyncLimitations {
+  usedVehicleFees: FeeSyncUsedVehicleFee[];
+  unsupportedSettings: FeeSyncUnsupportedSetting[];
+}
+
+export const FEE_SYNC_LIMITATIONS: FeeSyncLimitations = {
+  usedVehicleFees: [
+    { name: 'Reconditioning Fee', amount: 895, handling: 'excluded' },
+    { name: CPO_INSPECTION_FEE.name, amount: CPO_INSPECTION_FEE.amount, handling: 'excluded' },
+    { name: 'Electronic Filing Fee', amount: 50, handling: 'excluded' },
+  ],
+  unsupportedSettings: [
+    { setting: 'Include in Total Sale Price', instead: 'These fees are added on top of the selling price instead.', affectedFees: ['Doc Fee', 'Dealer Prep'] },
+    { setting: 'Lease: Fee in cap cost', instead: 'The fee is charged separately instead of added to the cap cost.', affectedFees: ['Doc Fee', 'Electronic Filing Fee'] },
+    { setting: 'Lease: Tax in cap cost', instead: 'The tax is charged separately instead of added to the cap cost.', affectedFees: ['Doc Fee', 'Tire & Battery Fee'] },
+  ],
+};
+
+/** A FeeSync change that wasn't applied because applying it would break live offers; the previous setup is kept. */
+export interface FeeSyncRejectedUpdate {
+  feeName: string;
+  change: string;
+  reason: string;
+  /** ISO time the update arrived. */
+  receivedAt: string;
+}
+
+export const buildRejectedUpdate = (receivedAt: string): FeeSyncRejectedUpdate => ({
+  feeName: 'Doc Fee',
+  change: 'was changed to apply to Used vehicles only.',
+  reason: 'Applying it would remove the fee from every offer, so the previous setup is still used.',
+  receivedAt,
+});
+
 // ── Dealerships ────────────────────────────────────────────────────────────────
 
 export interface FeeSyncDealership {
@@ -169,6 +222,12 @@ export function formatRefreshTime(iso: string): string {
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   return `${date} - ${time}`;
 }
+
+/** "Nov 11" */
+export const formatShortDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+/** "1 fee" / "2 fees" */
+export const pluralize = (count: number, singular: string, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`;
 
 // ── Notification ───────────────────────────────────────────────────────────────
 

@@ -4,7 +4,8 @@ import warningIcon from '../../../assets/icons/fees/warning-triangle.svg';
 import circleInfoIcon from '../../../assets/icons/fees/circle-info.svg';
 
 // Figma <Alert> "Notice": error (connection failed) and warning (connection lost) are filled banners;
-// info (some fees may not be available) is an inline line with no background. Sizes live here.
+// info (some fees may not be available) is an inline line with no background; `inline` renders the warning
+// the same way (a FeeSync update that wasn't applied). Sizes live here.
 const FONT_SIZE = 12;
 const BANNER_ICON_SIZE = 22;
 const INLINE_ICON_SIZE = 20;
@@ -24,9 +25,16 @@ const TONES: Record<FeeNoticeTone, { background?: string; color: string; icon: s
 
 const TEXT_STYLE = { margin: 0, fontSize: FONT_SIZE, lineHeight: 1.43, letterSpacing: '0.17px', fontFamily: 'Roboto, sans-serif' } as const;
 
-export const FeeNotice = ({ tone, children }: { tone: FeeNoticeTone; children: ReactNode }) => {
+interface FeeNoticeProps {
+  tone: FeeNoticeTone;
+  children: ReactNode;
+  /** Info is always inline; warnings can be inline too. */
+  inline?: boolean;
+}
+
+export const FeeNotice = ({ tone, children, inline = tone === 'info' }: FeeNoticeProps) => {
   const t = TONES[tone];
-  if (tone === 'info') {
+  if (inline) {
     return (
       <div role="note" style={{ display: 'flex', alignItems: 'center', gap: INLINE_GAP, padding: `${INLINE_PADDING_Y}px 0`, width: '100%' }}>
         <img src={t.icon} alt="" width={INLINE_ICON_SIZE} height={INLINE_ICON_SIZE} style={{ flexShrink: 0 }} />
@@ -47,7 +55,7 @@ export const FeeNotice = ({ tone, children }: { tone: FeeNoticeTone; children: R
   );
 };
 
-/** Bold underlined "See details" link used inside notices. No destination yet in the prototype. */
+/** Bold underlined link used inside notices ("See details", "Review update"). */
 export const NoticeLink = ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
   <button
     type="button"

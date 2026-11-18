@@ -106,3 +106,16 @@ describe('session store', () => {
     expect(settleTransientPhase(refreshing).phase).toBe('connected');
   });
 });
+
+describe('rejected FeeSync update', () => {
+  it('is set and cleared by the simulation toggle', () => {
+    const on = run([{ type: 'setSimulateRejectedUpdate', value: true, receivedAt: '2026-11-11T14:02:00.000Z' }]);
+    expect(on.rejectedUpdate).toMatchObject({ feeName: 'Doc Fee', receivedAt: '2026-11-11T14:02:00.000Z' });
+    expect(feeTabReducer(on, { type: 'setSimulateRejectedUpdate', value: false, receivedAt: '' }).rejectedUpdate).toBeNull();
+  });
+
+  it('comes with the "fees updated" notification', () => {
+    const s = run([{ type: 'openFromNotification', refreshedAt: '2026-11-11T14:02:00.000Z' }]);
+    expect(s.rejectedUpdate?.receivedAt).toBe('2026-11-11T14:02:00.000Z');
+  });
+});
