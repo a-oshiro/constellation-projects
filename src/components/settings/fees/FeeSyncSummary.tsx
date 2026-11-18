@@ -15,6 +15,7 @@ const LABEL_FONT_SIZE = 11;
 const VALUE_FONT_SIZE = 12;
 const REFRESH_ICON_SIZE = 18;
 const COLUMN_GAP = 2;
+const SKELETON_RADIUS = 4;
 
 const LABEL = { margin: 0, fontSize: LABEL_FONT_SIZE, lineHeight: 1.66, letterSpacing: '0.4px', color: '#686576' } as const;
 const VALUE = { margin: 0, fontSize: VALUE_FONT_SIZE, lineHeight: 1.43, letterSpacing: '0.17px', color: '#1f1d25' } as const;
@@ -52,7 +53,7 @@ export const FeeSyncSummary = ({ dealership, connectionLost, refreshedAt, refres
         </Tooltip>
       </div>
       {refreshing
-        ? <Skeleton variant="rounded" width={118} height={12} sx={{ marginTop: '4px', borderRadius: '6px' }} aria-label="Refreshing" />
+        ? <Skeleton variant="rounded" width={118} height={12} sx={{ marginTop: '4px', borderRadius: `${SKELETON_RADIUS}px` }} aria-label="Refreshing" />
         : <p style={VALUE}>{refreshedAt ? formatRefreshTime(refreshedAt) : '—'}</p>}
     </div>
   </div>

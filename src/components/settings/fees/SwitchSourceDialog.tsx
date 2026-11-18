@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FeeButton } from './FeeButton';
 import { FeeDialog, FeeDialogText } from './FeeDialog';
 import type { FeeSource } from './feeTabState';
@@ -26,8 +27,11 @@ interface SwitchSourceDialogProps {
 }
 
 export const SwitchSourceDialog = ({ target, onCancel, onConfirm }: SwitchSourceDialogProps) => {
-  // Keep the last copy while the dialog animates closed.
-  const copy = COPY[target ?? 'feesync'];
+  // Keep the last opened copy while the dialog animates closed; falling back to a fixed source here made
+  // "Switch to Manual" flash the FeeSync copy on dismiss. Updated during render (no effect, no extra paint).
+  const [shown, setShown] = useState<FeeSource>(target ?? 'feesync');
+  if (target !== null && target !== shown) setShown(target);
+  const copy = COPY[target ?? shown];
   return (
     <FeeDialog
       open={target !== null}

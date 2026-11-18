@@ -15,6 +15,21 @@ const NAME_CHIP_GAP = 8;
 const TREATMENT_CHIP_FONT_SIZE = 11;
 const TREATMENT_CHIP_PADDING = '3px 10px';
 const SKELETON_HEIGHT = 16;
+const SKELETON_RADIUS = 4;
+/** Skeleton widths vary per cell between these percentages of the cell, so rows don't look uniform. */
+const SKELETON_MIN_WIDTH_PCT = 40;
+const SKELETON_MAX_WIDTH_PCT = 95;
+
+/**
+ * A width that looks random but is stable for a given cell (a hash of fee id + column), so the
+ * skeletons don't jump around on every re-render while refreshing.
+ */
+const skeletonWidth = (seed: string) => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  const span = SKELETON_MAX_WIDTH_PCT - SKELETON_MIN_WIDTH_PCT;
+  return `${SKELETON_MIN_WIDTH_PCT + (Math.abs(h) % (span + 1))}%`;
+};
 
 const DIVIDER = '1px solid rgba(0,0,0,0.12)';
 const CELL_TEXT = {
@@ -63,7 +78,7 @@ export const FeeSyncFeesTable = ({ fees, loading }: FeeSyncFeesTableProps) => {
           {columns.map((c) => (
             <div key={c.key} role="cell" style={{ ...colStyle(c), display: 'flex', alignItems: 'center', padding: CELL_PADDING, boxSizing: 'border-box' }}>
               {loading
-                ? <Skeleton variant="rounded" height={SKELETON_HEIGHT} sx={{ width: '100%', borderRadius: '8px' }} />
+                ? <Skeleton variant="rounded" height={SKELETON_HEIGHT} sx={{ width: skeletonWidth(`${fee.id}:${c.key}`), borderRadius: `${SKELETON_RADIUS}px` }} />
                 : <FeeCell fee={fee} column={c.key} />}
             </div>
           ))}
