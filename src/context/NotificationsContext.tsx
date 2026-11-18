@@ -4,12 +4,19 @@ import type { AppNotification } from './notifications';
 import type { UserRole } from './userRole';
 import { ACCOUNTS } from '../data/accounts';
 import { buildDisclosureSubmissionNotification } from '../data/enrollmentSettings';
+import { buildFeeSyncUpdatedNotification } from '../data/feeSync';
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   // Every account's default disclosures start as a pending client submission, so their notifications start raised too.
+  // The (mocked) FeeSync "fees updated" notification for the first account is raised on load, on top, so the
+  // Fees tab's FeeSync view is one click away (Figma CP-14705 Flow 2).
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
     const createdAt = new Date().toISOString();
-    return ACCOUNTS.map((a) => ({ ...buildDisclosureSubmissionNotification(a.id, a.name), createdAt, read: false }));
+    const feeSyncAccount = ACCOUNTS[0];
+    return [
+      { ...buildFeeSyncUpdatedNotification(feeSyncAccount.id, feeSyncAccount.name), createdAt, read: false },
+      ...ACCOUNTS.map((a) => ({ ...buildDisclosureSubmissionNotification(a.id, a.name), createdAt, read: false })),
+    ];
   });
 
   const notify = useCallback((notification: Omit<AppNotification, 'createdAt' | 'read'>) => {

@@ -7,6 +7,7 @@ import { AccountLogo } from '../components/ui/AccountLogo';
 import { ACCOUNTS, getAccountById } from '../data/accounts';
 import { DestinationURLs } from '../components/settings/DestinationURLs';
 import { DealershipTab } from '../components/settings/DealershipTab';
+import { FeesTab } from '../components/settings/fees/FeesTab';
 import { AccountVariablesTab } from '../components/settings/AccountVariablesTab';
 import { EnrollmentSettingsTabContent, isEnrollmentLeafTabId } from '../components/settings/EnrollmentSettingsTabContent';
 import type { EnrollmentSettings } from '../data/enrollmentSettings';
@@ -21,6 +22,7 @@ const ACCOUNT_TABS = [
   { id: 'data-connections', label: 'Data Connections' },
   { id: 'destination-urls', label: 'Destination URLs' },
   { id: 'disclosure-template', label: 'Disclosure Template' },
+  { id: 'fees', label: 'Fees' },
   { id: 'history-log', label: 'History Log' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'offer-settings', label: 'Offer Settings' },
@@ -265,6 +267,9 @@ export const AccountSettingsPage = () => {
         <DestinationURLs accountName={account.name} />
       ) : activeTab.id === 'dealership' ? (
         <DealershipTab account={account} />
+      ) : activeTab.id === 'fees' ? (
+        // Keyed so switching accounts in the switcher loads that account's own fee state.
+        <FeesTab key={account.id} account={account} tabLabel={activeTab.label} />
       ) : activeTab.id === 'enrollment-account-variables' ? (
         <AccountVariablesTab accountName={account.name} />
       ) : isEnrollmentLeafTabId(activeTab.id) ? (

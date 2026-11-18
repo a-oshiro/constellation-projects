@@ -83,5 +83,11 @@ export default defineConfig({
   resolve: {
     alias: { '@portal': fileURLToPath(new URL('./src/portal', import.meta.url)) },
   },
-  test: { environment: 'node', include: ['src/portal/**/*.test.ts', 'src/components/ui/ProjectsFilterBar.test.ts'] },
+  test: {
+    environment: 'node',
+    include: [
+      'src/portal/**/*.test.ts', 'src/components/ui/ProjectsFilterBar.test.ts',
+      'src/data/feeSync.test.ts', 'src/components/settings/fees/**/*.test.ts',
+    ],
+  },
 })
