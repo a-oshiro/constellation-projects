@@ -6,6 +6,7 @@ import type { Account } from '../../data/accounts';
 import { ACCOUNTS } from '../../data/accounts';
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { FIELD_LABEL_STYLE, TEXT_FIELD_SX } from '../ui/enrollment/shared';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 /**
  * Account Settings-only tab — the dealership this enrollment belongs to and the main contact who
@@ -76,7 +77,8 @@ export const DealershipTab = ({ account }: DealershipTabProps) => {
       <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
         <Breadcrumbs items={['Settings', 'Accounts', account.name, 'Dealership']} />
       </div>
-      <div style={{ padding: '10px 16px 12px', flexShrink: 0 }}>
+      <div style={{ padding: '10px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <SettingsNavPanelToggle />
         <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
           Dealership
         </h1>

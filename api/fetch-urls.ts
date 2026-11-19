@@ -1,13 +1,14 @@
 // Server-side proxy for the OpenAI Responses API. Keeps OPENAI_API_KEY out of the
 // client bundle — never rename this to VITE_OPENAI_API_KEY, which Vite would inline
 // into shipped JS and expose to anyone inspecting the browser.
-export const config = { runtime: 'edge' };
+//
+// Node.js runtime, not Edge: only Node.js Vercel Functions support request cancellation.
+// With `supportsCancellation` on for this file (vercel.json), `req.signal` aborts when the
+// browser cancels the request (e.g. "Stop generating"), and passing it to the OpenAI call
+// below cancels that call too, so OpenAI stops instead of finishing an unwanted response.
+export const config = { runtime: 'nodejs' };
 
-// Edge Runtime exposes env vars via process.env but isn't Node.js — @types/node isn't
-// applicable here, so declare just the shape this file actually uses.
-declare const process: { env: Record<string, string | undefined> };
-
-export default async function handler(req: Request): Promise<Response> {
+async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -32,6 +33,7 @@ export default async function handler(req: Request): Promise<Response> {
       Authorization: `Bearer ${apiKey}`,
     },
     body,
+    signal: req.signal,
   });
 
   const data = await upstream.text();
@@ -40,3 +42,6 @@ export default async function handler(req: Request): Promise<Response> {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+// Web-standard handler: Node.js Vercel Functions take a `Request` through a `fetch` export.
+export default { fetch: handler };

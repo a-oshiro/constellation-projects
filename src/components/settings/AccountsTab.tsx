@@ -8,6 +8,7 @@ import { Add, MoreVert, Search, ArrowDownward, Inventory2Outlined } from '@mui/i
 import { Breadcrumbs } from '../layout/Breadcrumbs';
 import { AccountLogo } from '../ui/AccountLogo';
 import { ACCOUNTS, accountColor, type DataSource, type AccountUser } from '../../data/accounts';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 // ── Small building blocks ────────────────────────────────────────────────────
 
@@ -112,6 +113,7 @@ export const AccountsTab = () => {
           <Breadcrumbs items={['Settings', 'Accounts']} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <SettingsNavPanelToggle />
           <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
             Accounts
           </h1>

@@ -10,6 +10,7 @@ import { AppTextField } from '../ui/AppTextField';
 import { ManageWorkflowDialog } from './ManageWorkflowDialog';
 import { APPROVAL_REQUIREMENTS } from './workflowTypes';
 import type { WorkflowStepConfig, ApprovalRequirement } from './workflowTypes';
+import { SettingsNavPanelToggle } from './SettingsNavPanel';
 
 const GitForkIcon = () => (
   <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -368,6 +369,7 @@ export const OfferReplacementWorkflowTab = () => {
             <Breadcrumbs items={['Settings', 'Offer Replacement Workflow']} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <SettingsNavPanelToggle />
             <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
               Offer Replacement Workflow
             </h1>

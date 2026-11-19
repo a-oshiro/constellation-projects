@@ -11,6 +11,9 @@ import { AccountVariablesTab } from '../components/settings/AccountVariablesTab'
 import { EnrollmentSettingsTabContent, isEnrollmentLeafTabId } from '../components/settings/EnrollmentSettingsTabContent';
 import type { EnrollmentSettings } from '../data/enrollmentSettings';
 import { getSavedEnrollmentSettings, saveEnrollmentSettings } from '../data/enrollmentSettingsStore';
+import { SettingsNavPanelFrame, SettingsNavPanelToggle } from '../components/settings/SettingsNavPanel';
+import { Expandable } from '../components/ui/Expandable';
+import { setSettingsNavPanelOpen } from '../components/settings/settingsNavPanelStore';
 
 const ACCOUNT_TABS = [
   { id: 'general', label: 'General' },
@@ -34,7 +37,7 @@ const ENROLLMENT_SETTINGS_TABS = [
   { id: 'enrollment-vin-priorities', label: 'VIN Priorities' },
   { id: 'enrollment-aged-discounts', label: 'Aged discount preferences' },
   { id: 'enrollment-creative-distribution', label: 'Creative and Distribution' },
-  { id: 'enrollment-fees-disclosures', label: 'Fees and Disclosures' },
+  { id: 'enrollment-fees-disclosures', label: 'Disclosures' },
 ] as const;
 
 const ALL_ACCOUNT_TABS = [...ACCOUNT_TABS, ...ENROLLMENT_SETTINGS_TABS];
@@ -60,15 +63,37 @@ export const AccountSettingsPage = () => {
   // the switcher navigates to a different account, since this page doesn't remount on a route param change.
   const [savedEnrollment, setSavedEnrollment] = useState<EnrollmentSettings>(() => getSavedEnrollmentSettings(`account:${account.id}`));
   const [draftEnrollment, setDraftEnrollment] = useState<EnrollmentSettings>(savedEnrollment);
+  // Tracked separately from `draftEnrollment !== savedEnrollment`: auto-saved patches (Disclosures) update
+  // both objects, which would otherwise read as unsaved changes on the other Enrollment Settings tabs.
+  const [isEnrollmentDirty, setIsEnrollmentDirty] = useState(false);
   useEffect(() => {
     const s = getSavedEnrollmentSettings(`account:${account.id}`);
     setSavedEnrollment(s);
     setDraftEnrollment(s);
+    setIsEnrollmentDirty(false);
   }, [account.id]);
-  const isEnrollmentDirty = draftEnrollment !== savedEnrollment;
-  const handleEnrollmentChange = (patch: Partial<EnrollmentSettings>) => setDraftEnrollment((prev) => ({ ...prev, ...patch }));
-  const handleEnrollmentSave = () => { saveEnrollmentSettings(`account:${account.id}`, draftEnrollment); setSavedEnrollment(draftEnrollment); };
-  const handleEnrollmentDiscard = () => setDraftEnrollment(savedEnrollment);
+  const handleEnrollmentChange = (patch: Partial<EnrollmentSettings>) => {
+    setDraftEnrollment((prev) => ({ ...prev, ...patch }));
+    setIsEnrollmentDirty(true);
+  };
+  /** Disclosures saves as you go — the patch is applied to the saved settings too, leaving other tabs' unsaved edits as drafts. */
+  const handleEnrollmentAutoSave = (patch: Partial<EnrollmentSettings>) => {
+    setDraftEnrollment((prev) => ({ ...prev, ...patch }));
+    setSavedEnrollment((prev) => {
+      const next = { ...prev, ...patch };
+      saveEnrollmentSettings(`account:${account.id}`, next);
+      return next;
+    });
+  };
+  const handleEnrollmentSave = () => {
+    saveEnrollmentSettings(`account:${account.id}`, draftEnrollment);
+    setSavedEnrollment(draftEnrollment);
+    setIsEnrollmentDirty(false);
+  };
+  const handleEnrollmentDiscard = () => {
+    setDraftEnrollment(savedEnrollment);
+    setIsEnrollmentDirty(false);
+  };
 
   const filteredSwitcherAccounts = useMemo(
     () => ACCOUNTS.filter((a) => a.name.toLowerCase().includes(switcherSearch.toLowerCase())),
@@ -86,8 +111,9 @@ export const AccountSettingsPage = () => {
   };
 
   return (
-    <div className="flex h-full" style={{ background: '#f0f2f4', gap: 16, padding: 8 }}>
-      {/* ── Left panel — back / account switcher / tab navigation ────── */}
+    <div className="flex h-full" style={{ background: '#f0f2f4', padding: 8 }}>
+      {/* ── Left panel — back / account switcher / tab navigation (closable; each pane title then shows a reopen button) ── */}
+      <SettingsNavPanelFrame>
       <div
         style={{
           width: 280, flexShrink: 0, background: '#ffffff', borderRadius: 16,
@@ -102,7 +128,7 @@ export const AccountSettingsPage = () => {
           <h2 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0, flex: 1 }}>
             Accounts
           </h2>
-          <IconButton title="Close" onClick={() => navigate('/projects')} sx={{ padding: '5px', flexShrink: 0 }}>
+          <IconButton title="Close panel" aria-label="Close panel" onClick={() => setSettingsNavPanelOpen(false)} sx={{ padding: '5px', flexShrink: 0 }}>
             <CloseIcon />
           </IconButton>
         </div>
@@ -207,27 +233,32 @@ export const AccountSettingsPage = () => {
               ? <ExpandLess style={{ fontSize: 20, color: '#686576', flexShrink: 0 }} />
               : <ExpandMore style={{ fontSize: 20, color: '#686576', flexShrink: 0 }} />}
           </button>
-          {enrollmentExpanded && ENROLLMENT_SETTINGS_TABS.map((tab) => {
-            const isActive = tab.id === activeTab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate(`/settings/accounts/${account.id}/${tab.id}`)}
-                className={isActive ? '' : 'hover:bg-[rgba(17,16,20,0.04)]'}
-                style={{
-                  display: 'flex', alignItems: 'center', width: '100%', padding: '8px 8px 8px 32px',
-                  border: 'none', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
-                  background: isActive ? 'rgba(99,86,225,0.08)' : 'transparent',
-                  fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
-                  color: '#1f1d25', letterSpacing: '0.17px', lineHeight: '24px',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          <Expandable open={enrollmentExpanded}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {ENROLLMENT_SETTINGS_TABS.map((tab) => {
+                const isActive = tab.id === activeTab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => navigate(`/settings/accounts/${account.id}/${tab.id}`)}
+                    className={isActive ? '' : 'hover:bg-[rgba(17,16,20,0.04)]'}
+                    style={{
+                      display: 'flex', alignItems: 'center', width: '100%', padding: '8px 8px 8px 32px',
+                      border: 'none', borderRadius: 8, textAlign: 'left', cursor: 'pointer',
+                      background: isActive ? 'rgba(99,86,225,0.08)' : 'transparent',
+                      fontSize: 14, fontFamily: 'Roboto, sans-serif', fontWeight: 400,
+                      color: '#1f1d25', letterSpacing: '0.17px', lineHeight: '24px',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Expandable>
         </nav>
       </div>
+      </SettingsNavPanelFrame>
 
       {/* ── Main panel — active tab content ─────────────────────────── */}
       {activeTab.id === 'destination-urls' ? (
@@ -240,10 +271,11 @@ export const AccountSettingsPage = () => {
         <EnrollmentSettingsTabContent
           tabId={activeTab.id}
           tabLabel={activeTab.label}
+          accountId={account.id}
           accountName={account.name}
           accountBrand={account.brand}
           settings={draftEnrollment}
-          onChange={handleEnrollmentChange}
+          onChange={activeTab.id === 'enrollment-fees-disclosures' ? handleEnrollmentAutoSave : handleEnrollmentChange}
           isDirty={isEnrollmentDirty}
           onSave={handleEnrollmentSave}
           onDiscard={handleEnrollmentDiscard}
@@ -258,6 +290,12 @@ export const AccountSettingsPage = () => {
         >
           <div style={{ padding: '10px 16px 0', flexShrink: 0 }}>
             <Breadcrumbs items={['Settings', 'Accounts', account.name, activeTab.label]} />
+          </div>
+          <div style={{ padding: '10px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SettingsNavPanelToggle />
+            <h1 style={{ fontSize: 16, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.15px', margin: 0 }}>
+              {activeTab.label}
+            </h1>
           </div>
           <div style={{ flex: 1 }} />
         </div>

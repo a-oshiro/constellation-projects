@@ -1,0 +1,834 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { Alert, Button, Checkbox, FormControlLabel, IconButton, Tooltip } from '@mui/material';
+import { AutoAwesome, InfoOutlined, StopCircleOutlined } from '@mui/icons-material';
+import { disclosureSubmissionNotificationId } from '../../../data/enrollmentSettings';
+import type {
+  DisclosureBlock, DisclosureSnippetMeta, DisclosureSnippetVersion, DisclosureTemplate, EnrollmentSettings,
+} from '../../../data/enrollmentSettings';
+import {
+  buildCombinedDisclosureSource, consolidateDisclosureTemplates, generateDisclosureSnippet, mergeDisclosureReplacements,
+} from '../../../utils/disclosureSnippetAI';
+import type { DisclosureReplacement } from '../../../utils/disclosureSnippetColors';
+import { buildVariableColorMap, findActiveVariableKeys } from '../../../utils/disclosureSnippetColors';
+import { CURRENT_USER } from '../../../data/mockData';
+import { useSnackbar } from '../../../context/SnackbarContext';
+import { DisclosureSnippetDialog } from './DisclosureSnippetDialog';
+import { DisclosureSnippetEditor } from './DisclosureSnippetEditor';
+import type { DisclosureSnippetEditorHandle } from './DisclosureSnippetEditor';
+import { DisclosureRawInput } from './DisclosureRawInput';
+import { DisclosureDiffView } from './DisclosureDiffView';
+import { DisclosureWarningsDialog } from './DisclosureWarningsDialog';
+import { HeaderTag, MaskedIcon } from './DisclosureUi';
+import { TemplateLoadingSkeleton } from './TemplateLoadingSkeleton';
+import { Expandable } from '../Expandable';
+import { ClientDisclosuresView } from './ClientDisclosuresView';
+import { useUserRole } from '../../../context/userRole';
+import { useNotifications } from '../../../context/notifications';
+import {
+  BODY2_SECONDARY_STYLE, CONTAINED_MEDIUM_BUTTON_SX, OUTLINED_MEDIUM_BUTTON_SX, SECTION_CARD_STYLE, SUBTITLE2_STYLE,
+  TEXT_MEDIUM_BUTTON_SX,
+} from './disclosureStyles';
+import type { TagTone } from './disclosureStyles';
+import { RemoveSnippetDialog } from './RemoveSnippetDialog';
+import { UpdateSnippetDialog } from './UpdateSnippetDialog';
+import pageTextLinkIcon from '../../../assets/icons/disclosures/page-text-link.svg';
+import pencilIcon from '../../../assets/icons/disclosures/pencil.svg';
+import circleXIcon from '../../../assets/icons/disclosures/circle-x.svg';
+import chevronTopIcon from '../../../assets/icons/disclosures/chevron-top-small.svg';
+import refreshIcon from '../../../assets/icons/disclosures/refresh.svg';
+
+/** Height of each side of the raw/template split view — both scroll independently past it (Figma: 273px). */
+const SPLIT_PANE_HEIGHT = 273;
+
+interface DisclosuresTabProps {
+  settings: EnrollmentSettings;
+  onChange: (patch: Partial<EnrollmentSettings>) => void;
+  /**
+   * The account these disclosures belong to — set on the account Settings page. The project-scoped
+   * Enrollment Settings panel has none, so it always shows the internal view and raises no notifications.
+   */
+  accountId?: string;
+  accountName: string;
+  accountBrand: string;
+}
+
+/** Client users submit raw disclosures for review; internal users build them into the account snippet. */
+export const DisclosuresTab = (props: DisclosuresTabProps) => {
+  const { role } = useUserRole();
+  return role === 'client' && props.accountId ? (
+    <ClientDisclosuresView settings={props.settings} onChange={props.onChange} accountId={props.accountId} accountName={props.accountName} />
+  ) : (
+    <InternalDisclosuresTab {...props} />
+  );
+};
+
+function buildDefaultSnippetName(accountName: string): string {
+  const now = new Date();
+  const month = now.toLocaleString('en-US', { month: 'short' });
+  return `Disclosure Template_${accountName}_${month}${String(now.getFullYear()).slice(-2)}`;
+}
+
+/** yyyy-mm-dd (native <input type="date"> value format) for December 31st of the current year. */
+function lastDayOfYear(): string {
+  return `${new Date().getFullYear()}-12-31`;
+}
+
+function buildSnippetMeta(
+  name: string,
+  accountName: string,
+  accountBrand: string,
+  sourceText: string,
+  replacements: DisclosureReplacement[],
+): DisclosureSnippetMeta {
+  const now = new Date().toISOString();
+  return {
+    id: `snippet-${Date.now()}`,
+    name,
+    tags: [],
+    folder: accountName,
+    brands: [accountBrand],
+    expirationDate: lastDayOfYear(),
+    websiteDescription: '',
+    websiteNotes: '',
+    createdAt: now,
+    updatedAt: now,
+    createdBy: CURRENT_USER.name,
+    sourceText,
+    replacements,
+  };
+}
+
+function buildSnippetVersion(
+  name: string,
+  text: string,
+  sourceText: string,
+  replacements: DisclosureReplacement[],
+  disclosures: DisclosureBlock[],
+): DisclosureSnippetVersion {
+  return {
+    id: `version-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name, text, sourceText, replacements, disclosures,
+    createdAt: new Date().toISOString(),
+    createdBy: CURRENT_USER.name,
+  };
+}
+
+/** True when the block's template was generated from its current raw text (not stale or still pending). */
+const hasCurrentTemplate = (d: DisclosureBlock) => !!d.template && d.text.trim() !== '' && d.template.sourceText === d.text.trim();
+
+const InternalDisclosuresTab = ({ settings, onChange, accountId, accountName, accountBrand }: DisclosuresTabProps) => {
+  const { showSnackbar } = useSnackbar();
+  const { notify, dismiss } = useNotifications();
+  const snippet = settings.disclosureSnippet;
+
+  // Async template generations patch whatever the disclosures are when they finish, not what they were
+  // when they started — otherwise a result would overwrite edits made to other rows in the meantime.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const [generatingIds, setGeneratingIds] = useState<Set<DisclosureBlock['id']>>(new Set());
+  // In-flight generations, so "Stop" can cancel the request; and the types whose generation the user stopped.
+  const controllersRef = useRef(new Map<DisclosureBlock['id'], AbortController>());
+  const [cancelledIds, setCancelledIds] = useState<Set<DisclosureBlock['id']>>(new Set());
+  const [errors, setErrors] = useState<Partial<Record<DisclosureBlock['id'], string>>>({});
+  // Only one disclosure type card is open at a time — expanding another closes it.
+  const [expandedId, setExpandedId] = useState<DisclosureBlock['id'] | null>('lease');
+  // `closeMessage` — the dialog opened straight after the snippet was generated or updated, so closing it
+  // confirms that with a snackbar (matching the Figma flow's "Done" → "Snippet generated.").
+  const [snippetDialog, setSnippetDialog] = useState<{ closeMessage?: string } | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+
+  const patchDisclosure = (id: DisclosureBlock['id'], patch: Partial<DisclosureBlock>) => {
+    const disclosures = settingsRef.current.disclosures.map((d) => (d.id === id ? { ...d, ...patch } : d));
+    // Updated right away (not on the next render) so two templates finishing back to back don't overwrite each other.
+    settingsRef.current = { ...settingsRef.current, disclosures };
+    onChangeRef.current({ disclosures });
+  };
+
+  // Reads the latest template (not the render's closure) so a text change and a new replacement made by the same editor action both land.
+  const patchTemplate = (id: DisclosureBlock['id'], patch: Partial<DisclosureTemplate>) => {
+    const template = settingsRef.current.disclosures.find((d) => d.id === id)?.template;
+    if (template) patchDisclosure(id, { template: { ...template, ...patch } });
+  };
+
+  const addTemplateReplacement = (id: DisclosureBlock['id'], replacement: DisclosureReplacement) => {
+    const replacements = settingsRef.current.disclosures.find((d) => d.id === id)?.template?.replacements ?? [];
+    if (replacements.some((r) => r.key === replacement.key && r.original === replacement.original)) return;
+    patchTemplate(id, { replacements: [...replacements, replacement] });
+  };
+
+  const setGenerating = (id: DisclosureBlock['id'], generating: boolean) => {
+    setGeneratingIds((prev) => {
+      if (prev.has(id) === generating) return prev;
+      const next = new Set(prev);
+      if (generating) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const setCancelled = (id: DisclosureBlock['id'], cancelled: boolean) => {
+    setCancelledIds((prev) => {
+      if (prev.has(id) === cancelled) return prev;
+      const next = new Set(prev);
+      if (cancelled) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const generateTemplate = async (id: DisclosureBlock['id'], sourceText: string) => {
+    const controller = new AbortController();
+    controllersRef.current.set(id, controller);
+    setGenerating(id, true);
+    setCancelled(id, false);
+    setErrors((e) => ({ ...e, [id]: undefined }));
+    try {
+      const { snippet: text, replacements, issues } = await generateDisclosureSnippet(sourceText, controller.signal);
+      // Dropped if the raw text changed while this was in flight — a newer generation is already queued.
+      const current = settingsRef.current.disclosures.find((d) => d.id === id);
+      if (current?.text.trim() !== sourceText) return;
+      patchDisclosure(id, { template: { text, replacements, sourceText, issues, generatedAt: new Date().toISOString() } });
+    } catch (err) {
+      if (controller.signal.aborted) return; // Stopped by the user — handled by stopGeneration.
+      if (settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() !== sourceText) return;
+      setErrors((e) => ({ ...e, [id]: err instanceof Error ? err.message : 'Something went wrong while generating this template.' }));
+    } finally {
+      if (controllersRef.current.get(id) === controller) controllersRef.current.delete(id);
+      if (!controller.signal.aborted && settingsRef.current.disclosures.find((d) => d.id === id)?.text.trim() === sourceText) setGenerating(id, false);
+    }
+  };
+
+  /** "Stop": cancels the in-flight OpenAI request; the template pane then says the generation was cancelled. */
+  const stopGeneration = (id: DisclosureBlock['id']) => {
+    controllersRef.current.get(id)?.abort();
+    controllersRef.current.delete(id);
+    setGenerating(id, false);
+    setCancelled(id, true);
+  };
+
+
+  // Raw text that arrived without a matching template (pre-filled disclosures) gets one generated on first
+  // view. Leaving the page cancels anything still generating, so no request (or OpenAI call) outlives it.
+  // Start and cancel live in one effect so React's dev double-mount (mount, unmount, mount) restarts the
+  // generations it cancelled instead of leaving them stuck.
+  useEffect(() => {
+    const controllers = controllersRef.current;
+    settingsRef.current.disclosures
+      .filter((d) => d.text.trim() !== '' && !hasCurrentTemplate(d))
+      .forEach((d) => generateTemplate(d.id, d.text.trim()));
+    return () => controllers.forEach((c) => c.abort());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRawTextChange = (d: DisclosureBlock, value: string) => {
+    if (value.trim() === '') {
+      patchDisclosure(d.id, { text: value, template: null });
+      setGenerating(d.id, false);
+      setCancelled(d.id, false);
+      setErrors((e) => ({ ...e, [d.id]: undefined }));
+      return;
+    }
+    // Typing into an empty disclosure makes this user its author.
+    patchDisclosure(d.id, d.text.trim() === '' ? { text: value, addedBy: 'internal' } : { text: value });
+  };
+
+  // The template is (re)built once the user leaves the raw text, not on every keystroke.
+  const handleRawTextBlur = (id: DisclosureBlock['id']) => {
+    const d = settingsRef.current.disclosures.find((b) => b.id === id);
+    const trimmed = d?.text.trim() ?? '';
+    if (!d || trimmed === '' || hasCurrentTemplate(d) || generatingIds.has(id)) return;
+    generateTemplate(id, trimmed);
+  };
+
+  const toggleExpanded = (id: DisclosureBlock['id']) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  // The account snippet is every included template combined, with anything repeated across them written once.
+  const included = useMemo(
+    () => settings.disclosures.filter((d) => d.includeInSnippet && hasCurrentTemplate(d)),
+    [settings.disclosures],
+  );
+  const consolidated = useMemo(() => ({
+    text: consolidateDisclosureTemplates(included.map((d) => d.template!.text)),
+    sourceText: buildCombinedDisclosureSource(included.map((d) => ({ label: d.label, text: d.text.trim() }))),
+    replacements: mergeDisclosureReplacements(included.map((d) => d.template!.replacements)),
+  }), [included]);
+
+  const anyGenerating = generatingIds.size > 0;
+  const canGenerate = included.length > 0 && !anyGenerating;
+  const blockStatus = (d: DisclosureBlock): DisclosureSnippetStatus | null => {
+    if (changedBlocks.some((c) => c.id === d.id)) return 'edited';
+    if (!snippet || d.text.trim() === '') return null;
+    const saved = snippet.disclosures.find((s) => s.id === d.id);
+    return saved?.includeInSnippet && saved.template ? 'applied' : 'not_applied';
+  };
+
+  // Disclosure types edited since the snippet was last generated/updated (raw text, template, or "Apply to automated offers").
+  const changedBlocks = useMemo(() => {
+    if (!snippet) return [];
+    return settings.disclosures.filter((d) => {
+      const saved = snippet.disclosures.find((s) => s.id === d.id);
+      return !saved || saved.text !== d.text || saved.includeInSnippet !== d.includeInSnippet || saved.template?.text !== d.template?.text;
+    });
+  }, [settings.disclosures, snippet]);
+
+  // Client submissions the snippet doesn't include yet — flagged by the banner and marked up in the raw text.
+  const pendingClientBlocks = useMemo(
+    () => changedBlocks.filter((d) => d.clientStatus === 'submitted'),
+    [changedBlocks],
+  );
+  /** The text the snippet was last built from, when a pending client edit changed it — what the raw diff compares against. */
+  const diffBaseline = (d: DisclosureBlock): string | undefined => {
+    if (!snippet || !pendingClientBlocks.some((c) => c.id === d.id)) return undefined;
+    const saved = snippet.disclosures.find((s) => s.id === d.id)?.text ?? '';
+    return saved.trim() !== '' && saved !== d.text ? saved : undefined;
+  };
+
+  /**
+   * Client-submitted disclosures the snippet now includes become "Applied to offers" for the client; the
+   * internal "snippet generation pending" notification is resolved, and the client is told.
+   */
+  const applyClientSubmissions = (): DisclosureBlock[] => {
+    const appliedIds = new Set(included.filter((d) => d.clientStatus === 'submitted').map((d) => d.id));
+    if (appliedIds.size === 0) return settings.disclosures;
+    if (accountId) {
+      dismiss(disclosureSubmissionNotificationId(accountId));
+      notify({
+        id: `disclosures-applied:${accountId}`,
+        audience: 'client',
+        source: 'Disclosure Builder',
+        title: 'Your submitted disclosures were applied to offers.',
+        tags: ['Disclosures', accountName],
+        href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+      });
+    }
+    return settings.disclosures.map((d) => (appliedIds.has(d.id) ? { ...d, clientStatus: 'applied' } : d));
+  };
+
+  const handleRequestClientUpdate = (d: DisclosureBlock) => {
+    patchDisclosure(d.id, { clientStatus: 'updates_requested' });
+    if (accountId) {
+      notify({
+        id: `disclosure-update-request:${accountId}:${d.id}`,
+        audience: 'client',
+        source: 'Disclosure Builder',
+        title: `Constellation requested updates to your ${d.label} disclosure.`,
+        tags: ['Disclosures', accountName],
+        href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+      });
+    }
+    showSnackbar({ message: 'Client update requested.' });
+  };
+
+  const handleGenerateSnippet = () => {
+    const meta = buildSnippetMeta(
+      buildDefaultSnippetName(accountName), accountName, accountBrand, consolidated.sourceText, consolidated.replacements,
+    );
+    const disclosures = applyClientSubmissions();
+    const version = buildSnippetVersion(meta.name, consolidated.text, meta.sourceText, meta.replacements, disclosures);
+    onChange({ disclosures, disclosureSnippet: { meta, text: consolidated.text, disclosures, versions: [version] } });
+    setExpandedId(null);
+    setSnippetDialog({ closeMessage: 'Snippet generated.' });
+  };
+
+  /** Confirmed from the Update Snippet dialog — `text` is the rebuilt snippet, possibly edited there. */
+  const handleConfirmUpdate = (text: string) => {
+    if (!snippet) return;
+    const disclosures = applyClientSubmissions();
+    onChange({
+      disclosures,
+      disclosureSnippet: {
+        meta: {
+          ...snippet.meta,
+          sourceText: consolidated.sourceText,
+          replacements: consolidated.replacements,
+          updatedAt: new Date().toISOString(),
+        },
+        text,
+        disclosures,
+        versions: [
+          ...snippet.versions,
+          buildSnippetVersion(snippet.meta.name, text, consolidated.sourceText, consolidated.replacements, disclosures),
+        ],
+      },
+    });
+    setUpdateOpen(false);
+    setExpandedId(null);
+    showSnackbar({ message: 'Snippet updated.' });
+  };
+
+  /** Saved from the snippet dialog: the edited text/metadata become a new version, built from the same disclosures. */
+  const handleSnippetSave = (text: string, meta: DisclosureSnippetMeta) => {
+    if (!snippet) return;
+    const version = buildSnippetVersion(meta.name, text, meta.sourceText, meta.replacements, snippet.disclosures);
+    onChange({ disclosureSnippet: { ...snippet, meta, text, versions: [...snippet.versions, version] } });
+  };
+
+  /**
+   * Restoring a previous version copies it forward as a new current version (history is never rewritten)
+   * and brings back the disclosures it was built from, on this page too.
+   */
+  const handleRestoreVersion = (versionId: string) => {
+    if (!snippet) return;
+    const restored = snippet.versions.find((v) => v.id === versionId);
+    if (!restored) return;
+    const version = buildSnippetVersion(
+      snippet.meta.name, restored.text, restored.sourceText, restored.replacements, restored.disclosures,
+    );
+    setGeneratingIds(new Set());
+    setErrors({});
+    onChange({
+      disclosures: restored.disclosures,
+      disclosureSnippet: {
+        ...snippet,
+        meta: { ...snippet.meta, sourceText: restored.sourceText, replacements: restored.replacements, updatedAt: version.createdAt },
+        text: restored.text,
+        disclosures: restored.disclosures,
+        versions: [...snippet.versions, version],
+      },
+    });
+    showSnackbar({ message: 'Version restored.' });
+  };
+
+  /** Restores every disclosure to how it was when the snippet was last generated/updated. */
+  const handleDiscardChanges = () => {
+    if (!snippet) return;
+    setGeneratingIds(new Set());
+    setErrors({});
+    onChange({ disclosures: snippet.disclosures });
+  };
+
+  const labelList = (blocks: DisclosureBlock[]) => blocks.map((d, i) => (
+    <span key={d.id}>
+      {i > 0 && (i === blocks.length - 1 ? ' and ' : ', ')}
+      <strong style={{ fontWeight: 700 }}>{d.label}</strong>
+    </span>
+  ));
+
+  let footer: ReactNode;
+  if (!snippet) {
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          {included.length === 0 ? 'Add disclosures to generate snippet.' : (
+            <>Template created for {labelList(included)} {included.length === 1 ? 'disclosure' : 'disclosures'}. Generate snippet to apply.</>
+          )}
+        </p>
+        <Button
+          variant="outlined"
+          startIcon={<MaskedIcon src={pageTextLinkIcon} size={20} color="currentColor" />}
+          sx={OUTLINED_MEDIUM_BUTTON_SX}
+        >
+          Select Existing Snippet
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled={!canGenerate}
+          onClick={handleGenerateSnippet}
+          startIcon={<AutoAwesome style={{ fontSize: 18 }} />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Generate Snippet
+        </Button>
+      </>
+    );
+  } else if (changedBlocks.length > 0) {
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          Changes made to {labelList(changedBlocks)} {changedBlocks.length === 1 ? 'disclosure' : 'disclosures'}. Update snippet to apply.
+          <br />
+          If you exit, all changes will be lost.
+        </p>
+        <Button variant="text" onClick={handleDiscardChanges} sx={TEXT_MEDIUM_BUTTON_SX}>
+          Discard Changes
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled={anyGenerating || included.length === 0}
+          onClick={() => setUpdateOpen(true)}
+          startIcon={<MaskedIcon src={refreshIcon} size={20} color="currentColor" />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Update Snippet
+        </Button>
+      </>
+    );
+  } else {
+    // Snippet up to date: the actions stay visible but disabled until a disclosure is edited.
+    footer = (
+      <>
+        <p style={{ ...BODY2_SECONDARY_STYLE, flex: 1, minWidth: 0 }}>
+          Edit disclosure templates to update the snippet.
+        </p>
+        <Button variant="text" disabled sx={{ ...TEXT_MEDIUM_BUTTON_SX, '&.Mui-disabled': { color: 'rgba(17,16,20,0.38)' } }}>
+          Discard Changes
+        </Button>
+        <Button
+          variant="contained"
+          disableElevation
+          disabled
+          startIcon={<MaskedIcon src={refreshIcon} size={20} color="currentColor" />}
+          sx={CONTAINED_MEDIUM_BUTTON_SX}
+        >
+          Update Snippet
+        </Button>
+      </>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100%', boxSizing: 'border-box' }}>
+      <div style={{ ...SECTION_CARD_STYLE, gap: 8 }}>
+        <p style={SUBTITLE2_STYLE}>Automated Offers Snippet</p>
+        {snippet && pendingClientBlocks.length > 0 && (
+          <Alert
+            severity="info"
+            icon={<InfoOutlined style={{ fontSize: 20 }} />}
+            sx={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', alignItems: 'center', background: '#e5f2fa', color: '#01579b', '& .MuiAlert-icon': { color: '#0288d1' } }}
+          >
+            Client has updated the {labelList(pendingClientBlocks)} {pendingClientBlocks.length === 1 ? 'disclosure' : 'disclosures'}.{' '}
+            <button
+              type="button"
+              disabled={anyGenerating || included.length === 0}
+              onClick={() => setUpdateOpen(true)}
+              style={{
+                all: 'unset', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline',
+                opacity: anyGenerating || included.length === 0 ? 0.5 : 1,
+              }}
+            >
+              Update snippet
+            </button>
+            {' '}to apply changes to offers.
+          </Alert>
+        )}
+        {snippet ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8,
+            border: '1px solid #473bab', background: 'rgba(99,86,225,0.08)',
+          }}>
+            <img src={pageTextLinkIcon} width={20} height={20} alt="" style={{ flexShrink: 0 }} />
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden',
+              fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#473bab', letterSpacing: '0.17px', lineHeight: 1.43,
+            }}>
+              <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{accountName} Snippet:</span>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{snippet.meta.name}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 28 }}>
+              <IconButton aria-label="Edit snippet" onClick={() => setSnippetDialog({})} sx={{ padding: '5px' }}>
+                <MaskedIcon src={pencilIcon} size={20} />
+              </IconButton>
+              <IconButton aria-label="Remove snippet" onClick={() => setRemoveOpen(true)} sx={{ padding: '5px' }}>
+                <MaskedIcon src={circleXIcon} size={20} />
+              </IconButton>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <MaskedIcon src={pageTextLinkIcon} size={20} color="#9c99a9" />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <p style={{ ...BODY2_SECONDARY_STYLE, color: '#1f1d25', fontWeight: 500 }}>No snippet attached to this account yet.</p>
+              <p style={BODY2_SECONDARY_STYLE}>
+                Select an existing snippet or generate a new one from the disclosure templates.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {settings.disclosures.map((d) => (
+          <DisclosureAccordion
+            key={d.id}
+            block={d}
+            expanded={expandedId === d.id}
+            status={blockStatus(d)}
+            diffBaseline={diffBaseline(d)}
+            generating={generatingIds.has(d.id)}
+            cancelled={cancelledIds.has(d.id)}
+            error={errors[d.id]}
+            onToggle={() => toggleExpanded(d.id)}
+            onRawTextChange={(value) => handleRawTextChange(d, value)}
+            onRawTextBlur={() => handleRawTextBlur(d.id)}
+            onTemplateChange={(text) => patchTemplate(d.id, { text })}
+            onReplacementAdded={(replacement) => addTemplateReplacement(d.id, replacement)}
+            onIncludeChange={(includeInSnippet) => patchDisclosure(d.id, { includeInSnippet })}
+            onRequestClientUpdate={() => handleRequestClientUpdate(d)}
+            onStopGeneration={() => stopGeneration(d.id)}
+            onDismissError={() => setErrors((e) => ({ ...e, [d.id]: undefined }))}
+          />
+        ))}
+      </div>
+
+      {/* Stays pinned to the bottom of the page's scroll area so the snippet actions are always reachable. */}
+      <div style={{
+        position: 'sticky', bottom: 0, zIndex: 2, margin: '0 -16px', marginTop: 'auto',
+        display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px',
+        background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.12)',
+      }}>
+        {footer}
+      </div>
+
+      {snippetDialog && snippet && (
+        <DisclosureSnippetDialog
+          disclosureLabel={included.map((d) => d.label).join(', ')}
+          initialText={snippet.text}
+          initialSnippet={snippet.meta}
+          onClose={() => {
+            if (snippetDialog.closeMessage) showSnackbar({ message: snippetDialog.closeMessage });
+            setSnippetDialog(null);
+          }}
+          disclosures={snippet.disclosures}
+          versions={snippet.versions}
+          onSave={handleSnippetSave}
+          onRestoreVersion={handleRestoreVersion}
+        />
+      )}
+
+      <UpdateSnippetDialog
+        open={updateOpen && !!snippet}
+        currentText={snippet?.text ?? ''}
+        newText={consolidated.text}
+        onCancel={() => setUpdateOpen(false)}
+        onConfirm={handleConfirmUpdate}
+      />
+
+      <RemoveSnippetDialog
+        open={removeOpen && !!snippet}
+        snippetName={snippet?.meta.name ?? ''}
+        onCancel={() => setRemoveOpen(false)}
+        onConfirm={() => {
+          onChange({ disclosureSnippet: null });
+          setRemoveOpen(false);
+        }}
+      />
+    </div>
+  );
+};
+
+/**
+ * Where a disclosure stands against the account snippet: `edited` since the snippet was last
+ * generated/updated, or — when unchanged — whether the snippet includes it.
+ */
+type DisclosureSnippetStatus = 'edited' | 'applied' | 'not_applied';
+
+const STATUS_TAGS: Record<DisclosureSnippetStatus, { label: string; tone: TagTone }> = {
+  edited: { label: 'Edited', tone: 'blue' },
+  applied: { label: 'Applied in snippet', tone: 'green' },
+  not_applied: { label: 'Not applied in snippet', tone: 'orange' },
+};
+
+interface DisclosureAccordionProps {
+  block: DisclosureBlock;
+  expanded: boolean;
+  status: DisclosureSnippetStatus | null;
+  /** Set while a client edit awaits review: the snippet's text for this type, shown against the new text as a read-only diff. */
+  diffBaseline: string | undefined;
+  generating: boolean;
+  /** The user stopped this type's last generation (until a new one starts). */
+  cancelled: boolean;
+  error: string | undefined;
+  onToggle: () => void;
+  onRawTextChange: (value: string) => void;
+  onRawTextBlur: () => void;
+  onTemplateChange: (text: string) => void;
+  onReplacementAdded: (replacement: DisclosureReplacement) => void;
+  onIncludeChange: (include: boolean) => void;
+  onRequestClientUpdate: () => void;
+  onStopGeneration: () => void;
+  onDismissError: () => void;
+}
+
+/** One disclosure type: raw disclosure (left) and its resulting template (right), color-matched value ↔ variable. */
+const DisclosureAccordion = ({
+  block, expanded, status, diffBaseline, generating, cancelled, error, onToggle, onRawTextChange, onRawTextBlur, onTemplateChange, onReplacementAdded, onIncludeChange, onRequestClientUpdate, onStopGeneration, onDismissError,
+}: DisclosureAccordionProps) => {
+  const editorRef = useRef<DisclosureSnippetEditorHandle>(null);
+  const template = block.template;
+  // A cancelled generation leaves no template for the current text — an older one would be out of date.
+  const showTemplate = !!template && !generating && !cancelled;
+  const issues = showTemplate ? template.issues : [];
+  const [warningsOpen, setWarningsOpen] = useState(false);
+
+  // Only variables mapped back to a raw value AND still present in the template get a color, so a
+  // variable the user removed from the template also drops its highlight on the raw side.
+  const colors = useMemo(
+    () => (template ? buildVariableColorMap(template.replacements, findActiveVariableKeys(template.text)) : {}),
+    [template],
+  );
+
+  useEffect(() => {
+    editorRef.current?.applyChipColors(colors);
+  }, [colors, showTemplate, expanded]);
+
+  const paneHeaderStyle: CSSProperties = { ...BODY2_SECONDARY_STYLE, whiteSpace: 'nowrap' };
+
+  return (
+    <div style={{ ...SECTION_CARD_STYLE, gap: 0 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 30, cursor: 'pointer', outline: 'none' }}
+      >
+        <span style={{ fontSize: 14, fontWeight: 500, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.1px', lineHeight: 1.57 }}>
+          {block.label}
+        </span>
+        {block.text.trim() !== '' && (
+          <HeaderTag
+            label={block.addedBy === 'client' ? 'Added by client' : 'Added by internal user'}
+            tone={block.addedBy === 'client' ? 'purple' : 'gray'}
+          />
+        )}
+        {status && <HeaderTag {...STATUS_TAGS[status]} />}
+        {block.clientStatus === 'updates_requested' && <HeaderTag label="Client update requested" tone="orange" />}
+        {issues.length > 0 && (
+          <HeaderTag label={`Warnings (${issues.length})`} tone="orange" onClick={() => setWarningsOpen(true)} />
+        )}
+        <span style={{ flex: 1 }} />
+        <IconButton
+          aria-label={expanded ? `Collapse ${block.label}` : `Expand ${block.label}`}
+          tabIndex={-1}
+          sx={{ padding: '5px' }}
+        >
+          <img
+            src={chevronTopIcon}
+            width={20}
+            height={20}
+            alt=""
+            style={{ transform: expanded ? 'none' : 'rotate(180deg)', transition: 'transform 0.15s ease' }}
+          />
+        </IconButton>
+      </div>
+
+      {/* The header-to-body gap lives inside the expanding region, so a collapsed card has no extra space. */}
+      <Expandable open={expanded}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
+          <div style={{ display: 'flex', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px', borderRight: '1px solid rgba(0,0,0,0.12)' }}>
+              <p style={paneHeaderStyle}>Raw Disclosure</p>
+              {diffBaseline !== undefined ? (
+                <DisclosureDiffView
+                  ariaLabel={`${block.label} raw disclosure changes`}
+                  oldText={diffBaseline}
+                  newText={block.text}
+                  replacements={showTemplate ? template.replacements : []}
+                  colors={colors}
+                  height={SPLIT_PANE_HEIGHT}
+                />
+              ) : (
+                <DisclosureRawInput
+                  ariaLabel={`${block.label} raw disclosure`}
+                  value={block.text}
+                  onChange={onRawTextChange}
+                  onBlur={onRawTextBlur}
+                  replacements={showTemplate ? template.replacements : []}
+                  colors={colors}
+                  placeholder={`Paste the client's ${block.label} disclosure here.`}
+                  height={SPLIT_PANE_HEIGHT}
+                />
+              )}
+            </div>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
+              <p style={paneHeaderStyle}>Resulting Template</p>
+              <div style={{ height: SPLIT_PANE_HEIGHT, overflowY: 'auto' }}>
+                {generating ? (
+                  <TemplateLoadingSkeleton />
+                ) : cancelled ? (
+                  <p role="status" style={{ ...BODY2_SECONDARY_STYLE, lineHeight: '24px' }}>Template generation cancelled.</p>
+                ) : template ? (
+                  <DisclosureSnippetEditor
+                    key={template.generatedAt}
+                    ref={editorRef}
+                    initialValue={template.text}
+                    onChange={onTemplateChange}
+                    resolveOriginal={(key) => template.replacements.find((r) => r.key === key)?.original}
+                    onReplacementAdded={onReplacementAdded}
+                    contentStyle={{ fontSize: 12, lineHeight: '28px', letterSpacing: '0.15px', minHeight: SPLIT_PANE_HEIGHT }}
+                  />
+                ) : (
+                  <p style={{ ...BODY2_SECONDARY_STYLE, color: '#9c99a9', lineHeight: '24px' }}>
+                    The resulting template appears here once a raw disclosure is added.
+                  </p>
+                )}
+              </div>
+              {generating && (
+                <Tooltip
+                  title="Cancel template generation"
+                  placement="top"
+                  // MUI leaves 14px between tooltip and button; pulled in to 4px so it reads as the button's label.
+                  slotProps={{ popper: { modifiers: [{ name: 'offset', options: { offset: [0, -10] } }] } }}
+                >
+                  <IconButton
+                    aria-label={`Cancel ${block.label} template generation`}
+                    onClick={onStopGeneration}
+                    size="medium"
+                    sx={{ position: 'absolute', left: 6, bottom: 6, background: '#ffffff', '&:hover': { background: 'rgba(99,86,225,0.08)' } }}
+                  >
+                    <StopCircleOutlined style={{ fontSize: 24, color: '#473bab' }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <Alert severity="error" sx={{ fontSize: 12 }} onClose={onDismissError}>
+              {error}
+            </Alert>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FormControlLabel
+            control={(
+              <Checkbox
+                size="small"
+                checked={block.includeInSnippet}
+                onChange={(e) => onIncludeChange(e.target.checked)}
+                sx={{ padding: '5px 9px', color: 'rgba(17,16,20,0.56)', '&.Mui-checked': { color: '#473bab' } }}
+              />
+            )}
+            label="Apply to automated offers"
+            sx={{
+              margin: 0, marginRight: 'auto',
+              '& .MuiFormControlLabel-label': { fontSize: 12, fontFamily: 'Roboto, sans-serif', color: '#1f1d25', letterSpacing: '0.17px', lineHeight: 1.43 },
+            }}
+          />
+          {block.text.trim() !== '' && (
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={block.clientStatus === 'updates_requested'}
+              onClick={onRequestClientUpdate}
+              sx={{
+                ...OUTLINED_MEDIUM_BUTTON_SX, fontSize: 13, lineHeight: '22px', padding: '3px 10px',
+                '&.Mui-disabled': { borderColor: 'rgba(17,16,20,0.12)', color: 'rgba(17,16,20,0.38)' },
+              }}
+            >
+              {block.clientStatus === 'updates_requested' ? 'Client Update Requested' : 'Request Client Update'}
+            </Button>
+          )}
+          </div>
+        </div>
+      </Expandable>
+
+      <DisclosureWarningsDialog
+        open={warningsOpen && issues.length > 0}
+        disclosureLabel={block.label}
+        issues={issues}
+        onClose={() => setWarningsOpen(false)}
+      />
+    </div>
+  );
+};

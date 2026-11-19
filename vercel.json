@@ -1,6 +1,9 @@
 {
   "framework": "vite",
   "installCommand": "npm install",
+  "functions": {
+    "api/fetch-urls.ts": { "supportsCancellation": true }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

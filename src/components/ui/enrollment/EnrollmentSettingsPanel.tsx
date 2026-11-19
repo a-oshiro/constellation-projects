@@ -6,14 +6,14 @@ import { VehiclesTab } from './VehiclesTab';
 import { VinPrioritiesTab } from './VinPrioritiesTab';
 import { AgedDiscountsTab } from './AgedDiscountsTab';
 import { CreativeDistributionTab } from './CreativeDistributionTab';
-import { FeesDisclosuresTab } from './FeesDisclosuresTab';
+import { DisclosuresTab } from './DisclosuresTab';
 
 const ENROLLMENT_TABS = [
   { id: 'vehicles', label: 'New vehicles and offers' },
   { id: 'vin-priorities', label: 'VIN Priorities' },
   { id: 'aged-discounts', label: 'Aged discount preferences' },
   { id: 'creative-distribution', label: 'Creative and Distribution' },
-  { id: 'fees-disclosures', label: 'Fees and Disclosures' },
+  { id: 'fees-disclosures', label: 'Disclosures' },
 ] as const;
 
 type EnrollmentTabId = (typeof ENROLLMENT_TABS)[number]['id'];
@@ -38,7 +38,7 @@ export const EnrollmentSettingsPanel = ({ settings, onChange, accountName, accou
       {activeTab === 'aged-discounts' && <AgedDiscountsTab settings={settings} onChange={onChange} />}
       {activeTab === 'creative-distribution' && <CreativeDistributionTab settings={settings} onChange={onChange} />}
       {activeTab === 'fees-disclosures' && (
-        <FeesDisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
+        <DisclosuresTab settings={settings} onChange={onChange} accountName={accountName} accountBrand={accountBrand} />
       )}
     </>
   );

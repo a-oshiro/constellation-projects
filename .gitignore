@@ -5,3 +5,6 @@ dist
 .vercel
 .env*.local
 .env*
+
+# Local export packages
+exports/

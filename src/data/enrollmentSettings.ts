@@ -3,6 +3,7 @@
 // live in an in-memory store (see enrollmentSettingsStore.ts) that persists only for the
 // current browser session.
 
+import type { AppNotification } from '../context/notifications';
 import type { DisclosureReplacement } from '../utils/disclosureSnippetColors';
 
 export interface VehicleModelYear {
@@ -42,7 +43,7 @@ export interface AdditionalFee {
   amount: number | null;
 }
 
-/** Metadata for a disclosure block once it's been turned into a reusable text snippet via the Disclosure Snippet Builder. */
+/** Metadata for the account's disclosure snippet once it's been built via the Disclosure Snippet Builder. */
 export interface DisclosureSnippetMeta {
   id: string;
   name: string;
@@ -61,14 +62,86 @@ export interface DisclosureSnippetMeta {
   replacements: DisclosureReplacement[];
 }
 
-export interface DisclosureBlock {
-  id: 'lease' | 'cash' | 'finance';
-  label: string;
-  optional: boolean;
-  enabled: boolean;
+/**
+ * Something in a raw disclosure the templatizer couldn't safely turn into a reusable template, shown in
+ * the Disclosure Warnings dialog. `failure` needs the client to change the disclosure, `warning` needs a
+ * human check, `change` explains something the templatizer left as-is.
+ */
+export interface DisclosureIssue {
+  severity: 'failure' | 'warning' | 'change';
+  title: string;
+  message: string;
+}
+
+/** A disclosure type's raw text templatized into {variable} placeholders — generated automatically as the raw text is entered. */
+export interface DisclosureTemplate {
+  /** The templatized text, with {variable} placeholders (editable). */
   text: string;
-  /** Present once this block's disclosure has been generated into a snippet template. */
-  snippet?: DisclosureSnippetMeta;
+  /** Which {variable} replaced which exact substring of `sourceText` — powers the value/variable color-matching. */
+  replacements: DisclosureReplacement[];
+  /** The raw disclosure text this template was generated from. */
+  sourceText: string;
+  generatedAt: string;
+  /** Problems found in the raw disclosure while templatizing it — drives the "Warnings (n)" tag. */
+  issues: DisclosureIssue[];
+}
+
+export interface DisclosureBlock {
+  id: 'lease' | 'apr' | 'finance' | 'cash';
+  label: string;
+  /** The raw client-provided disclosure text. */
+  text: string;
+  /** Who entered the raw text — a client (submitted for review) or a Constellation internal user. */
+  addedBy: 'client' | 'internal';
+  /**
+   * Where this disclosure stands in the client review loop: `none` until a client submits it, then
+   * `submitted` (awaiting Constellation review), `updates_requested` (sent back to the client), or
+   * `applied` (built into the account snippet).
+   */
+  clientStatus: 'none' | 'submitted' | 'updates_requested' | 'applied';
+  /** The status before the pending client submission — what "Cancel Submission" puts back. */
+  clientStatusBeforeSubmit?: 'none' | 'updates_requested' | 'applied';
+  template: DisclosureTemplate | null;
+  /** "Apply to automated offers" — whether this type's template is combined into the account snippet. */
+  includeInSnippet: boolean;
+}
+
+/** Id of the internal-user notification raised when a client submits disclosures — one per account, so a resubmission replaces it. */
+export const disclosureSubmissionNotificationId = (accountId: string) => `disclosure-submission:${accountId}`;
+
+/** The internal-user notification raised when a client submits disclosures — also seeded at startup, since every account's default disclosures start as client-submitted. */
+export const buildDisclosureSubmissionNotification = (accountId: string, accountName: string): Omit<AppNotification, 'createdAt' | 'read'> => ({
+  id: disclosureSubmissionNotificationId(accountId),
+  audience: 'internal',
+  source: 'Disclosure Builder',
+  title: 'New Client Disclosure Edits. Snippet generation pending.',
+  tags: ['Client Settings', accountName],
+  href: `/settings/accounts/${accountId}/enrollment-fees-disclosures`,
+});
+
+/** One saved state of the account snippet — a new one is recorded on generate, update, Save and restore. */
+export interface DisclosureSnippetVersion {
+  id: string;
+  /** The snippet's name when this version was saved. */
+  name: string;
+  text: string;
+  sourceText: string;
+  replacements: DisclosureReplacement[];
+  /** The disclosures this version was built from — what the comparison view shows and what restoring brings back. */
+  disclosures: DisclosureBlock[];
+  createdAt: string;
+  createdBy: string;
+}
+
+/** The single text snippet an account's disclosures are built into — one per account, covering every disclosure type. */
+export interface AccountDisclosureSnippet {
+  meta: DisclosureSnippetMeta;
+  /** The templatized snippet text, with {variable} placeholders. */
+  text: string;
+  /** The disclosures as they were when the snippet was last generated or updated — what "Discard Changes" restores. */
+  disclosures: DisclosureBlock[];
+  /** Every saved version, oldest first — the last one is the current snippet. */
+  versions: DisclosureSnippetVersion[];
 }
 
 export interface EnrollmentSettings {
@@ -81,6 +154,7 @@ export interface EnrollmentSettings {
   channels: DistributionChannel[];
   otherChannels: string[];
   disclosures: DisclosureBlock[];
+  disclosureSnippet: AccountDisclosureSnippet | null;
   docFee: number | null;
   additionalFees: AdditionalFee[];
 }
@@ -88,6 +162,12 @@ export interface EnrollmentSettings {
 function vehicle(id: string, model: string, year: number, selected: boolean): VehicleModelYear {
   return { id, model, year, selected, trimsMode: 'core', offerMode: 'oem' };
 }
+
+// TEST DATA — Lease and Cash start pre-filled so combining several disclosure types into one snippet can be
+// tried without pasting text each time. Their templates are generated on first view of the Disclosures page.
+// Reset both to '' to start the page empty again.
+const SAMPLE_LEASE_DISCLOSURE = "$2,999 due at signing, which includes an $895 document fee and any dealer ad-on's, 10,000 annual miles, $0.20 per mile thereafter, no security deposit required. Subject to credit approval by BMW Financial. Lease terms based on 2025 BMW X3 xDrive30i with MSRP of $52,750 less $1,200 dealer participation for total MSRP of $51,550. Excludes taxes, license, registration, and government fees. Prices may vary depending on vehicle. Offer expires 11/30/2026. Subject to prior sale.";
+const SAMPLE_CASH_DISCLOSURE = 'Cash price of $48,995 for 2025 BMW X3 xDrive30i with MSRP of $52,750 less $3,755 dealer discount, plus an $895 document fee. Excludes taxes, license, registration, and government fees. Prices may vary depending on vehicle. Offer expires 11/30/2026. Subject to prior sale.';
 
 /** Builds a brand-new default settings object — called once per project the first time its dialog opens. */
 export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
@@ -134,10 +214,12 @@ export function buildDefaultEnrollmentSettings(): EnrollmentSettings {
     ],
     otherChannels: [],
     disclosures: [
-      { id: 'lease', label: 'Lease Disclosure', optional: false, enabled: false, text: '' },
-      { id: 'cash', label: 'Cash Disclosure', optional: true, enabled: false, text: '' },
-      { id: 'finance', label: 'Finance Disclosure', optional: true, enabled: false, text: '' },
+      { id: 'lease', label: 'Lease', text: SAMPLE_LEASE_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'client', clientStatus: 'submitted', clientStatusBeforeSubmit: 'none' },
+      { id: 'apr', label: 'APR', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'finance', label: 'Finance', text: '', template: null, includeInSnippet: true, addedBy: 'internal', clientStatus: 'none' },
+      { id: 'cash', label: 'Cash', text: SAMPLE_CASH_DISCLOSURE, template: null, includeInSnippet: true, addedBy: 'client', clientStatus: 'submitted', clientStatusBeforeSubmit: 'none' },
     ],
+    disclosureSnippet: null,
     docFee: 85,
     additionalFees: [],
   };
