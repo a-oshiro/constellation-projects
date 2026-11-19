@@ -1,9 +1,11 @@
 // Batch AI Enhance — the full-screen dialog behind the Portal's AI Enhance
 // action (Figma: CP-XXXXX AI Enhance Updates, node 4112:9293).
 //
-// Left: the tool rail (only Enhance is live), the prompt and the reference
-// images. Right: one accordion per selected asset, its source beside four
-// generated variants.
+// Left: the tool rail (only Enhance is live), then the Enhance column, laid
+// out like an AI chat: each request is a speech bubble, answered by a short
+// reply with thumbs up/down and a retry; the prompt box at the foot carries the
+// reference images and the send/stop button. Right: one accordion per selected
+// asset, its source beside four generated variants.
 //
 // Each asset is one request to /api/enhance-asset, which asks OpenAI for all
 // of that asset's variants in a single call. Variants the user has ticked are
@@ -13,16 +15,31 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, WandSparkles, Sparkles, Scaling, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Maximize2, CirclePlus, Square,
+  X, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
+  Maximize2, Plus, Square, ArrowUp, ThumbsUp, ThumbsDown, History,
 } from "lucide-react";
 import { Checkbox } from "@portal/components/ui/checkbox";
+import enhanceIcon from "../../../assets/icons/ai-enhance/enhance.svg";
+import resizeIcon from "../../../assets/icons/ai-enhance/resize.svg";
+import upscaleIcon from "../../../assets/icons/ai-enhance/upscale-4k.svg";
 import { Tooltip } from "@portal/components/ui/Tooltip";
 import type { PortalAsset } from "@portal/lib/portal-assets";
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const VARIANTS = 4;
+
+/** The prompt box dropping from under the title to the foot of the column on
+ *  the first request, shrinking to one line on the way. A plain cubic
+ *  ease-out: the stronger curve used for opening covered a quarter of this
+ *  much longer trip in its first frame, and the drop read as a jump. */
+const MOVE_MS = 300;
+const MOVE_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
+/** The prompt box opening (and folding): a strong ease-out, no overshoot. */
+const RESIZE_MS = 300;
+const RESIZE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MAX_REFERENCES = 7;
 /** Requests in flight at once. Every asset is its own OpenAI call, and a large
  *  selection fired all together would run into the API's rate limits. */
@@ -52,6 +69,68 @@ const PHRASES = [
 // ─── Types ────────────────────────────────────────────────────────────────
 
 interface Reference { id: string; name: string; dataUrl: string }
+
+/** The image model's render tier. Higher looks better and costs several times
+ *  more per variant; the API's own default is medium. */
+type Quality = "low" | "medium" | "high";
+const QUALITY_LABEL: Record<Quality, string> = { low: "Low", medium: "Medium", high: "High" };
+
+/** One exchange in the Enhance column's chat: the request as sent, and how
+ *  it went. Kept for as long as the dialog is open. */
+interface Turn {
+  id: string;
+  prompt: string;
+  /** The reference images sent with it, so a retry sends the same ones. */
+  references: Reference[];
+  /** The quality it was asked at — a retry asks at the same one. */
+  quality: Quality;
+  /** The variants it produced, once finished — absent if it changed nothing. */
+  snapshot?: Snapshot;
+  status: "running" | "done" | "stopped" | "error";
+  /** The reply under the bubble, once it has finished. */
+  reply?: string;
+  feedback?: "up" | "down";
+}
+
+/** Every asset's variants and ticks as a request left them — what "Revert to
+ *  this version" puts back. */
+type Snapshot = Record<string, { slots: (string | null)[]; selected: boolean[] }>;
+
+/** How a run went, asset by asset, for the reply — and the variants it left. */
+interface RunOutcome {
+  total: number; updated: number; failed: number; aborted: boolean; firstError?: string;
+  snapshot: Snapshot;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The reply to a finished request. Written from what happened rather than by
+ *  a model: the image API returns images, not words, and a second call per
+ *  request for a sentence would cost time and money. */
+function replyFor(o: RunOutcome): { status: Turn["status"]; reply: string } {
+  if (o.aborted) {
+    return {
+      status: "stopped",
+      reply: o.updated ? `Stopped. ${plural(o.updated, "asset")} had already been updated.` : "Stopped.",
+    };
+  }
+  if (o.total === 0) {
+    return { status: "done", reply: "Every variant is ticked, so there was nothing to replace. Untick some to generate new ones." };
+  }
+  if (o.updated === 0) {
+    return { status: "error", reply: o.firstError ? `That didn't work: ${o.firstError}` : "That didn't work. Try again." };
+  }
+  if (o.failed) {
+    return {
+      status: "done",
+      reply: `Updated ${o.updated} of ${plural(o.total, "asset")}. ${plural(o.failed, "asset")} failed; the error is shown on ${o.failed === 1 ? "it" : "each"}.`,
+    };
+  }
+  return {
+    status: "done",
+    reply: o.total === 1 ? "Done. The asset has new variants on the right." : `Done. All ${o.total} assets have new variants on the right.`,
+  };
+}
 
 interface AssetState {
   /** The four variant slots; null until one is generated. */
@@ -181,22 +260,39 @@ function IconButton({
 }
 
 /** One tile of the tool rail on the far left. */
+/** One tab of the tool rail — Figma "Side Sheet / Vertical Tabs" (node
+ *  4175:5278): a 56px square, 24px icon over an 11px label, the selected one
+ *  on a light purple wash. */
 function ToolTile({
-  icon, label, active, disabled,
-}: { icon: ReactNode; label: string; active?: boolean; disabled?: boolean }) {
+  icon, tint, label, active, disabled,
+}: {
+  icon: string;
+  /** Paint the icon entirely in the label's purple. The Figma exports carry
+   *  black fills (the colour is an override on the canvas), so each is used as
+   *  a mask over `currentColor` rather than recoloured. */
+  tint?: boolean;
+  label: string; active?: boolean; disabled?: boolean;
+}) {
   const tile = (
     <button
       type="button"
       disabled={disabled}
       aria-pressed={active}
-      className={`size-[100px] shrink-0 flex flex-col items-center justify-center gap-3 rounded-xl border-2 transition-colors ${
-        active
-          ? "bg-[#f2f0fa] border-semantic-primary-main text-semantic-primary-main"
-          : "bg-white border-black/[0.12] text-semantic-action-active"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`size-14 shrink-0 flex flex-col items-center gap-2 pt-[7px] pb-[3px] rounded-[5px] text-semantic-primary-main transition-colors ${
+        active ? "bg-[rgba(99,86,225,0.08)]" : disabled ? "cursor-not-allowed" : "hover:bg-[rgba(99,86,225,0.04)]"
+      }`}
     >
-      <span className="h-8 flex items-center">{icon}</span>
-      <span className="text-[10px] leading-[14px] font-medium">{label}</span>
+      {tint ? (
+        <span
+          aria-hidden
+          className="size-6 shrink-0 bg-current"
+          // Quoted: small SVGs arrive inlined as data URLs, which break unquoted.
+          style={{ mask: `url("${icon}") center / contain no-repeat`, WebkitMask: `url("${icon}") center / contain no-repeat` }}
+        />
+      ) : (
+        <img src={icon} alt="" width={24} height={24} className="size-6 shrink-0" />
+      )}
+      <span className="h-[14px] flex items-center text-[11px] leading-[1.66] tracking-[0.4px] whitespace-nowrap">{label}</span>
     </button>
   );
   return disabled ? <Tooltip label="Coming soon">{tile}</Tooltip> : tile;
@@ -269,6 +365,89 @@ function Thumb({
   );
 }
 
+/** The user's request, as a light-purple bubble on the right, with the
+ *  reference images that went with it. */
+function RequestBubble({ turn }: { turn: Turn }) {
+  return (
+    <div className="self-end max-w-[85%] flex flex-col gap-2 px-3 py-2 rounded-2xl rounded-br-md bg-[#eeedfe] text-[#26215c]">
+      {turn.references.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {turn.references.map((r) => (
+            <img
+              key={r.id}
+              src={r.dataUrl}
+              alt={r.name}
+              title={r.name}
+              className="size-10 rounded-md object-cover border border-black/[0.08] bg-white"
+            />
+          ))}
+        </div>
+      )}
+      <p className="text-[14px] leading-[1.45] whitespace-pre-wrap break-words">{turn.prompt}</p>
+    </div>
+  );
+}
+
+/** The answer to a request, with feedback and a retry under it — small grey
+ *  icons, the picked thumb in the app's purple. */
+function Reply({
+  turn, busy, onFeedback, onRetry, revert,
+}: {
+  turn: Turn; busy: boolean; onFeedback: (f: "up" | "down") => void; onRetry: () => void;
+  /** Present when the request produced variants to go back to. */
+  revert?: { current: boolean; onlyOne: boolean; onRevert: () => void };
+}) {
+  const tone = turn.status === "error" ? "text-semantic-error-main"
+    : turn.status === "stopped" ? "text-semantic-text-secondary"
+    : "text-semantic-text-primary";
+  const icon = "size-7 rounded-md flex items-center justify-center transition-colors hover:bg-semantic-action-hover disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed";
+  const off = "text-[#9c99a9] hover:text-semantic-text-secondary";
+  const on = "text-semantic-primary-main";
+  return (
+    <div className="flex flex-col gap-1">
+      <p className={`text-[14px] leading-[1.5] ${tone}`}>{turn.reply}</p>
+      <div className="flex items-center -ml-1.5">
+        {turn.status === "done" && (
+          <>
+            <Tooltip label="Good result">
+              <button type="button" aria-label="Good result" aria-pressed={turn.feedback === "up"} onClick={() => onFeedback("up")} className={`${icon} ${turn.feedback === "up" ? on : off}`}>
+                <ThumbsUp size={15} />
+              </button>
+            </Tooltip>
+            <Tooltip label="Bad result">
+              <button type="button" aria-label="Bad result" aria-pressed={turn.feedback === "down"} onClick={() => onFeedback("down")} className={`${icon} ${turn.feedback === "down" ? on : off}`}>
+                <ThumbsDown size={15} />
+              </button>
+            </Tooltip>
+          </>
+        )}
+        <Tooltip label="Try again for all assets">
+          <button type="button" aria-label="Try again for all assets" onClick={onRetry} disabled={busy} className={`${icon} ${off}`}>
+            <RefreshCw size={15} />
+          </button>
+        </Tooltip>
+        {revert && (
+          <Tooltip
+            label={revert.onlyOne ? "Revert to this version · there is only one version so far"
+              : revert.current ? "Revert to this version · this is the current version"
+              : "Revert to this version"}
+          >
+            <button
+              type="button"
+              aria-label="Revert to this version"
+              onClick={revert.onRevert}
+              disabled={busy || revert.onlyOne || revert.current}
+              className={`${icon} ${off}`}
+            >
+              <History size={15} />
+            </button>
+          </Tooltip>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── The dialog ───────────────────────────────────────────────────────────
 
 export function AiEnhanceDialog({
@@ -282,7 +461,29 @@ export function AiEnhanceDialog({
   onSaveAsVersions: (picks: EnhancedPick[]) => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  /** References attached to the request being written; they travel with it. */
   const [references, setReferences] = useState<Reference[]>([]);
+  /** The chat so far, oldest first. */
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [quality, setQuality] = useState<Quality>("medium");
+  /** The request whose variants are on screen right now — null once a
+   *  per-asset regenerate has mixed in variants of its own. */
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+  /** The prompt box opened up by the user (focus or a click) after the first
+   *  request. Before the first request it is always open. */
+  const [boxOpen, setBoxOpen] = useState(false);
+  /** The prompt box's outer slot (moved) and the box itself (resized). */
+  const boxSlotRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  /** Where the box was, and how tall, just before a change that moves or
+   *  resizes it — read by the layout effect that animates from there. */
+  const moveFrom = useRef<number | null>(null);
+  const heightFrom = useRef<number | null>(null);
+  /** Remember the box's height before it is opened or folded. */
+  const markResize = () => {
+    if (boxRef.current) heightFrom.current = boxRef.current.offsetHeight;
+  };
+  const historyRef = useRef<HTMLDivElement>(null);
   const [states, setStates] = useState<Record<string, AssetState>>({});
   /** The enlarged view: the images it can step through, and which is shown. */
   const [preview, setPreview] = useState<{ items: { url: string; label: string }[]; index: number } | null>(null);
@@ -297,6 +498,30 @@ export function AiEnhanceDialog({
   const fileRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
+
+  // A fresh workspace each time the dialog opens on a selection.
+  const assetKey = assets.map((a) => a.id).join(",");
+  useEffect(() => {
+    if (!open) return;
+    setStates(Object.fromEntries(assets.map((a) => [a.id, freshState()])));
+    setPreview(null);
+    setTurns([]);
+    setCurrentVersion(null);
+    setBoxOpen(false);
+    // Ready to type the moment it opens.
+    window.setTimeout(() => promptRef.current?.focus(), 0);
+    setPrompt("");
+    setReferences([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, assetKey]);
+
+  const stateOf = (id: string) => states[id] ?? freshState();
+  const busy = Object.values(states).some((s) => s.pending.some(Boolean));
+  /** A request has been sent: the column is a chat now. */
+  const started = turns.length > 0;
+  /** The full prompt box, with + and quality — otherwise the one-line one. */
+  const expanded = !started || (boxOpen && !busy);
+
   // The prompt grows with its text. Its height is set to what the text needs;
   // the column's flex layout then caps it at the room left (it shrinks before
   // anything else does), and past that the textarea scrolls.
@@ -305,32 +530,81 @@ export function AiEnhanceDialog({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [prompt, open]);
+  }, [prompt, open, expanded]);
 
-  // A fresh workspace each time the dialog opens on a selection.
-  const assetKey = assets.map((a) => a.id).join(",");
-  useEffect(() => {
-    if (!open) return;
-    setStates(Object.fromEntries(assets.map((a) => [a.id, freshState()])));
-    setPreview(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, assetKey]);
+  // The box's moves and resizes, animated from where they started (FLIP): the
+  // layout changes at once, and the box is played from its old place or size
+  // into the new one. Runs after the textarea has taken its new height.
+  useLayoutEffect(() => {
+    const slot = boxSlotRef.current;
+    const box = boxRef.current;
+    const from = moveFrom.current;
+    const fromH = heightFrom.current;
+    moveFrom.current = null;
+    heightFrom.current = null;
+    if (!slot || !box || prefersReducedMotion()) return;
 
-  const stateOf = (id: string) => states[id] ?? freshState();
-  const busy = Object.values(states).some((s) => s.pending.some(Boolean));
-  const hasResults = Object.values(states).some((s) => s.slots.some(Boolean));
+    /** Eases the box's height from what it was to what it is now. */
+    const resize = (fromHeight: number, duration: number, easing: string) => {
+      const toH = box.offsetHeight;
+      if (Math.abs(toH - fromHeight) <= 1) return 0;
+      box.style.overflow = "hidden";
+      const anim = box.animate(
+        [{ height: `${fromHeight}px` }, { height: `${toH}px` }],
+        { duration, easing },
+      );
+      const done = () => { box.style.overflow = ""; };
+      anim.onfinish = done;
+      anim.oncancel = done;
+      return fromHeight - toH;
+    };
+
+    if (from !== null) {
+      // First request: from under the title to the foot, shrinking to one
+      // line on the way rather than snapping to it first. Both use the same
+      // curve and duration, so they move as one.
+      // Where the slot ends up — read before the shrink starts, since a
+      // running height animation already moves it.
+      const to = slot.getBoundingClientRect().top;
+      const shrink = fromH !== null ? resize(fromH, MOVE_MS, MOVE_EASE) : 0;
+      // The box sits at the foot of its slot, so while it is still taller the
+      // slot's top is that much higher; the move starts from the old place
+      // with that accounted for, and the two meet at the end.
+      const dy = from - to + shrink;
+      if (Math.abs(dy) > 1) {
+        slot.animate(
+          [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+          { duration: MOVE_MS, easing: MOVE_EASE },
+        );
+      }
+      return;
+    }
+    // Opening or folding in place: the height eases to its new value. The
+    // box sits at the foot of the column, so it grows upwards.
+    if (fromH !== null) resize(fromH, RESIZE_MS, RESIZE_EASE);
+  }, [expanded, started]);
+  /** The latest request — what the per-asset regenerate buttons repeat. */
+  const lastTurn = turns.length ? turns[turns.length - 1] : undefined;
 
   const patch = useCallback((id: string, fn: (s: AssetState) => AssetState) => {
     setStates((prev) => ({ ...prev, [id]: fn(prev[id] ?? freshState()) }));
   }, []);
 
-  /** Asks for new variants in every slot of these assets that is not ticked. */
-  const run = useCallback(async (targets: PortalAsset[]) => {
-    const text = prompt.trim();
-    if (!text) return;
+  /** Asks for new variants in every slot of these assets that is not ticked,
+   *  and says how it went. */
+  const run = useCallback(async (
+    targets: PortalAsset[], text: string, sentRefs: Reference[], sentQuality: Quality,
+  ): Promise<RunOutcome> => {
     const controller = new AbortController();
     abortRef.current = controller;
-    const refs = references.map((r) => r.dataUrl);
+    const refs = sentRefs.map((r) => r.dataUrl);
+    // The version this run will leave, built from what it starts with plus
+    // what it receives — exact, with no need to read state back afterwards.
+    const snapshot: Snapshot = Object.fromEntries(assets.map((a) => {
+      const s = states[a.id] ?? freshState();
+      return [a.id, { slots: [...s.slots], selected: [...s.selected] }];
+    }));
+    const outcome: RunOutcome = { total: 0, updated: 0, failed: 0, aborted: false, snapshot };
 
     // Which slots each asset will fill — decided now, from the ticks as they stand.
     const jobs = targets
@@ -340,6 +614,7 @@ export function AiEnhanceDialog({
         return { asset, slots };
       })
       .filter((j) => j.slots.length > 0);
+    outcome.total = jobs.length;
 
     for (const j of jobs) {
       patch(j.asset.id, (s) => ({
@@ -366,13 +641,25 @@ export function AiEnhanceDialog({
             height: job.asset.height,
             references: refs,
             count: job.slots.length,
+            quality: sentQuality,
           }),
           signal: controller.signal,
         });
         const answer = await readAnswer(res);
         if (!answer.images?.length) {
+          if (controller.signal.aborted) return settle((s) => s);
+          outcome.failed += 1;
+          outcome.firstError ??= answer.error;
           return settle((s) => ({ ...s, error: answer.error ?? "Image generation failed" }));
         }
+        outcome.updated += 1;
+        const snap = snapshot[job.asset.id];
+        job.slots.forEach((slot, k) => {
+          if (snap && answer.images![k]) {
+            snap.slots[slot] = answer.images![k];
+            snap.selected[slot] = false;
+          }
+        });
         settle((s) => {
           const slots = [...s.slots];
           const selected = [...s.selected];
@@ -387,6 +674,8 @@ export function AiEnhanceDialog({
       } catch (e) {
         // Stopped: the slots keep whatever they showed before.
         if (controller.signal.aborted) return settle((s) => s);
+        outcome.failed += 1;
+        outcome.firstError ??= e instanceof Error ? e.message : undefined;
         settle((s) => ({ ...s, error: e instanceof Error ? e.message : "Image generation failed" }));
       }
     };
@@ -399,7 +688,81 @@ export function AiEnhanceDialog({
       }),
     );
     if (abortRef.current === controller) abortRef.current = null;
-  }, [prompt, references, states, patch]);
+    outcome.aborted = controller.signal.aborted;
+    return outcome;
+  }, [assets, states, patch]);
+
+  const patchTurn = (id: string, fn: (t: Turn) => Turn) =>
+    setTurns((prev) => prev.map((t) => (t.id === id ? fn(t) : t)));
+
+  /** Runs a turn's request over every asset and writes its reply. */
+  const runTurn = async (turn: Turn) => {
+    const outcome = await run(assets, turn.prompt, turn.references, turn.quality);
+    const { status, reply } = replyFor(outcome);
+    const changed = outcome.updated > 0;
+    patchTurn(turn.id, (t) => ({ ...t, status, reply, snapshot: changed ? outcome.snapshot : t.snapshot }));
+    if (changed) setCurrentVersion(turn.id);
+  };
+
+  /** Puts every asset's variants and ticks back to how a request left them. */
+  const revertTo = (turn: Turn) => {
+    const snap = turn.snapshot;
+    if (!snap || busy) return;
+    setStates((prev) => {
+      const next = { ...prev };
+      for (const [id, v] of Object.entries(snap)) {
+        const s = prev[id] ?? freshState();
+        next[id] = {
+          ...s,
+          slots: [...v.slots],
+          selected: [...v.selected],
+          pending: Array(VARIANTS).fill(false),
+          error: undefined,
+        };
+      }
+      return next;
+    });
+    setCurrentVersion(turn.id);
+  };
+
+  /** The prompt box's send: the request becomes a bubble, the box empties for
+   *  the next one, and its references go with it. */
+  const send = () => {
+    const text = prompt.trim();
+    if (!text || busy || assets.length === 0) return;
+    const turn: Turn = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      prompt: text,
+      references,
+      quality,
+      status: "running",
+    };
+    // The first request sends the box from under the title to the foot of the
+    // column; later ones only fold it.
+    if (!started && boxSlotRef.current) moveFrom.current = boxSlotRef.current.getBoundingClientRect().top;
+    markResize();
+    setTurns((prev) => [...prev, turn]);
+    setPrompt("");
+    setReferences([]);
+    // Folds to one line while it works; the textarea is disabled, so the
+    // focus it had goes too.
+    setBoxOpen(false);
+    void runTurn(turn);
+  };
+
+  /** A reply's retry: the same request and references, again, for every asset. */
+  const retry = (turn: Turn) => {
+    if (busy) return;
+    patchTurn(turn.id, (t) => ({ ...t, status: "running", reply: undefined, feedback: undefined }));
+    void runTurn(turn);
+  };
+
+  // The newest exchange in view: on a new request, and when its reply lands.
+  const lastStatus = lastTurn?.status;
+  useEffect(() => {
+    const el = historyRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [turns.length, lastStatus]);
 
   const stop = () => abortRef.current?.abort();
 
@@ -458,14 +821,40 @@ export function AiEnhanceDialog({
     [assets, states],
   );
 
+  const runningRefs = turns.find((t) => t.status === "running")?.references.length ?? 0;
   const phrases = useMemo(
-    () => (references.length ? PHRASES : PHRASES.filter((p) => !p.startsWith("Reading references"))),
-    [references.length],
+    () => (runningRefs ? PHRASES : PHRASES.filter((p) => !p.startsWith("Reading references"))),
+    [runningRefs],
   );
 
   if (!open) return null;
 
-  const canRun = !!prompt.trim() && !busy && assets.length > 0;
+  const canSend = !!prompt.trim() && !busy && assets.length > 0;
+  /** Send, or stop while a request runs — the same button in both box states. */
+  const submitButton = busy ? (
+                      <Tooltip key="stop" label="Stop generation">
+                        <button
+                          type="button"
+                          aria-label="Stop generation"
+                          onClick={stop}
+                          className="size-8 rounded-full bg-semantic-primary-main hover:bg-[#3b3093] flex items-center justify-center text-white transition-colors"
+                        >
+                          <Square size={12} fill="currentColor" />
+                        </button>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip key="send" label="Send">
+                        <button
+                          type="button"
+                          aria-label="Send"
+                          onClick={send}
+                          disabled={!canSend}
+                          className="size-8 rounded-full bg-semantic-primary-main hover:bg-[#3b3093] flex items-center justify-center text-white disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowUp size={16} strokeWidth={2.25} />
+                        </button>
+                      </Tooltip>
+                    );
   const n = picks.length;
 
   return createPortal(
@@ -492,70 +881,154 @@ export function AiEnhanceDialog({
         {/* ── Workspace ── */}
         <div className="flex-1 min-h-0 flex">
           {/* Tool rail — only Enhance is live for now. */}
-          <div className="shrink-0 flex flex-col items-center gap-4 p-4 border-r border-black/[0.12] overflow-y-auto">
-            <ToolTile icon={<WandSparkles size={30} strokeWidth={1.5} />} label="Enhance" active />
-            <ToolTile icon={<Scaling size={30} strokeWidth={1.5} />} label="Resize" disabled />
-            <ToolTile
-              icon={<span className="px-1 border-2 border-current rounded-[4px] text-[13px] font-bold leading-[18px]">HD</span>}
-              label="Upscale"
-              disabled
-            />
+          <div className="shrink-0 flex flex-col items-center gap-2 pt-2 px-2 border-r border-black/[0.12] overflow-y-auto">
+            <ToolTile icon={enhanceIcon} tint label="Enhance" active />
+            {/* Not built yet: disabled, with a "Coming soon" tooltip, but drawn
+              * in the same purple as Enhance, as in the design. */}
+            <ToolTile icon={resizeIcon} tint label="Resize" disabled />
+            <ToolTile icon={upscaleIcon} tint label="Upscale" disabled />
           </div>
 
-          {/* Enhancement settings */}
-          {/* Everything here keeps its size except the prompt, which grows
-            * with its text and gives way first when the column runs out: the
-            * chain down to the textarea is `min-h-0`, the rest `shrink-0`. */}
-          <div className="w-[350px] shrink-0 flex flex-col gap-4 p-4 overflow-y-auto">
-            <div className="flex flex-col gap-6 min-h-0">
-              <div className="flex flex-col gap-1 shrink-0">
-                <p className="text-[16px] font-medium leading-[1.75] tracking-[0.15px] text-semantic-text-primary">Enhance</p>
+          {/* The Enhance column, as a chat.
+            *  · Before the first request: the title and its description, and
+            *    the full prompt box straight under them, focused.
+            *  · From the first request on: the title alone, the history (which
+            *    scrolls), and the prompt box pinned to the foot — collapsed to
+            *    one line (placeholder and send/stop) until it is clicked, and
+            *    always collapsed while a request runs. */}
+          <div className="w-[350px] shrink-0 flex flex-col min-h-0">
+            <div className="flex flex-col gap-1 shrink-0 px-4 pt-4 pb-3">
+              <p className="text-[16px] font-medium leading-[1.75] tracking-[0.15px] text-semantic-text-primary">Enhance</p>
+              {!started && (
                 <p className="text-[12px] leading-[1.43] tracking-[0.17px] text-semantic-text-secondary">
                   Ask AI what you wish to change on the selected assets. Selected variants are kept. Everything else is replaced.
                 </p>
-              </div>
+              )}
+            </div>
 
-              {/* Reference images */}
-              <div className="flex flex-col gap-2 shrink-0">
-                <div>
-                  <p className="flex items-center gap-1">
-                    <span className="text-[14px] font-medium leading-[1.43] tracking-[0.17px] text-semantic-text-primary">Reference Images</span>
-                    <span className="text-[11px] leading-[1.66] tracking-[0.4px] text-semantic-text-secondary">(optional)</span>
-                  </p>
-                  <p className="text-[11px] leading-[1.66] tracking-[0.4px] text-semantic-text-secondary">
-                    Add up to {MAX_REFERENCES} images to guide the enhancement.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {references.map((r) => (
-                    <div key={r.id} className="group/ref relative size-[90px] rounded-xl overflow-hidden border border-black/[0.12] bg-[#f0f2f4]">
-                      <img src={r.dataUrl} alt={r.name} title={r.name} className="absolute inset-0 w-full h-full object-contain" />
-                      <button
-                        type="button"
-                        aria-label={`Remove ${r.name}`}
-                        disabled={busy}
-                        onClick={() => setReferences((prev) => prev.filter((x) => x.id !== r.id))}
-                        className="absolute top-1 right-1 size-5 rounded-full bg-white/90 shadow-sm flex items-center justify-center text-gray-600 hover:text-gray-900 opacity-0 group-hover/ref:opacity-100 focus-visible:opacity-100 disabled:hidden"
-                      >
-                        <X size={12} />
-                      </button>
+            {/* History */}
+            {started && (
+            <div ref={historyRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-1 pb-4 flex flex-col gap-4" aria-live="polite">
+              {turns.map((t) => (
+                <div key={t.id} className="flex flex-col gap-2">
+                  <RequestBubble turn={t} />
+                  {t.status === "running" ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <ThinkingLine phrases={phrases} />
+                      <ElapsedTimer />
                     </div>
-                  ))}
-                  {references.length < MAX_REFERENCES && (
+                  ) : (
+                    <Reply
+                      turn={t}
+                      busy={busy}
+                      onFeedback={(f) => patchTurn(t.id, (x) => ({ ...x, feedback: x.feedback === f ? undefined : f }))}
+                      onRetry={() => retry(t)}
+                      revert={t.snapshot ? {
+                        current: currentVersion === t.id,
+                        onlyOne: turns.length < 2,
+                        onRevert: () => revertTo(t),
+                      } : undefined}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            )}
+
+            {/* Prompt box */}
+            <div ref={boxSlotRef} className="shrink-0 px-4 pb-4">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => { addReferences(e.target.files); e.target.value = ""; }}
+              />
+              <div
+                ref={boxRef}
+                // Clicking anywhere on the collapsed line opens it, not only on
+                // the text itself.
+                onMouseDown={(e) => {
+                  if (expanded || busy || e.target === promptRef.current) return;
+                  e.preventDefault();
+                  promptRef.current?.focus();
+                }}
+                onBlur={(e) => {
+                  // Folds back only when focus left for elsewhere on the page —
+                  // not for the + button or the quality picker inside it, and
+                  // not for the system file picker (the window loses focus) —
+                  // and only when there is nothing typed or attached to lose.
+                  const box = e.currentTarget;
+                  window.setTimeout(() => {
+                    if (!document.hasFocus() || box.contains(document.activeElement)) return;
+                    if (!promptRef.current?.value.trim() && references.length === 0 && boxOpen) {
+                      markResize();
+                      setBoxOpen(false);
+                    }
+                  }, 0);
+                }}
+                className={`flex border border-black/[0.12] focus-within:border-semantic-primary-main drop-shadow-[0px_2px_1px_rgba(0,0,0,0.08)] transition-[border-radius] ${
+                  busy ? "bg-[#f7f7f8]" : "bg-white"
+                } ${expanded
+                  ? "flex-col gap-2 p-3 rounded-2xl"
+                  : `items-center gap-2 pl-4 pr-1.5 py-1.5 rounded-[22px] ${busy ? "" : "cursor-text"}`}`}
+              >
+                {expanded && references.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {references.map((r) => (
+                      <div key={r.id} className="group/ref relative size-12 rounded-lg overflow-hidden border border-black/[0.12] bg-[#f0f2f4]">
+                        <img src={r.dataUrl} alt={r.name} title={r.name} className="absolute inset-0 w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          aria-label={`Remove ${r.name}`}
+                          disabled={busy}
+                          onClick={() => setReferences((prev) => prev.filter((x) => x.id !== r.id))}
+                          className="absolute top-0.5 right-0.5 size-4 rounded-full bg-white/90 shadow-sm flex items-center justify-center text-gray-600 hover:text-gray-900 opacity-0 group-hover/ref:opacity-100 focus-visible:opacity-100 disabled:hidden"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  ref={promptRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onFocus={() => {
+                    if (!expanded) markResize();
+                    setBoxOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    // Enter sends, Shift+Enter is a new line — as in any AI chat.
+                    // Not while an input method is composing a character.
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  disabled={busy}
+                  rows={expanded ? 2 : 1}
+                  placeholder="Ask AI what to change..."
+                  aria-label="Ask AI what to change"
+                  className={`w-full resize-none bg-transparent outline-none text-[14px] leading-[1.5] tracking-[0.15px] text-semantic-text-primary placeholder:text-[#9c99a9] disabled:text-[#9c99a9] ${
+                    expanded ? "max-h-[200px]" : "flex-1 min-w-0 max-h-[21px] overflow-hidden whitespace-nowrap"
+                  }`}
+                />
+                {expanded ? (
+                  <div className="flex items-center gap-1.5">
+                  <Tooltip label={references.length >= MAX_REFERENCES ? `Up to ${MAX_REFERENCES} reference images` : "Add reference images"}>
                     <button
                       type="button"
-                      aria-label="Add reference image"
-                      disabled={busy}
+                      aria-label="Add reference images"
+                      disabled={busy || references.length >= MAX_REFERENCES}
                       onClick={() => fileRef.current?.click()}
-                      className={`size-[90px] rounded-xl border-2 border-dashed flex items-center justify-center transition-colors ${
-                        busy
-                          ? "border-gray-300 text-gray-300 cursor-not-allowed"
-                          : "border-semantic-primary-main text-semantic-primary-main hover:bg-semantic-primary-states-hover"
-                      }`}
+                      className="size-8 rounded-full border border-black/[0.16] flex items-center justify-center text-semantic-text-secondary hover:bg-semantic-action-hover hover:text-semantic-text-primary disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
                     >
-                      <CirclePlus size={22} strokeWidth={1.5} />
+                      <Plus size={16} />
                     </button>
-                  )}
+                  </Tooltip>
                   <input
                     ref={fileRef}
                     type="file"
@@ -564,67 +1037,33 @@ export function AiEnhanceDialog({
                     hidden
                     onChange={(e) => { addReferences(e.target.files); e.target.value = ""; }}
                   />
-                </div>
-              </div>
-
-              {/* Prompt */}
-              <div className="flex flex-col gap-2 min-h-0">
-                {busy && (
-                  <div className="flex items-center justify-between gap-2">
-                    <ThinkingLine phrases={phrases} />
-                    <ElapsedTimer />
-                  </div>
-                )}
-                <div className={`flex flex-col gap-4 p-4 min-h-0 rounded-2xl border border-black/[0.12] drop-shadow-[0px_2px_1px_rgba(0,0,0,0.08)] ${busy ? "bg-[#f7f7f8]" : "bg-white"}`}>
-                  <textarea
-                    ref={promptRef}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canRun) run(assets);
-                    }}
-                    disabled={busy}
-                    placeholder="Ask AI what to change..."
-                    aria-label="Ask AI what to change"
-                    className="min-h-[60px] w-full resize-none bg-transparent outline-none text-[14px] leading-[1.5] tracking-[0.15px] text-semantic-text-primary placeholder:text-[#9c99a9] disabled:text-[#9c99a9]"
-                  />
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => run(assets)}
-                      disabled={!canRun}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 rounded-full text-[14px] font-medium leading-6 tracking-[0.4px] bg-semantic-primary-main text-white hover:bg-[#3b3093] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <Sparkles size={16} />
-                      {hasResults ? "Regenerate All" : "Enhance Assets"}
-                    </button>
-                    {busy && (
-                      <Tooltip label="Stop generation">
-                        <button
-                          type="button"
-                          aria-label="Stop generation"
-                          onClick={stop}
-                          className="size-9 shrink-0 rounded-full bg-semantic-primary-main hover:bg-[#3b3093] flex items-center justify-center text-white transition-colors"
+                    <div className="ml-auto flex items-center gap-1.5">
+                    {/* Quality: a native select for its keyboard and screen-reader
+                      * behaviour, dressed as a small pill. */}
+                    <Tooltip label="Image quality · higher costs more">
+                      <label className={`relative flex items-center h-8 rounded-full border border-black/[0.16] text-[12px] leading-none text-semantic-text-secondary ${busy ? "opacity-40" : "hover:bg-semantic-action-hover"}`}>
+                        <span className="sr-only">Image quality</span>
+                        <select
+                          value={quality}
+                          onChange={(e) => setQuality(e.target.value as Quality)}
+                          disabled={busy}
+                          className="appearance-none bg-transparent outline-none h-full pl-3 pr-6 rounded-full cursor-pointer disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-semantic-primary-main"
                         >
-                          <Square size={14} fill="currentColor" />
-                        </button>
-                      </Tooltip>
-                    )}
+                          {(Object.keys(QUALITY_LABEL) as Quality[]).map((q) => (
+                            <option key={q} value={q}>{QUALITY_LABEL[q]}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={12} className="pointer-events-none absolute right-2" />
+                      </label>
+                    </Tooltip>
+                      {submitButton}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="shrink-0">{submitButton}</div>
+                )}
               </div>
             </div>
-
-            <Tooltip label="Coming soon" className="self-center shrink-0">
-              <button
-                type="button"
-                disabled
-                className="flex items-center justify-center gap-2 px-2 py-1.5 rounded-full text-[14px] font-medium leading-6 tracking-[0.4px] text-semantic-primary-main disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <WandSparkles size={16} />
-                Auto-Adjust Asset Quality
-              </button>
-            </Tooltip>
           </div>
 
           <div className="w-px shrink-0 bg-black/[0.12]" />
@@ -653,8 +1092,13 @@ export function AiEnhanceDialog({
                     <div className="flex items-center gap-2 shrink-0">
                       <IconButton
                         label="Regenerate this asset"
-                        onClick={() => run([asset])}
-                        disabled={busy || !prompt.trim()}
+                        onClick={() => {
+                          if (!lastTurn) return;
+                          // A mix of versions now: no reply's version is the one on screen.
+                          setCurrentVersion(null);
+                          void run([asset], lastTurn.prompt, lastTurn.references, lastTurn.quality);
+                        }}
+                        disabled={busy || !lastTurn}
                       >
                         <RefreshCw size={18} />
                       </IconButton>

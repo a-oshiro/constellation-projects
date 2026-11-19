@@ -23,8 +23,12 @@ const MAX_REFERENCES = 7;
 const MAX_VARIANTS = 4;
 /** OPENAI_IMAGE_MODEL overrides it (it is shared with api/generate-image.ts). */
 const DEFAULT_MODEL = 'gpt-image-2';
-/** Render tier: low | medium | high. OPENAI_ENHANCE_QUALITY overrides it. */
+/** Render tier when the request names none: OPENAI_ENHANCE_QUALITY, else this.
+ *  The dialog's quality picker sends one of QUALITIES with every request. */
 const DEFAULT_QUALITY = 'medium';
+const QUALITIES = ['low', 'medium', 'high'] as const;
+type Quality = (typeof QUALITIES)[number];
+const isQuality = (q: unknown): q is Quality => QUALITIES.includes(q as Quality);
 
 /** Sent with every prompt so an edit never distorts the car, its text or logos. */
 const BASE_INSTRUCTIONS = [
@@ -68,6 +72,8 @@ interface Body {
   references?: string[];
   /** How many variants to make — fewer than 4 when the user kept some. */
   count?: number;
+  /** The user's pick in the dialog. Anything else falls back to the default. */
+  quality?: string;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -108,7 +114,7 @@ export default async function handler(req: Request): Promise<Response> {
   });
   form.append('n', String(count));
   form.append('size', sizeFor(body.width ?? 0, body.height ?? 0));
-  form.append('quality', process.env.OPENAI_ENHANCE_QUALITY || DEFAULT_QUALITY);
+  form.append('quality', isQuality(body.quality) ? body.quality : process.env.OPENAI_ENHANCE_QUALITY || DEFAULT_QUALITY);
   form.append('output_format', 'jpeg');
   form.append('output_compression', '95');
   // gpt-image-2 always reads inputs at high fidelity and rejects this field;
