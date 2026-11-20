@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../layout/Breadcrumbs';
 import { SettingsNavPanelToggle } from '../SettingsNavPanel';
@@ -6,10 +6,9 @@ import { useSnackbar } from '../../../context/SnackbarContext';
 import type { Account } from '../../../data/accounts';
 import {
   FEE_SYNC_LIMITATIONS, FEE_SYNC_NOTIFICATION_PARAM, FEE_SYNC_NOTIFICATION_VALUE, getFeeSyncDealership,
-  mockConfirmDealership, mockConnectWithCode, mockRefreshFees,
+  getFeeSyncDealershipOptions, mockConfirmDealership, mockRefreshFees,
 } from '../../../data/feeSync';
 import { ConfirmDealershipCard } from './ConfirmDealershipCard';
-import { ConnectWithCodeDialog } from './ConnectWithCodeDialog';
 import { FeeButton } from './FeeButton';
 import { FeeSimulationMenu } from './FeeSimulationMenu';
 import { FeeSourceSelector } from './FeeSourceSelector';
@@ -42,8 +41,7 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, dispatch] = useReducer(feeTabReducer, account, (a) => loadFeeTabState(a.id, getFeeSyncDealership(a)));
   const [switchTarget, setSwitchTarget] = useState<FeeSource | null>(null);
-  const [codeDialogOpen, setCodeDialogOpen] = useState(false);
-  const [connectingWithCode, setConnectingWithCode] = useState(false);
+  const dealershipOptions = useMemo(() => getFeeSyncDealershipOptions(account), [account]);
 
   // Ignore mock responses that land after the tab unmounted.
   const mounted = useRef(true);
@@ -77,18 +75,6 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
       if (mounted.current) dispatch({ type: 'confirmSuccess', pull });
     } catch {
       if (mounted.current) dispatch({ type: 'confirmFail' });
-    }
-  };
-
-  const connectWithCode = async (code: string) => {
-    setConnectingWithCode(true);
-    try {
-      const pull = await mockConnectWithCode(code, state.dealership);
-      if (!mounted.current) return;
-      dispatch({ type: 'connectedWithCode', pull });
-      setCodeDialogOpen(false);
-    } finally {
-      if (mounted.current) setConnectingWithCode(false);
     }
   };
 
@@ -166,10 +152,11 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
           ) : (
             <ConfirmDealershipCard
               dealership={state.dealership}
+              options={dealershipOptions}
               confirming={state.phase === 'confirming'}
               failed={state.phase === 'confirm-error'}
+              onSelect={(dealership) => dispatch({ type: 'selectDealership', dealership })}
               onConfirm={confirmDealership}
-              onConnectWithCode={() => setCodeDialogOpen(true)}
             />
           )}
         </div>
@@ -183,12 +170,6 @@ export const FeesTab = ({ account, tabLabel }: FeesTabProps) => {
       )}
 
       <SwitchSourceDialog target={switchTarget} onCancel={() => setSwitchTarget(null)} onConfirm={confirmSwitch} />
-      <ConnectWithCodeDialog
-        open={codeDialogOpen}
-        loading={connectingWithCode}
-        onCancel={() => setCodeDialogOpen(false)}
-        onConnect={connectWithCode}
-      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FEE_SYNC_FEES, FEE_SYNC_UPDATED_FEES, FeeSyncError, buildFeeSyncUpdatedNotification, formatFeeAmount, formatRefreshTime,
-  getFeeSyncDealership, mockConfirmDealership, mockConnectWithCode, mockRefreshFees,
+  getFeeSyncDealership, getFeeSyncDealershipOptions, matchesFeeSyncDealership, mockConfirmDealership, mockRefreshFees,
 } from './feeSync';
 
 const dealership = getFeeSyncDealership({ id: 'acc-1', name: 'BMW of Manhattan', brand: 'BMW' });
@@ -23,6 +23,22 @@ describe('FeeSync mock data', () => {
   it('matches the dealership to the account', () => {
     expect(dealership).toMatchObject({ name: 'BMW of Manhattan', brand: 'BMW', zipCode: '10019' });
     expect(dealership.address).toContain('10019');
+    expect(dealership.code).toBe('10000100');
+  });
+
+  it('lists the group with the matched dealership first', () => {
+    const options = getFeeSyncDealershipOptions({ id: 'acc-2', name: 'BMW of Seattle', brand: 'BMW' });
+    expect(options[0]).toMatchObject({ name: 'BMW of Seattle', code: '20000200' });
+    expect(options).toHaveLength(24);
+    expect(new Set(options.map((o) => o.code)).size).toBe(24);
+  });
+
+  it('searches the dealership field by name, dealer code or ZIP', () => {
+    expect(matchesFeeSyncDealership(dealership, 'manhatt')).toBe(true);
+    expect(matchesFeeSyncDealership(dealership, '10000100')).toBe(true);
+    expect(matchesFeeSyncDealership(dealership, '10019')).toBe(true);
+    expect(matchesFeeSyncDealership(dealership, 'seattle')).toBe(false);
+    expect(matchesFeeSyncDealership(dealership, '  ')).toBe(true);
   });
 
   it('formats the refresh time like Figma', () => {
@@ -42,10 +58,6 @@ describe('FeeSync mock requests', () => {
     await expect(mockConfirmDealership(dealership, { ...fast, fail: true })).rejects.toMatchObject({ code: 400 });
   });
 
-  it('connects with any non-empty code', async () => {
-    await expect(mockConnectWithCode('100100010010', dealership, fast)).resolves.toMatchObject({ fees: FEE_SYNC_FEES });
-    await expect(mockConnectWithCode('  ', dealership, fast)).rejects.toBeInstanceOf(FeeSyncError);
-  });
 
   it('refresh returns the same fees, and fails while the connection is lost', async () => {
     await expect(mockRefreshFees(FEE_SYNC_UPDATED_FEES, dealership, fast)).resolves.toMatchObject({ fees: FEE_SYNC_UPDATED_FEES });

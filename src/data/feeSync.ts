@@ -3,6 +3,7 @@
 // Every "request" is a local promise that resolves (or rejects) after a short delay, and every fee comes
 // from the fixed lists below, which match the fees in the CP-14705 Figma file exactly.
 
+import { ACCOUNTS } from './accounts';
 import type { Account } from './accounts';
 import type { AppNotification } from '../context/notifications';
 
@@ -102,6 +103,8 @@ export const buildRejectedUpdate = (receivedAt: string): FeeSyncRejectedUpdate =
 // ── Dealerships ────────────────────────────────────────────────────────────────
 
 export interface FeeSyncDealership {
+  /** FeeSync dealer code — searchable in the Dealership field and shown after the name. */
+  code: string;
   name: string;
   brand: string;
   zipCode: string;
@@ -139,15 +142,37 @@ const DEALER_LOCATIONS: Record<string, { street: string; city: string; state: st
 
 const FALLBACK_LOCATION = { street: '5000 Telegraph Rd', city: 'Bloomfield Hills', state: 'MI', zip: '48302' };
 
-/** The FeeSync franchise this account matches — what the "Confirm dealership" screen offers. */
+/** Mock FeeSync dealer code: acc-1 → "10000100", acc-2 → "20000200" (the Figma examples), and so on. */
+const dealerCode = (accountId: string) => String((Number(accountId.replace(/\D/g, '')) || 0) * 10000100);
+
+/** The FeeSync franchise this account matches — preselected in the "Dealership" field. */
 export function getFeeSyncDealership(account: Pick<Account, 'id' | 'name' | 'brand'>): FeeSyncDealership {
   const loc = DEALER_LOCATIONS[account.id] ?? FALLBACK_LOCATION;
   return {
+    code: dealerCode(account.id),
     name: account.name,
     brand: account.brand,
     zipCode: loc.zip,
     address: `${loc.street}, ${loc.city}, ${loc.state} ${loc.zip}`,
   };
+}
+
+/**
+ * Every FeeSync franchise in the account's group — the "Dealership" field's options. The mock has no
+ * dealer groups, so the group is every mock account; the account's own match comes first.
+ */
+export function getFeeSyncDealershipOptions(account: Pick<Account, 'id' | 'name' | 'brand'>): FeeSyncDealership[] {
+  const others = ACCOUNTS.filter((a) => a.id !== account.id)
+    .map(getFeeSyncDealership)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [getFeeSyncDealership(account), ...others];
+}
+
+/** Dealership field search: matches the dealer name, dealer code or ZIP code (case-insensitive). */
+export function matchesFeeSyncDealership(dealership: FeeSyncDealership, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [dealership.name, dealership.code, dealership.zipCode].some((v) => v.toLowerCase().includes(q));
 }
 
 // ── Mock requests ──────────────────────────────────────────────────────────────
@@ -184,17 +209,6 @@ export async function mockConfirmDealership(
 ): Promise<FeeSyncPull> {
   await wait(delayMs);
   if (fail) throw new FeeSyncError('FeeSync connection failed.', 400);
-  return { dealership, fees: FEE_SYNC_FEES, refreshedAt: new Date().toISOString() };
-}
-
-/** "Not your dealership? Connect with code" — any non-empty code connects to the account's mock franchise. */
-export async function mockConnectWithCode(
-  code: string,
-  dealership: FeeSyncDealership,
-  { delayMs = FEE_SYNC_MOCK_DELAY_MS }: MockOptions = {},
-): Promise<FeeSyncPull> {
-  await wait(delayMs);
-  if (!code.trim()) throw new FeeSyncError('Enter a FeeSync account code.', 422);
   return { dealership, fees: FEE_SYNC_FEES, refreshedAt: new Date().toISOString() };
 }
 

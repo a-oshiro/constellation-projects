@@ -25,9 +25,11 @@ interface FeeButtonProps {
   /** Shows a small inline spinner after the label and disables the button. */
   loading?: boolean;
   type?: 'button' | 'submit';
+  /** Capitalize Each Word (default). False keeps the label as written, e.g. Figma's sentence-case "Confirm dealership". */
+  capitalize?: boolean;
 }
 
-export const FeeButton = ({ variant = 'contained', children, onClick, disabled, loading = false, type = 'button' }: FeeButtonProps) => (
+export const FeeButton = ({ variant = 'contained', children, onClick, disabled, loading = false, type = 'button', capitalize = true }: FeeButtonProps) => (
   <Button
     type={type}
     variant={variant}
@@ -36,7 +38,7 @@ export const FeeButton = ({ variant = 'contained', children, onClick, disabled, 
     disabled={disabled || loading}
     aria-busy={loading || undefined}
     sx={{
-      textTransform: 'capitalize', fontSize: FONT_SIZE, fontWeight: 500, letterSpacing: '0.4px', lineHeight: LINE_HEIGHT,
+      textTransform: capitalize ? 'capitalize' : 'none', fontSize: FONT_SIZE, fontWeight: 500, letterSpacing: '0.4px', lineHeight: LINE_HEIGHT,
       borderRadius: '100px', minWidth: 0, whiteSpace: 'nowrap', gap: `${SPINNER_GAP}px`,
       padding: variant === 'contained' ? CONTAINED_PADDING : variant === 'outlined' ? OUTLINED_PADDING : TEXT_PADDING,
       ...(variant === 'contained' && {

@@ -10,7 +10,7 @@ import type { FeeSyncDealership, FeeSyncFee, FeeSyncPull, FeeSyncRejectedUpdate 
 export type FeeSource = 'manual' | 'feesync';
 
 /**
- * FeeSync flow, in Figma order: `identify` (we identified this account) → `confirming` (button spinner)
+ * FeeSync flow, in Figma order: `identify` (we identified this account; another from the group can be picked) → `confirming` (button spinner)
  * → `connected`, or → `confirm-error` (connection failed). `refreshing` is a manual refresh while connected.
  */
 export type FeeSyncPhase = 'identify' | 'confirming' | 'confirm-error' | 'connected' | 'refreshing';
@@ -83,7 +83,7 @@ export type FeeTabAction =
   | { type: 'confirmStart' }
   | { type: 'confirmSuccess'; pull: FeeSyncPull }
   | { type: 'confirmFail' }
-  | { type: 'connectedWithCode'; pull: FeeSyncPull }
+  | { type: 'selectDealership'; dealership: FeeSyncDealership }
   | { type: 'refreshStart' }
   | { type: 'refreshSuccess'; pull: FeeSyncPull }
   | { type: 'refreshFail' }
@@ -104,8 +104,10 @@ export function feeTabReducer(state: FeeTabState, action: FeeTabAction): FeeTabS
 
     case 'confirmStart':
       return state.phase === 'identify' || state.phase === 'confirm-error' ? { ...state, phase: 'confirming' } : state;
+    case 'selectDealership':
+      // Only before connecting; the confirm button sends whichever dealership is selected.
+      return state.phase === 'identify' || state.phase === 'confirm-error' ? { ...state, dealership: action.dealership } : state;
     case 'confirmSuccess':
-    case 'connectedWithCode':
       return {
         ...state, phase: 'connected', dealership: action.pull.dealership,
         fees: action.pull.fees, refreshedAt: action.pull.refreshedAt,

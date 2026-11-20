@@ -31,6 +31,14 @@ describe('feeTabReducer', () => {
     expect(done.refreshedAt).toBe(pull.refreshedAt);
   });
 
+  it('selects another dealership before connecting, but not while confirming', () => {
+    const other = getFeeSyncDealership({ id: 'acc-2', name: 'BMW of Seattle', brand: 'BMW' });
+    const picked = run([{ type: 'switchSource', source: 'feesync' }, { type: 'selectDealership', dealership: other }]);
+    expect(picked.dealership).toBe(other);
+    const confirming = run([{ type: 'confirmStart' }]);
+    expect(feeTabReducer(confirming, { type: 'selectDealership', dealership: other }).dealership).toBe(dealership);
+  });
+
   it('lands on the error state when confirming fails, and can retry', () => {
     const failed = run([{ type: 'confirmStart' }, { type: 'confirmFail' }]);
     expect(failed.phase).toBe('confirm-error');
